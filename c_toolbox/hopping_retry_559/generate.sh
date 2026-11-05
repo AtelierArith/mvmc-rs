@@ -5,7 +5,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 dir="$root/c_toolbox/hopping_retry_559"
-src="$root/extern/mVMC-1.3.0/src/mVMC"
+src="$root/extern/mVMC-1.4.0/src/mVMC"
 fixture="$root/tests/fixtures/candidate/hopping_retry_cap_559.txt"
 
 check() { echo "$1  $2" | sha256sum --check --quiet; }
@@ -13,7 +13,7 @@ check 8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed "$src/vmc
 check 2b43a47a85ec13833d453a010962334147024a6d6aae01b99bb8b2a0b80c15db "$src/vmcmake_fsz.c"
 
 extract() { # file first last
-  printf '/* Verbatim: extern/mVMC-1.3.0/src/mVMC/%s lines %s-%s (GPLv3, see that file). */\n' \
+  printf '/* Verbatim: extern/mVMC-1.4.0/src/mVMC/%s lines %s-%s (GPLv3, see that file). */\n' \
     "$(basename "$1")" "$2" "$3"
   sed -n "$2,$3p" "$1"
 }

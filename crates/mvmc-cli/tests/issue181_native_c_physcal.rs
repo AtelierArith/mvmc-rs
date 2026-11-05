@@ -1,7 +1,8 @@
 //! Issue #181: serial PhysCal and Lanczos modes 1/2 against the NATIVE C `vmc.out`.
 //!
 //! References in `tests/fixtures/native_c_physcal_181/` come from the unmodified
-//! vendored mVMC 1.3.0 executable (`c_toolbox/physcal_native/`); this test never
+//! vendored mVMC 1.3.0 executable (historical 1.3.0 reference kept after #682;
+//! `c_toolbox/physcal_native/`); this test never
 //! builds or runs C. Per scenario it checks
 //!
 //! * exact: file inventory, `zvo_time` deterministic columns (acceptance counters),
@@ -218,7 +219,7 @@ fn run_with_env(
         if sc.class == "c_rejected" || sc.class == "c_defect_not_reproduced" {
             // c_rejected: C aborts in the definition reader (nonzero exit, no zvo_ls_*).
             // c_defect_not_reproduced: C accepts the input through its `else if` in
-            // readdef.c:610-617 and writes NaN moments (fixture shows it); Rust rejects.
+            // readdef.c:703-710 and writes NaN moments (fixture shows it); Rust rejects.
             assert!(!result.status.success(), "{name}: Rust rejects this input");
             let leaked = out.exists()
                 && fs::read_dir(&out)

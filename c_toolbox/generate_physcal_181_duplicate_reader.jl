@@ -2,7 +2,7 @@
 # can write the extra duplicate before reporting its count error safely.
 using SHA
 repo = dirname(@__DIR__)
-source_path = joinpath(repo,"extern/mVMC-1.3.0/src/mVMC/readdef.c")
+source_path = joinpath(repo,"extern/mVMC-1.4.0/src/mVMC/readdef.c")
 source = read(source_path,String)
 function extract(start_marker, stop_marker)
     # The same signature prefix occurs in upstream forward declarations.

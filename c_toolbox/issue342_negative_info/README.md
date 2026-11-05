@@ -14,8 +14,8 @@ matrix is run; `Ne=0` yields native INFO -5.
 Reproduction (Dev Container image, Linux x86_64):
 
 ```bash
-# 1. CMake-build extern/mVMC-1.3.0 (target vmc.out) in $BUILD:
-#    cmake <repo>/extern/mVMC-1.3.0 -DCMAKE_BUILD_TYPE=Release \
+# 1. CMake-build extern/mVMC-1.4.0 (target vmc.out) in $BUILD:
+#    cmake <repo>/extern/mVMC-1.4.0 -DCMAKE_BUILD_TYPE=Release \
 #      -DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF -DMPI_C_COMPILER=/opt/mpich/bin/mpicc
 #    make -j8 vmc.out
 # 2. Run the probe into an EMPTY output directory:

@@ -47,17 +47,17 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC"
     sources = [src / "readdef.c", src / "initfile.c", src / "stcopt_dposv.c", src / "include/global.h"]
     materialize(root, "negative_stepdt_upstream.inc",
                 extract(sources[0].read_text(), sources[1].read_text(), sources[2].read_text()),
                 sources, args.write)
     cc_version = subprocess.check_output(["cc", "--version"], text=True).splitlines()[0]
     lines = [
-        "# C mVMC 1.3.0 negative DSROptStepDt oracle (#367): readdef.c:749-755 normalization,",
-        "# initfile.c:47-54 SRinfo header and stcOptInit + dposv on fixed operands (3 parameters).",
+        "# C mVMC 1.3.0 negative DSROptStepDt oracle (#367): readdef.c:959-965 normalization,",
+        "# initfile.c:47-59 SRinfo header and stcOptInit + dposv on fixed operands (3 parameters).",
         *(f"# {p.name} sha256={hashlib.sha256(p.read_bytes()).hexdigest()}" for p in sources),
-        f"# compiler: {cc_version}; options: cc -O0 -ffp-contract=off -I extern/mVMC-1.3.0/src/mVMC/include -I c_toolbox ... -llapack",
+        f"# compiler: {cc_version}; options: cc -O0 -ffp-contract=off -I extern/mVMC-1.4.0/src/mVMC/include -I c_toolbox ... -llapack",
         f"# platform: {platform.system()} {platform.machine()} {platform.libc_ver()[0]} {platform.libc_ver()[1]}",
         "# reproduce: uv run --no-project python scripts/check_negative_stepdt_c_parity.py --write",
         "# format: 'case <name> raw_dt <text> sta_del <text>' then 'key value' lines",

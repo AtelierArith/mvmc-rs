@@ -18,7 +18,7 @@ from check_general_orbital_c_parity import function
 
 
 def verify_sources(root, real):
-    src = root / "extern/mVMC-1.3.0/src/mVMC"
+    src = root / "extern/mVMC-1.4.0/src/mVMC"
     selected = {
         "projection.c": ["inline double ProjRatio(", "void UpdateProjCnt(", "void UpdateProjCnt_fsz("],
         "pfupdate_fsz.c": ["void CalculateNewPfM_fsz("],
@@ -123,7 +123,7 @@ def validate(root, library, real, kind):
 
 def build_and_validate(root, destination, write=False):
     kind = native_platform("auto")
-    projection = root / "extern/mVMC-1.3.0/src/mVMC/projection.c"
+    projection = root / "extern/mVMC-1.4.0/src/mVMC/projection.c"
     materialize(root, "fsz_runner_projection_upstream.inc",
                 function(projection.read_text(), "void MakeProjCnt("), [projection], write)
     destination.mkdir(parents=True, exist_ok=True)

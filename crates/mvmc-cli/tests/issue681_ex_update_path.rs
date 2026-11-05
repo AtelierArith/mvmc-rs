@@ -1,6 +1,7 @@
-//! Issue #681: `NExUpdatePath` values outside 0-3 have no update in mVMC 1.3.0
+//! Issue #681: `NExUpdatePath` values outside 0-6 have no update in mVMC
 //! (`getUpdateType` returns `NONE`), so the sampler would never move and every
-//! sample would be the initial configuration. The CLI must reject them, for
+//! sample would be the initial configuration; 4-6 are 1.4.0 updates that are
+//! not ported. The CLI must reject them, for
 //! optimization and PhysCal, before any output is created.
 use std::{
     fs,

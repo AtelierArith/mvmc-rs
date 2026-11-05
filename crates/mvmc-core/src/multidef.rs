@@ -1,14 +1,14 @@
 //! C MultiDef mode (`vmc.out -m N`, issue #348): communicator split arithmetic, the
 //! directory-list file and the per-group directory change.
 //!
-//! Port of `initMultiDefMode` (`extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727-800`). The
+//! Port of `initMultiDefMode` (`extern/mVMC-1.4.0/src/mVMC/vmcmain.c:737-810`). The
 //! functions here are independent of the MPI backend so they can be checked in ordinary
 //! single-process tests; the optional `mpi` feature adds `MpiContext::split_multi_def`.
 
 use std::path::Path;
 
 /// Group index of `rank` in a world of `size` ranks split into `n` groups
-/// (`vmcmain.c:752-760`).
+/// (`vmcmain.c:762-770`).
 ///
 /// The first `size % n` groups hold `size / n + 1` ranks, the others `size / n`. C
 /// divides by `n` unchecked (`n == 0` raises `SIGFPE`, a negative `n` gives an
@@ -24,19 +24,19 @@ pub fn group_of_rank(rank: usize, size: usize, n: usize) -> usize {
     }
 }
 
-/// Number of ranks of group `group` (`vmcmain.c:752-760`).
+/// Number of ranks of group `group` (`vmcmain.c:762-770`).
 pub fn group_size(group: usize, size: usize, n: usize) -> usize {
     size / n + usize::from(group < size % n)
 }
 
-/// Validation of `-m N` against the world size (`vmcmain.c:743-749`).
+/// Validation of `-m N` against the world size (`vmcmain.c:753-759`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldCheck {
     /// Printed by rank 0 on stderr when the groups are not equally sized.
     pub warning: Option<String>,
 }
 
-/// C message when the world is smaller than `N` (`vmcmain.c:744`).
+/// C message when the world is smaller than `N` (`vmcmain.c:754`).
 pub const SIZE_ERROR: &str = "error: -m: N should be smaller than MPI size.";
 
 /// Rust-side message for `N < 1`: C performs an unchecked division by `N`.
@@ -58,7 +58,7 @@ pub fn check_world(size: usize, n: i64) -> Result<WorldCheck, String> {
 }
 
 /// Read the first `n` whitespace-separated names of the directory-list file
-/// (`vmcmain.c:766-782`: `fscanf("%s\n")` per entry). Errors carry C's messages.
+/// (`vmcmain.c:776-792`: `fscanf("%s\n")` per entry). Errors carry C's messages.
 pub fn read_dir_list(path: &Path, n: usize) -> Result<Vec<String>, String> {
     let text = std::fs::read(path).map_err(|_| "error: DirListFile does not exist.".to_owned())?;
     let text = String::from_utf8_lossy(&text);
@@ -82,7 +82,7 @@ fn strerror(error: &std::io::Error) -> String {
     }
 }
 
-/// `chdir(dirName)` (`vmcmain.c:791-798`). The Err text is C's `error: chdir(): %s: ` plus
+/// `chdir(dirName)` (`vmcmain.c:801-808`). The Err text is C's `error: chdir(): %s: ` plus
 /// `perror("")`.
 ///
 /// C runs one process per MPI rank, so the process-global working directory is the

@@ -1,6 +1,6 @@
 # glibc complex functions for the RBM path (issue #470)
 
-The C RBM code (`extern/mVMC-1.3.0/src/mVMC/rbm.c`) calls the C99 complex functions of the
+The C RBM code (`extern/mVMC-1.4.0/src/mVMC/rbm.c`) calls the C99 complex functions of the
 platform libm:
 
 | C call site | function |

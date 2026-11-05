@@ -24,7 +24,7 @@ $$
 $$
 
 です。ここで $r_{n\sigma}$ はスピン $\sigma$ の $n$ 番目の電子のサイトです
-([Cマニュアル, *アルゴリズム*](../../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst))。
+([Cマニュアル, *アルゴリズム*](../../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst))。
 コードはこれを 3 つの配列として保持します(C の名前。Rust ではスネークケースの同じ名前を使います)。
 
 - `eleIdx[n + s*Ne]` – スピン $s$(0 = アップ、1 = ダウン)の $n$ 番目の電子のサイト,
@@ -44,7 +44,7 @@ $$
 \rho(x)=\frac{|\langle x|\psi\rangle|^2}{\langle\psi|\psi\rangle}.
 $$
 
-です。[第 4 章](04-theory-sampling.md)のマルコフ連鎖は $x\sim\rho(x)$ をサンプリングするので、すべてのサンプルが同じ重みを持ちます。C コードはこれを明示しており(`w = 1.0`, `vmccal.c:153`。コメントアウトされた再重み付けの式は使われません)、Rust への移植でも重み変数を 1 に保っています。ローカル推定量
+です。[第 4 章](04-theory-sampling.md)のマルコフ連鎖は $x\sim\rho(x)$ をサンプリングするので、すべてのサンプルが同じ重みを持ちます。C コードはこれを明示しており(`w = 1.0`, `vmccal.c:160`。1.4.0 の `reweight 1` 分岐 `vmccal.c:153-158` は移植しておらず、このキーワードは拒否されます)、Rust への移植でも重み変数を 1 に保っています。ローカル推定量
 
 $$
 F(x,A)=\frac{\langle\psi|A|x\rangle}{\langle\psi|x\rangle},
@@ -61,7 +61,7 @@ $$
 を累積します。
 
 `Etot2` として保存される 2 次モーメント(`zvo_out.dat` で $\langle H^2\rangle$ と呼ばれる列)は $\langle F^\dagger F\rangle=\langle\lvert E_{\rm loc}\rvert^2\rangle$ であり、$\langle F(x,H^2)\rangle$ では**ない**ことに注意してください。C マニュアルはその理由を説明しています。積の形のほうが数値的に安定で、有限個のサンプルに対して非負の分散を与えるためです
-([Cマニュアル, *パワー Lanczos 法*](../../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst))。
+([Cマニュアル, *パワー Lanczos 法*](../../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst))。
 `zvo_out.dat` に書き出される相対分散は
 
 $$
@@ -72,20 +72,20 @@ $$
 ([第 8 章](08-running.md))。
 
 > **実装**
-> - C: `VMCMainCal` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:82`
-> - C: `WeightAverageWE` — `extern/mVMC-1.3.0/src/mVMC/average.c:41`
-> - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
+> - C: `VMCMainCal` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:82`
+> - C: `WeightAverageWE` — `extern/mVMC-1.4.0/src/mVMC/average.c:41`
+> - C: `outputData` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:642`
 > - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2900`
 > - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1818`
 > - Rust: `weight_average_we` — `crates/mvmc-core/src/average.rs:18`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
-> - 整合性: `Etot2 += w * conj(e) * e` (`vmccal.c:191`) は `run.rs:2771` の `etot2 += w * e.conj() * e` に対応し、積の順序は同じです。`output_data` では、相対分散は $|\langle H\rangle|>10^{-14}$ のときにのみ計算され、それ以外は `0.0` として書き出されます(Julia のガード)。C は無条件に割ります。最適化出力の複素数除算には `julia_complex::divide` を使い、PhysCal 出力(`output_phys_data`, `io.rs:161`)には C99 方式の `c_complex::divide` を使います。
+> - 整合性: `Etot2 += w * conj(e) * e` (`vmccal.c:200`) は `run.rs:2771` の `etot2 += w * e.conj() * e` に対応し、積の順序は同じです。`output_data` では、相対分散は $|\langle H\rangle|>10^{-14}$ のときにのみ計算され、それ以外は `0.0` として書き出されます(Julia のガード)。C は無条件に割ります。最適化出力の複素数除算には `julia_complex::divide` を使い、PhysCal 出力(`output_phys_data`, `io.rs:161`)には C99 方式の `c_complex::divide` を使います。
 > - 整合性: パフィアンのセットアップに失敗したサンプルや、エネルギーが有限でないサンプルは、どちらの実装でもスキップされます(C は警告を出力して `continue` し、Rust は `continue` します)。
 
 ## 2.3 ハミルトニアンの項
 
 Expert モードは、ハミルトニアンを 7 つの族の和として定義します
-([Cマニュアル, *Expert モードの入力ファイル*](../../../extern/mVMC-1.3.0/doc/en/source/expert.rst), 24-67 行):
+([Cマニュアル, *Expert モードの入力ファイル*](../../../extern/mVMC-1.4.0/doc/en/source/expert.rst), 24-67 行):
 
 $$
 \begin{aligned}
@@ -137,11 +137,11 @@ E_{\rm loc}=\sum_i U_i n_{i\uparrow}n_{i\downarrow}
 $$
 
 > **実装**
-> - C: `CalculateHamiltonian` — `extern/mVMC-1.3.0/src/mVMC/calham.c:59`
-> - C: `CalculateHamiltonian0` (diagonal part, used by Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:198`
-> - C: `CalculateHamiltonian1` (transfer part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:244`
-> - C: `CalculateHamiltonian2` (two-body part, Lanczos) — `extern/mVMC-1.3.0/src/mVMC/calham.c:299`
-> - C: `CalculateHamiltonian_fsz` — `extern/mVMC-1.3.0/src/mVMC/calham_fsz.c:49`
+> - C: `CalculateHamiltonian` — `extern/mVMC-1.4.0/src/mVMC/calham.c:59`
+> - C: `CalculateHamiltonian0` (diagonal part, used by Lanczos) — `extern/mVMC-1.4.0/src/mVMC/calham.c:198`
+> - C: `CalculateHamiltonian1` (transfer part, Lanczos) — `extern/mVMC-1.4.0/src/mVMC/calham.c:244`
+> - C: `CalculateHamiltonian2` (two-body part, Lanczos) — `extern/mVMC-1.4.0/src/mVMC/calham.c:299`
+> - C: `CalculateHamiltonian_fsz` — `extern/mVMC-1.4.0/src/mVMC/calham_fsz.c:49`
 > - Rust: `calculate_local_energy_timed` — `crates/mvmc-core/src/observables.rs:3455`
 > - Rust: `calculate_local_energy` — `crates/mvmc-core/src/observables.rs:2039`
 > - Rust: `calculate_hamiltonian_diagonal` — `crates/mvmc-core/src/observables.rs:506`
@@ -177,17 +177,17 @@ $$
 $G^{(2)}$ では、インデックスが一致する場合は $G^{(1)}$ または占有数に帰着します(`GreenFunc2` に列挙された数演算子の恒等式。たとえば $k=l$ の $c^\dagger_ic_jc^\dagger_kc_l$ は、$\sigma=\tau$ で $n_k$ が占有されているとき $G^{(1)}_{ij}n_k$ です)。一般の場合は、まず $c^\dagger_{k\tau}c_{l\tau}$ を作用させ($\tau$ 電子を $l$ から $k$ へ移動)、次に $c^\dagger_{i\sigma}c_{j\sigma}$ を作用させます($\sigma$ 電子を $j$ から $i$ へ移動)。2 回移動した配置のパフィアンは、[4.5](04-theory-sampling.md#45-パフィアン比と逆行列の更新)の 2 電子更新で得られます。
 
 > **実装**
-> - C: `GreenFunc1` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:41`
-> - C: `GreenFunc2` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:86`
-> - C: `GreenFunc1_fsz` — `extern/mVMC-1.3.0/src/mVMC/locgrn_fsz.c:29`
-> - C: `CalculateIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
+> - C: `GreenFunc1` — `extern/mVMC-1.4.0/src/mVMC/locgrn.c:41`
+> - C: `GreenFunc2` — `extern/mVMC-1.4.0/src/mVMC/locgrn.c:92`
+> - C: `GreenFunc1_fsz` — `extern/mVMC-1.4.0/src/mVMC/locgrn_fsz.c:29`
+> - C: `CalculateIP_fcmp` — `extern/mVMC-1.4.0/src/mVMC/qp.c:110`
 > - Rust: `green_func1` — `crates/mvmc-core/src/observables.rs:1419`
 > - Rust: `green_func1_impl` — `crates/mvmc-core/src/observables.rs:1858`
 > - Rust: `green_func2` — `crates/mvmc-core/src/observables.rs:581`
 > - Rust: `green_func2_impl` — `crates/mvmc-core/src/observables.rs:686`
 > - Rust: `green_func2_fsz` — `crates/mvmc-core/src/observables/fsz_green.rs:20`
 > - 整合性: 最終的な振幅比は複素共役を取ります(`conj(z/ip)`)。Rust では `divide(proj_ratio * new_ip, ip).conj()` が、C カーネルのインスタンス化(`C_KERNEL = true`)では `c_complex::divide`(C99 の意味論)を、それ以外では `julia_complex::divide` を選択します(`observables.rs:1874-1877`)。`ProjRatio` は射影指数の*実部*の $\exp$ のみを使います。C が Gutzwiller/Jastrow/DH パラメータを実数と宣言しているためです(`projection.c:41-56`, "we assume gutzwiller and jastrow is real")。
-> - 整合性: C の `GreenFunc1` は RBM 以外の分岐で `UpdateProjCnt` を 2 回呼び出します(`locgrn.c:68`。同一引数での冗長な重複)。これは結果を変えません。
+> - 整合性: C の `GreenFunc1` は RBM 以外の分岐で `UpdateProjCnt` を 2 回呼び出します(`locgrn.c:74`。同一引数での冗長な重複)。これは結果を変えません。
 > - 整合性: 遷移係数のキャッシュ(`refresh_transfer_cache`, `observables.rs:1533`)と、オプションのマルチスレッド遷移ループ(`MVMC_RS_INNER_THREADS`)が Rust の実数経路に存在します。どちらも各項について逐次的な項順序の結果を保ちます(総和順序は変わりません)。
 
 ## 2.6 対角成分のみで求まる量

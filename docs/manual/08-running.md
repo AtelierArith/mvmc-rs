@@ -11,7 +11,7 @@ The binary is built from `crates/mvmc-cli/src/lib.rs` (`cargo build --release -p
 mvmc [options] <namelist.def> [initpara]
 ```
 
-The synopsis is the C driver's `vmc.out [option] NameListFile [OptParaFile]` (`vmcmain.c:714-723`). Options may follow the positional arguments; short options can be clustered (`-bo`) and take their value attached or as the next word (`-F2`, `-F 2`), as with C `getopt`.
+The synopsis is the C driver's `vmc.out [option] NameListFile [OptParaFile]` (`vmcmain.c:724-733`). Options may follow the positional arguments; short options can be clustered (`-bo`) and take their value attached or as the next word (`-F2`, `-F 2`), as with C `getopt`.
 
 | Option | Meaning | Default |
 |--------|---------|---------|
@@ -25,7 +25,7 @@ The synopsis is the C driver's `vmc.out [option] NameListFile [OptParaFile]` (`v
 | `-b` | binary parameter output: `zvo_varbin_NNN.dat` replaces the `zvo_var` text file ([binary output](#binary-output--b)) | off |
 | `-F <N>`, `--flush-interval <N>` | flush the `_time_`/`_SRinfo` files every `N` steps; `N < 1` is an error ([9.5](09-output-files.md)) | 1 |
 | `-e`, `--expert` | Expert mode (default); accepted, a no-op | on |
-| `-v`, `--version` | print `mvmc-rs version <crate version> (follows C mVMC 1.3.0)` to stdout and exit `0` | |
+| `-v`, `--version` | print `mvmc-rs version <crate version> (follows C mVMC 1.4.0)` to stdout and exit `0` | |
 | `-h`, `--help` | print usage (C option list plus the Rust extensions) to stderr and exit `0`, as C does | |
 | `-s`, `--standard` | Standard mode: generate the Expert files from the StdFace input into `--out-dir` (default: current directory), then run `namelist.def` ([7.6](07-input-files.md#76-standard-mode-stdface)) | off |
 | `--dry-run` | generate the Expert files from the StdFace input and stop (C `vmcdry.out`) | off |
@@ -48,7 +48,7 @@ As in C (`vmcmain.c:177-182`, `:252-260`) the optional second positional argumen
 
 ### MultiDef mode (`-m`)
 
-`mvmc -m N DirListFile NameListFile [OptParaFile]` ports the C `vmc.out -m N` option (`initMultiDefMode`, `vmcmain.c:727-800`). It runs `N` independent calculations inside one MPI launch, each in its own directory with its own definition files.
+`mvmc -m N DirListFile NameListFile [OptParaFile]` ports the C `vmc.out -m N` option (`initMultiDefMode`, `vmcmain.c:737-810`). It runs `N` independent calculations inside one MPI launch, each in its own directory with its own definition files.
 
 - **Split.** The world of `size` ranks is split into `N` groups: with `div = size / N`, `mod = size % N`, `threshold = (div+1)*mod`, rank `r` belongs to group `r / (div+1)` if `r < threshold`, else `mod + (r - threshold) / div`. The first `mod` groups hold `div+1` ranks, the others `div` ranks. The group communicator is the whole world (`comm0`) of that run: its rank 0 is the output root and prints the console banner, and `NSplitSize` (and the seed offset `RndSeed + comm1 group`, [4.6](04-theory-sampling.md#46-parallelism-inside-the-sampler)) act inside the group. The group index itself does not enter the seed, so two groups that run the same input with the same width produce the same chain.
 - **Directories.** Rank 0 reads the first `N` whitespace-separated names of `DirListFile` (C `fscanf("%s")`; the paths are relative to the launch directory); group `g` enters the `g`-th directory. `NameListFile` and `OptParaFile` are resolved **inside** the group directory, and so are the default output directory and a relative `--out-dir`. C uses one process per rank, so it changes the process working directory with `chdir`; `mvmc` does the same (also one process per rank).
@@ -61,7 +61,7 @@ References: native C `vmc.out -m 2` at 2, 3 and 4 ranks (two groups with differe
 
 ### Binary output (`-b`)
 
-With `-b` (C `FlagBinary`, `vmcmain.c:654-660`, `initfile.c:58-66`, `:82-90`) **no** `zvo_var` text file is written; every other output file is unchanged. The parameters go to `zvo_varbin_NNN.dat` (`NNN` = `NDataIdxStart`, one file for the optimizer; one file per sample for PhysCal):
+With `-b` (C `FlagBinary`, `vmcmain.c:656-662`, `initfile.c:63-71`, `:82-90`) **no** `zvo_var` text file is written; every other output file is unchanged. The parameters go to `zvo_varbin_NNN.dat` (`NNN` = `NDataIdxStart`, one file for the optimizer; one file per sample for PhysCal):
 
 | Bytes | Content |
 |-------|---------|
@@ -90,9 +90,9 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 (`validate_para_opt`) is the library-level counterpart.
 
 > **Implementation**
-> - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
-> - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
-> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
+> - C: `main` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:46`
+> - C: `VMCParaOpt` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:333`
+> - C: `VMCPhysCal` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:533`
 > - Rust: `main` — `crates/mvmc-cli/src/lib.rs:201`
 > - Rust: `parse_c_int` — `crates/mvmc-cli/src/lib.rs:149`
 > - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:969`
@@ -101,7 +101,7 @@ and validates the input *before* it dispatches, an optimization run with `NVMCCa
 > - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1154`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1512`
-> - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
+> - C: `initMultiDefMode` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:737`
 > - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:847`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
 > - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
@@ -146,8 +146,8 @@ configuration arrays (`ele_idx.txt`, `ele_cfg.txt`, `ele_num.txt`, `ele_proj_cnt
 (`crates/mvmc-cli/src/physcal_trace.rs`). It is intended for parity debugging, is not a production output and is refused for multi-rank launches.
 
 > **Implementation**
-> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
+> - C: `VMCPhysCal` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:533`
+> - C: `InitFilePhysCal` — `extern/mVMC-1.4.0/src/mVMC/initfile.c:77`
 > - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:518`
 > - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:908`
 > - Rust: `read_opt_para_file` — `crates/mvmc-core/src/initial_params.rs:141`
@@ -219,9 +219,9 @@ measurement; $\mathrm{IP}$ is reduced inside the group. Grouped runs are therefo
 
 Rust rejects only the one grouped combination that is undefined in C, before initialization (`validate_grouped_runtime`, [7.5](07-input-files.md#75-supported-and-rejected-inputs)):
 
-- `NSplitSize > 1` with the CG solver (`NSRCG != 0`). `VMCMainCal` stores `sqrt(w) O` at the global sample slot (`vmccal.c:241,248`) but
-  `calculateOO_Store` reads the first `sampleEnd - sampleStart` columns from the base pointer (`vmccal.c:314-318`), so every rank after the first reads
-  unwritten `malloc` memory (`setmemory.c:419-421`). The same defect corrupts direct SR with `NStore != 0` and `NSplitSize > 1` in C; Rust computes that case correctly and therefore differs from C there.
+- `NSplitSize > 1` with the CG solver (`NSRCG != 0`). `VMCMainCal` stores `sqrt(w) O` at the global sample slot (`vmccal.c:250,257`) but
+  `calculateOO_Store` reads the first `sampleEnd - sampleStart` columns from the base pointer (`vmccal.c:323-327`), so every rank after the first reads
+  unwritten `malloc` memory (`setmemory.c:455-457`). The same defect corrupts direct SR with `NStore != 0` and `NSplitSize > 1` in C; Rust computes that case correctly and therefore differs from C there.
 
 Supported (checked against native C at 2 and 4 ranks, `tests/fixtures/grouped_nsplit_349/`): direct SR (`NSRCG = 0`) for any `NSplitSize`; SR-CG (`NSRCG = 1`) with `NSplitSize = 1`;
 PhysCal and optimization with sz-conserved, FSZ/general orbitals and any `NQPFull`; OptTrans with `NQPOptTrans > 1`; `NLanczosMode = 1, 2` PhysCal.
@@ -234,8 +234,8 @@ rank-local because only the root touches it (`RunConfig` documentation, `run.rs:
 Failures are agreed collectively, so a failing rank makes all ranks stop rather than hang.
 
 > **Implementation**
-> - C: `main` (communicator split, `init_gen_rand(RndSeed+group1)`) — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
-> - C: `SplitLoop` — `extern/mVMC-1.3.0/src/mVMC/splitloop.c:31`
+> - C: `main` (communicator split, `init_gen_rand(RndSeed+group1)`) — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:46`
+> - C: `SplitLoop` — `extern/mVMC-1.4.0/src/mVMC/splitloop.c:31`
 > - Rust: `MpiContext::split_groups` — `crates/mvmc-core/src/mpi.rs:154`
 > - Rust: `MpiContext::initialize` — `crates/mvmc-core/src/mpi.rs:70`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`

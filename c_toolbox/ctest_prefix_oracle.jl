@@ -148,7 +148,7 @@ open(joinpath(DESTINATION, "provenance.txt"), "w") do io
     println(io, "reviewed62b original kernels; no historical retention/initialization/CG replacements")
     println(io, "GeneralRBM complete canonical tables: C spin-major physical/coupling order; solver_override=$RBM_SOLVER")
     println(io, "C output layout: vmcmain.c outputData lines 653-657; contiguous declared Para slots; original Julia zvo_var retained")
-    println(io, "vmcmain.c sha256=", bytes2hex(sha256(read(joinpath(REPO, "extern/mVMC-1.3.0/src/mVMC/vmcmain.c")))))
+    println(io, "vmcmain.c sha256=", bytes2hex(sha256(read(joinpath(REPO, "extern/mVMC-1.4.0/src/mVMC/vmcmain.c")))))
     if !isempty(CTEST_BRIDGE)
         println(io, NativeFSZEnergyReference.PROVENANCE[])
         println(io, "native bridge sha256=", bytes2hex(sha256(read(joinpath(CTEST_BRIDGE, "libmvmc_fsz_reference.so")))))

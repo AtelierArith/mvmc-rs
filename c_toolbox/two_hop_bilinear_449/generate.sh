@@ -16,7 +16,7 @@ input="$root/tests/fixtures/pfaffian_cg/two_hop_bilinear.txt"
 "$tmp/probe_default" < "$input" > "$tmp/default.txt"
 cmp "$tmp/nofma.txt" "$tmp/default.txt"
 {
-  echo "# C two-hop bilinear form bMa (pfupdate_two_real.c:167-177), sequential, no FMA."
+  echo "# C two-hop bilinear form bMa (pfupdate_two_real.c:169-180), sequential, no FMA."
   echo "# One '<n> <hex bits>' line per case of two_hop_bilinear.txt, same order."
   echo "# Provenance: see c_toolbox/two_hop_bilinear_449/README.md"
   cat "$tmp/nofma.txt"

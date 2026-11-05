@@ -28,7 +28,7 @@ A user manual that starts from the theory (variational Monte Carlo, the Pfaffian
 | [`crates/mvmc-expert-parsers`](crates/mvmc-expert-parsers) | GPL-3.0-or-later | `MVMCExpertModeParsers.jl/src` |
 | [`crates/mvmc-core`](crates/mvmc-core) | GPL-3.0-or-later | `MVMCOptimizers.jl/src` |
 | [`crates/mvmc-cli`](crates/mvmc-cli) | GPL-3.0-or-later | `examples/*.jl` + CLI binary |
-| [`crates/mvmc-greenr2k`](crates/mvmc-greenr2k) | GPL-3.0-or-later | `extern/mVMC-1.3.0/tool/greenr2k.F90` (`greenr2k` binary) |
+| [`crates/mvmc-greenr2k`](crates/mvmc-greenr2k) | GPL-3.0-or-later | `extern/mVMC-1.4.0/tool/greenr2k.F90` (`greenr2k` binary) |
 | [`xtask`](xtask) | GPL-3.0-or-later | build / regression driver |
 
 ## Quick start
@@ -179,7 +179,7 @@ All differences are well within the 50-step regression tolerance of 1e-8.
 
 ### Numerical reference policy
 
-The C implementation in `extern/mVMC-1.3.0/` is treated as the authoritative source for numerical behavior: parameter layout, initialization and draw order, arithmetic order, signs, and floating-point results. Julia-mVMC is used as a secondary reference and test aid. Where the two references differ, Rust follows the C contract, and cross-language comparisons use explicit absolute and relative tolerances justified by the first divergence, operation order, problem scale, and conditioning. Exact-bit gates compare same-implementation runs; Rust-to-C or Rust-to-Julia comparisons never claim bitwise equality.
+The C implementation in `extern/mVMC-1.4.0/` is treated as the authoritative source for numerical behavior: parameter layout, initialization and draw order, arithmetic order, signs, and floating-point results. Julia-mVMC is used as a secondary reference and test aid. Where the two references differ, Rust follows the C contract, and cross-language comparisons use explicit absolute and relative tolerances justified by the first divergence, operation order, problem scale, and conditioning. Exact-bit gates compare same-implementation runs; Rust-to-C or Rust-to-Julia comparisons never claim bitwise equality.
 
 ## Speed benchmark vs. Julia-mVMC
 

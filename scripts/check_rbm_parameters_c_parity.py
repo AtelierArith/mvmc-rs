@@ -49,7 +49,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src"
     materialize_readers(root, src / "mVMC/readdef.c", args.write)
     parameter = src / "mVMC/parameter.c"
     materialize(root, "rbm_parameters_upstream.inc", "\n".join(function(parameter.read_text(), sig) for sig in (

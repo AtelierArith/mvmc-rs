@@ -114,7 +114,7 @@ def pick_image(explicit, out, env):
 
 
 def prepare_c(image, build, out, env):
-    c_source = ROOT / 'extern/mVMC-1.3.0'
+    c_source = ROOT / 'extern/mVMC-1.4.0'
     if command(['git', '-C', c_source, 'status', '--porcelain', '--untracked-files=no'], env=env).strip():
         raise ValueError('C reference has tracked modifications; preserve them and use a clean reference checkout')
     source = command(['git', '-C', c_source, 'rev-parse', 'HEAD'], env=env).strip()
@@ -342,7 +342,7 @@ def main():
         build.mkdir(parents=True, exist_ok=True)
         env = clean_environment()
         command(['git', 'submodule', 'update', '--init', '--recursive', 'extern/Julia-mVMC'] +
-                (['extern/mVMC-1.3.0'] if args.mode == 'cpu' else []), out / 'submodules.log', env)
+                (['extern/mVMC-1.4.0'] if args.mode == 'cpu' else []), out / 'submodules.log', env)
         project = JULIA if args.mode == 'cpu' else JULIA / 'test/gpu'
         command(['julia', '+1.13', '--startup-file=no', '--threads=1', f'--project={project}',
                  TOOLS / 'prepare_julia.jl'], out / 'julia-prepare.log', dict(env, JULIA_NUM_THREADS='1'))

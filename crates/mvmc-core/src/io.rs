@@ -180,8 +180,8 @@ pub fn output_data(
     )?;
 
     if binary {
-        // C initfile.c:58-66 writes the header at InitFile; outputData appends
-        // one Para block per step (vmcmain.c:658). Step 0 creates the file.
+        // C initfile.c:63-71 writes the header at InitFile; outputData appends
+        // one Para block per step (vmcmain.c:660). Step 0 creates the file.
         let index = data.modpara.n_data_idx_start;
         let path = output_path(&format!("{head}_varbin_{index:03}.dat"), output_dir)?;
         let mut file = open_step_file(&path, mode_first)?;
@@ -203,7 +203,7 @@ pub fn output_data(
         format_c_double(etot2.re),
         format_c_double(etot2.im),
     )?;
-    // C vmcmain.c:655-657 writes every Para[0..NPara] slot, not mapped
+    // C vmcmain.c:657-659 writes every Para[0..NPara] slot, not mapped
     // coefficient families. DH2/DH4 and inactive/reserved slots are data;
     // OptTrans follows the declared Slater block.
     for value in all_parameters(data) {
@@ -229,7 +229,7 @@ fn all_parameters(data: &ExpertModeData) -> Vec<Complex64> {
         .collect()
 }
 
-/// C `-b` header (`initfile.c:63-64`, `:88-89`): native-endian `int NPara`
+/// C `-b` header (`initfile.c:68-69`, `:88-89`): native-endian `int NPara`
 /// then `int NSROptItrStep` (PhysCal writes 1).
 pub fn write_varbin_header(out: &mut impl Write, n_para: usize, n_steps: i64) -> io::Result<()> {
     let n_para = i32::try_from(n_para)
@@ -244,7 +244,7 @@ pub fn write_varbin_header(out: &mut impl Write, n_para: usize, n_steps: i64) ->
 /// native-endian `f64` (re, im), `2 * NPara` doubles.
 ///
 /// Intentional difference from C: `fwrite(Para, sizeof(double), NPara, FileVar)`
-/// (`vmcmain.c:658`) writes only `NPara` doubles of the `double complex Para[NPara]`
+/// (`vmcmain.c:660`) writes only `NPara` doubles of the `double complex Para[NPara]`
 /// array, i.e. the first `ceil(NPara/2)` parameters. The header shape is C's; the block
 /// is complete. The leading `NPara` doubles equal C's block.
 pub fn varbin_para_bytes(parameters: &[Complex64]) -> Vec<u8> {
@@ -312,7 +312,7 @@ pub fn output_phys_data(
     )?;
     out.flush()?;
     if binary {
-        // C InitFilePhysCal (initfile.c:86-90): header (NPara, 1), one Para block.
+        // C InitFilePhysCal (initfile.c:91-95): header (NPara, 1), one Para block.
         let mut var = io::BufWriter::new(File::create(path_of(&format!(
             "{head}_varbin_{index:03}.dat"
         )))?);
@@ -374,7 +374,7 @@ pub fn output_phys_data(
         .zip(&phys.phys_cis_ajs_ckt_alt)
         .map(|(_term, value)| format!("{}  {} ", CDouble(value.re), CDouble(value.im)))
         .collect::<Vec<_>>();
-    // C vmcmain.c:671–675 emits pairs in term order, newline after the loop.
+    // C vmcmain.c:673–677 emits pairs in term order, newline after the loop.
     if !ex_pairs.is_empty() {
         write_rows("cisajscktaltex", vec![ex_pairs.concat()], false)?;
     }
@@ -525,7 +525,7 @@ pub fn output_phys_data(
                     )
                 })
                 .collect::<Vec<_>>();
-            // C InitFilePhysCal (initfile.c:130–132) opens this even at zero
+            // C InitFilePhysCal (initfile.c:140–142) opens this even at zero
             // count. physcal_lanczos.c:141/262 unconditionally emits '\n'
             // after the real/complex pair loop: zero terms means ONE newline.
             write_rows("ls_cisajscktaltex", vec![factored_pairs.concat()], false)?;

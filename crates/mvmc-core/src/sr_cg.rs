@@ -164,7 +164,7 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
     let mut operator = SampledSrOperator::new(mapping.len(), samples, complex);
     let mut gradient = vec![0.0; mapping.len()];
     let dt = 2.0 * data.modpara.dsr_opt_step_dt;
-    // stcopt_cg_impl.c:471-492 `omp parallel for` over the active components `si`.
+    // stcopt_cg_impl.c:713-734 `omp parallel for` over the active components `si`.
     crate::threading::for_each_mut(&mut operator.mean, 2, |si, value| {
         *value = oo[mapping[si] + offset]
     });
@@ -233,7 +233,7 @@ pub fn stochastic_opt_cg_with_reducer<R: Reducer + ?Sized>(
                 imax = i;
             }
         }
-        // C stcopt_cg_impl.c:202 prints the global NPara, not OFFSET*NPara.
+        // C stcopt_cg_impl.c:285 prints the global NPara, not OFFSET*NPara.
         files.write_sr_info(&SrInfoRow {
             n_para: n_para as i64,
             n_smat: mapping.len() as i64,
@@ -413,7 +413,7 @@ impl SampledSrOperator {
         let n = self.components;
         assert_eq!(gradient.len(), n);
         let version = crate::stage_backend::next_operand_version();
-        // stcopt_cg_impl.c:265 evaluates these four factors left to right.
+        // stcopt_cg_impl.c:492 evaluates these four factors left to right.
         let threshold = tolerance * tolerance * n as f64 * n as f64;
         let mut solution = vec![0.0; n];
         let mut direction = gradient.to_vec();
@@ -448,7 +448,7 @@ impl SampledSrOperator {
             )?;
             let dq = sequential_dot(&direction, &product);
             let alpha = delta / dq;
-            // stcopt_cg_impl.c:313 `omp parallel for`: elementwise, one producer per entry.
+            // stcopt_cg_impl.c:545 `omp parallel for`: elementwise, one producer per entry.
             crate::threading::for_each_mut(&mut solution, 2, |i, value| {
                 *value += alpha * direction[i]
             });

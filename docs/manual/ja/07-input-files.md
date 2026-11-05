@@ -3,7 +3,7 @@
 [目次](README.md) · 前へ: [6. 理論V: 物理量とLanczos法による補正](06-theory-observables-lanczos.md) · 次へ: [8. 実行](08-running.md)
 
 `mvmc` は、C プログラムとまったく同じように **Expert モード**の入力を読み込みます。1 つのリストファイル(`namelist.def`)が定義ファイルの集合を指名し、各ファイルは固定のキーワードで導入されます。各ファイル形式の基準となる記述は C マニュアル
-[`extern/mVMC-1.3.0/doc/en/source/expert.rst`](../../../extern/mVMC-1.3.0/doc/en/source/expert.rst)
+[`extern/mVMC-1.4.0/doc/en/source/expert.rst`](../../../extern/mVMC-1.4.0/doc/en/source/expert.rst)
 (日本語版: `doc/ja`)です。この章では構造を要約し、Rust 実装が異なる点を記録し、サポート/拒否の一覧を示します。この一覧は `crates/mvmc-core/src/validation.rs` から直接取ったものです。
 
 C パッケージの Standard モードのフロントエンド(`vmcdry`/StdFace、`-s` オプション)は、[7.6](#76-standard-モードstdface)に挙げた格子について `mvmc -s` / `mvmc --dry-run` として利用できます。それ以外では Expert モードのファイルは C のツールで生成するか、`benchmark/hubbard_chain/inputs/` および `tests/fixtures/` にコミットされている例を使ってください([チュートリアル](10-tutorial.md)を参照)。
@@ -11,7 +11,7 @@ C パッケージの Standard モードのフロントエンド(`vmcdry`/StdFace
 ## 7.1 `namelist.def`
 
 コメントでない各行は `Keyword filename` の形式です。キーワードは任意の順序で現れてよく、`#` で始まる行はスキップされ、キーワードの照合は ASCII の大文字小文字を区別しません(`CheckWords`)。
-C のキーワードリストは `cKWListOfFileNameList` (`extern/mVMC-1.3.0/src/mVMC/include/readdef.h:33`)です。
+C のキーワードリストは `cKWListOfFileNameList` (`extern/mVMC-1.4.0/src/mVMC/include/readdef.h:33`)です。
 
 ```text
 ModPara LocSpin Trans CoulombIntra CoulombInter Hund PairHop Exchange Gutzwiller Jastrow DH2 DH4
@@ -43,10 +43,10 @@ TransSym qptransidx.def
 
 各行は `Key value` の形式です(Rust パーサではオプションとして `Key = value` も受け付けます。`-` で始まる行は装飾です)。パーサは `parse_modpara_content`
 (`crates/mvmc-expert-parsers/src/parsers/modpara.rs:20`)で、キーのテーブルは `apply_param`
-(`modpara.rs:45`)にあります。C のリーダは `GetInfoFromModPara` (`readdef.c:1825`)です。
+(`modpara.rs:45`)にあります。C のリーダは `GetInfoFromModPara` (`readdef.c:2145`)です。
 
 **デフォルト値。** 指定されていないキーは以下の値を取ります。C の値は
-`SetDefaultValuesModPara` (`readdef.c:1756`)に由来し、いくつかのキーで **C マニュアルの記述と異なります**
+`SetDefaultValuesModPara` (`readdef.c:2064`)に由来し、いくつかのキーで **C マニュアルの記述と異なります**
 (マニュアル: `NSPGaussLeg` 8、`NVMCSample` 1000。コード: 1 と 10)。基準となるのはコードです。Rust の値は
 `impl Default for ModParaParameters` (`crates/mvmc-expert-parsers/src/types.rs:233`)であり、Julia のパーサに従っているため **C とは異なります**。重要なキーはすべて明示的に指定してください。
 
@@ -103,8 +103,8 @@ TransSym qptransidx.def
 注記:
 
 - スピンインデックスは 0(アップ)と 1(ダウン)です。サイトインデックスは 0 から始まります。`idx optflag` テーブルのパラメータインデックスは 0 から始まり、$0\ldots N-1$ をカバーしていなければなりません。
-- `Trans`, `Hund`, `Exchange`, `CoulombInter`, `CoulombIntra`, `PairHop` は、`crates/mvmc-expert-parsers/src/parsers/`(`coulomb.rs`, `hund.rs`, `exchange.rs`, `pairhop.rs`, `trans.rs`)の型付きローダでパースされます。C のリーダは `GetTransferInfo` (`readdef.c:1973`)、`ReadPairHopValue` (`readdef.c:2038`)、`ReadPairDValue`
-  (`readdef.c:2063`)、`GetInfoInterAll` (`readdef.c:2420`)です。`load_hamiltonian_definition` API
+- `Trans`, `Hund`, `Exchange`, `CoulombInter`, `CoulombIntra`, `PairHop` は、`crates/mvmc-expert-parsers/src/parsers/`(`coulomb.rs`, `hund.rs`, `exchange.rs`, `pairhop.rs`, `trans.rs`)の型付きローダでパースされます。C のリーダは `GetTransferInfo` (`readdef.c:2304`)、`ReadPairHopValue` (`readdef.c:2369`)、`ReadPairDValue`
+  (`readdef.c:2394`)、`GetInfoInterAll` (`readdef.c:2834`)です。`load_hamiltonian_definition` API
   (`crates/mvmc-expert-parsers/src/definition.rs`)は、これらの族のひとつを `ExpertModeData` に読み込みます。
 - インデックスファイルの `ComplexType` 行は、そのブロックのパラメータが実数(0)か複素数(1)かを選択し、それにより実数/複素数の実行モードも決まります([3.3](03-theory-wavefunction.md#33-実数モードと複素数モード))。
 - パラメータの最適化フラグ(`optflag`)は、1 で最適化、0 で固定です。初期値が与えられていない固定パラメータは 0 に設定され、乱数を消費しません([3.7](03-theory-wavefunction.md#37-初期値と同期))。
@@ -177,7 +177,7 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 
 | 条件 | 結果 |
 |-----------|--------|
-| `NSRCG != 0`(CG)での最適化 | 拒否: C で未定義(`vmccal.c:241,248` は保存した `O` をグローバルなサンプル位置に書くが、`vmccal.c:314-318` は先頭列からローカル数だけ読む) |
+| `NSRCG != 0`(CG)での最適化 | 拒否: C で未定義(`vmccal.c:250,257` は保存した `O` をグローバルなサンプル位置に書くが、`vmccal.c:323-327` は先頭列からローカル数だけ読む) |
 | 一般(FSZ)軌道での PhysCal/最適化(任意の `NQPFull`) | 受理(C が定義。#349 でネイティブ C の 2/4 ランクと照合) |
 | `NLanczosMode > 0` の PhysCal | 受理(C が定義) |
 | `NQPOptTrans > 1` / `OptTrans` | 受理(C が定義) |
@@ -201,7 +201,7 @@ BackFlow、`SpinJastrow`、グループ CG を拒否する C ソース上の根�
 ## 7.6 Standard モード(StdFace)
 
 `mvmc -s <stan.in>` は C の `-s` オプションの移植です。Standard モードのキーワードファイルを純 Rust の
-`mvmc-stdface` クレート(`extern/mVMC-1.3.0/src/StdFace/src` の mVMC ソルバー分岐のみの移植)が読み、Expert
+`mvmc-stdface` クレート(`extern/mVMC-1.4.0/src/StdFace/src` の mVMC ソルバー分岐のみの移植)が読み、Expert
 ファイル(`modpara.def`、`namelist.def`、`locspn.def`、`trans.def`、相互作用ファイル、`gutzwilleridx.def`、
 `jastrowidx.def`、`orbitalidx*.def`、`qptransidx.def`、`greenone.def`、`greentwo.def`、`geometry.dat`、
 `lattice.gp`)を `--out-dir`(既定は C と同じくカレントディレクトリ)に書き出し、生成された `namelist.def`

@@ -288,7 +288,7 @@ const DIAG_LINES: &[(&str, usize)] = &[
     ("  ReduceCounter            [966] ", 966),
 ];
 
-/// C's `OutputTimerPhysCal` line set (`vmcclock.c:140-191`). Distinct from the
+/// C's `OutputTimerPhysCal` line set (`vmcclock.c:140-192`). Distinct from the
 /// ParaOpt set: ids 50-53 mean GreenFunc1/GreenFunc2/addPhysCA/addPhysCACA in
 /// this mode, and StochasticOpt/ReturnSlaterElmDiff ids are absent.
 const PHYS_CAL_LINES: &[(&str, usize)] = &[

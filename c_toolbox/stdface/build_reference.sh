@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build the C StdFace dry-run driver for the mVMC solver (mvmc_dry.out equivalent).
 # Usage: c_toolbox/stdface/build_reference.sh <output-dir> [--fixed]
-# Mirrors extern/mVMC-1.3.0/src/StdFace/src/CMakeLists.txt (MVMC=ON):
+# Mirrors extern/mVMC-1.4.0/src/StdFace/src/CMakeLists.txt (MVMC=ON):
 #   sources = SOURCES_StdFace + dry.c, -D_mVMC -DMEXP=19937, link -lm.
 # Override the optimisation level with OPT (default: the CMake Release flags `-O3 -DNDEBUG`).
 # With --fixed the sources are first copied to a temporary directory and
@@ -14,7 +14,7 @@ OUT=${1:?output directory}
 MODE=${2:-}
 CC=${CC:-gcc}
 OPT=${OPT:--O3 -DNDEBUG}
-S="$ROOT/extern/mVMC-1.3.0/src/StdFace/src"
+S="$ROOT/extern/mVMC-1.4.0/src/StdFace/src"
 NAME=mvmc_dry.out
 if [ "$MODE" = "--fixed" ]; then
   TMP=$(mktemp -d)

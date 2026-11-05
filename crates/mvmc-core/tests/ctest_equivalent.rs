@@ -335,7 +335,7 @@ fn rust_ctest_equivalent_selected_models() {
 
 /// Upstream C/Julia ctest contract at the upstream run length.
 ///
-/// Mirrors `extern/mVMC-1.3.0/test/python/runtest.py` and Julia's
+/// Mirrors `extern/mVMC-1.4.0/test/python/runtest.py` and Julia's
 /// `ctest_equivalent.jl`: run the unmodified input (`NSROptItrStep`/`NSROptItrSmp`
 /// from `modpara.def`, seed from the input) and compare the first two window-averaged
 /// summary values with `ref_mean.dat`/`ref_std.dat`. A model fails only when

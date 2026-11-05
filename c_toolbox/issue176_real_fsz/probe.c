@@ -81,7 +81,7 @@ static void print_matrix_state(const char *label, int nqp_local, int qp_offset) 
 }
 
 /* Matrix cases: operands are the literal (idx, spins, complex Slater hex) records of the
- * Julia fixture; C's vmcmain.c:372 copies creal(SlaterElm) into SlaterElm_real before
+ * Julia fixture; C's vmcmain.c:374 copies creal(SlaterElm) into SlaterElm_real before
  * CalculateMAll_fsz_real, so only real parts enter the native kernel. */
 static int run_matrix(const char *path) {
   FILE *fp = fopen(path, "r");

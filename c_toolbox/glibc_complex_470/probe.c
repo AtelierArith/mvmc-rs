@@ -1,5 +1,5 @@
 /* Standalone libm kernel check for issue #470: evaluates the C99 complex functions the mVMC RBM
- * code calls (extern/mVMC-1.3.0/src/mVMC/rbm.c: cexp, clog, ccosh, ctanh) on hexadecimal inputs.
+ * code calls (extern/mVMC-1.4.0/src/mVMC/rbm.c: cexp, clog, ccosh, ctanh) on hexadecimal inputs.
  * Not a full vmc.out run. Build and run: see generate.sh.
  *
  * stdin : one `<re bits> <im bits>` per line (16 hex digits each, IEEE-754 binary64)

@@ -16,7 +16,7 @@ Run inside the Linux development container with the reference submodules initial
 ```sh
 repo="$PWD"
 probe="$(mktemp -d)"
-cp -a "$repo/extern/mVMC-1.3.0" "$probe/src"
+cp -a "$repo/extern/mVMC-1.4.0" "$probe/src"
 patch -d "$probe/src" -p1 < "$repo/c_toolbox/issue_605/probe.patch"
 mkdir "$probe/build"
 cd "$probe/build"

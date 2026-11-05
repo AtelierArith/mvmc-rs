@@ -38,15 +38,15 @@ For one SR step (or one PhysCal sample) `VMCMakeSample` runs this procedure:
 5. Store the final configuration for the next call and set `BurnFlag = 1`.
 
 > **Implementation**
-> - C: `VMCMakeSample` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:45`
-> - C: `VMCMakeSample_real` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_real.c:45`
-> - C: `VMCMakeSample_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:42`
-> - C: `saveEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:445`
+> - C: `VMCMakeSample` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:45`
+> - C: `VMCMakeSample_real` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_real.c:45`
+> - C: `VMCMakeSample_fsz` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:42`
+> - C: `saveEleConfig` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:550`
 > - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:462`
 > - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:147`
 > - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1022`
 > - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:443`
-> - Parity: the number of outer steps, the saved-sample index and the `nAccept > Nsite` refresh follow `vmcmake.c:141, 309, 334-349` (Rust `driver.rs:271-278, 532-552, 558-562`). The refresh test uses a strict `>`. `copyToBurnSample` after the last step is reproduced by the "burn" buffers of `ElectronConfiguration`; the carry-over is detected by `counter[9] != 0` (`driver.rs:167`).
+> - Parity: the number of outer steps, the saved-sample index and the `nAccept > Nsite` refresh follow `vmcmake.c:141, 389, 414-429` (Rust `driver.rs:271-278, 532-552, 558-562`). The refresh test uses a strict `>`. `copyToBurnSample` after the last step is reproduced by the "burn" buffers of `ElectronConfiguration`; the carry-over is detected by `counter[9] != 0` (`driver.rs:167`).
 
 ## 4.2 Initial configuration
 
@@ -63,7 +63,7 @@ For one SR step (or one PhysCal sample) `VMCMakeSample` runs this procedure:
    then abort).
 
 > **Implementation**
-> - C: `makeInitialSample` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:359`
+> - C: `makeInitialSample` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:439`
 > - Rust: `make_initial_sample` — `crates/mvmc-core/src/sampling/initial.rs:76`
 > - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:252`
 > - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:274`
@@ -113,14 +113,14 @@ exactly one `genrand_real2` in the acceptance test, even when the weight is
 non-finite or zero.
 
 > **Implementation**
-> - C: `getUpdateType` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:606`
-> - C: `makeCandidate_hopping` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:515`
-> - C: `makeCandidate_exchange` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:548`
-> - C: `updateEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:585`
-> - C: `makeCandidate_hopping_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:594`
-> - C: `makeCandidate_exchange_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:670`
-> - C: `makeCandidate_LocalSpinFlip_localspin` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:728`
-> - C: `makeCandidate_LocalSpinFlip_conduction` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:756`
+> - C: `getUpdateType` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:797`
+> - C: `makeCandidate_hopping` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:620`
+> - C: `makeCandidate_exchange` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:684`
+> - C: `updateEleConfig` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:777`
+> - C: `makeCandidate_hopping_fsz` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:633`
+> - C: `makeCandidate_exchange_fsz` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:780`
+> - C: `makeCandidate_LocalSpinFlip_localspin` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:838`
+> - C: `makeCandidate_LocalSpinFlip_conduction` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:866`
 > - Rust: `get_update_type` — `crates/mvmc-core/src/sampling/candidate.rs:320`
 > - Rust: `make_candidate_hopping` — `crates/mvmc-core/src/sampling/candidate.rs:137`
 > - Rust: `make_candidate_exchange` — `crates/mvmc-core/src/sampling/candidate.rs:230`
@@ -149,7 +149,7 @@ $\ln\mathrm{IP}$ are updated; on rejection the occupation arrays are reverted
 (`revertEleConfig`) and nothing else changes.
 
 > **Implementation**
-> - C: `VMCMakeSample` (acceptance block `w = exp(2.0*(creal(x+logIpNew-logIpOld)))`) — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:194`
+> - C: `VMCMakeSample` (acceptance block `w = exp(2.0*(creal(x+logIpNew-logIpOld)))`) — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:203`
 > - Rust: `metropolis_weight` — `crates/mvmc-core/src/sampling/metropolis.rs:42`
 > - Rust: `metropolis_decision` — `crates/mvmc-core/src/sampling/metropolis.rs:60`
 > - Rust: `attempt_hopping_move` — `crates/mvmc-core/src/sampling/one_move.rs:200`
@@ -202,15 +202,15 @@ configuration; `calHCA`/`calHCACA` of the Lanczos path temporarily update and th
 restore the stored `InvM`/`PfM` (`copyMAll`).
 
 > **Implementation**
-> - C: `CalculateNewPfM2` — `extern/mVMC-1.3.0/src/mVMC/pfupdate.c:78`
-> - C: `UpdateMAll` — `extern/mVMC-1.3.0/src/mVMC/pfupdate.c:119`
-> - C: `updateMAll_child` — `extern/mVMC-1.3.0/src/mVMC/pfupdate.c:143`
-> - C: `CalculateNewPfMTwo2_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:73`
-> - C: `calculateNewPfMTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:107`
-> - C: `UpdateMAllTwo_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:189`
-> - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:217`
-> - C: `UpdateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_fsz.c:114`
-> - C: `UpdateMAllTwo_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fsz.c:194`
+> - C: `CalculateNewPfM2` — `extern/mVMC-1.4.0/src/mVMC/pfupdate.c:80`
+> - C: `UpdateMAll` — `extern/mVMC-1.4.0/src/mVMC/pfupdate.c:123`
+> - C: `updateMAll_child` — `extern/mVMC-1.4.0/src/mVMC/pfupdate.c:147`
+> - C: `CalculateNewPfMTwo2_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:73`
+> - C: `calculateNewPfMTwo_child_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:107`
+> - C: `UpdateMAllTwo_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:192`
+> - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:220`
+> - C: `UpdateMAll_fsz` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_fsz.c:116`
+> - C: `UpdateMAllTwo_fsz` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fsz.c:197`
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
 > - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:73`
 > - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
@@ -221,7 +221,7 @@ restore the stored `InvM`/`PfM` (`copyMAll`).
 > - Rust: `update_m_all_two_fsz_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:907`
 > - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
 > - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
-> - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. **Known quirk (observed):** in the two-electron update C defines `rsbOld = raOld + t*Nsite` (it uses `raOld`, not `rbOld`) in all four variants (`pfupdate_two_fcmp.c:227`, `pfupdate_two_real.c:227`, and the FSZ files). The Rust *real* update reproduces this on purpose (`update_m_all_two_real_flat`, `updates.rs:565`, `rsb_old = ra_old + ...` at `updates.rs:588`), but the Rust *complex normal* update uses `rb_old` (`updates.rs:537`). See [11.5](11-compatibility.md#115-open-observations).
+> - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. **Known quirk (observed):** in the two-electron update C defines `rsbOld = raOld + t*Nsite` (it uses `raOld`, not `rbOld`) in all four variants (`pfupdate_two_fcmp.c:230`, `pfupdate_two_real.c:230`, and the FSZ files). The Rust *real* update reproduces this on purpose (`update_m_all_two_real_flat`, `updates.rs:565`, `rsb_old = ra_old + ...` at `updates.rs:588`), but the Rust *complex normal* update uses `rb_old` (`updates.rs:537`). See [11.5](11-compatibility.md#115-open-observations).
 
 ## 4.6 Parallelism inside the sampler
 
@@ -234,8 +234,8 @@ For `NSplitSize = 1` each MPI rank runs its own chain with RNG seed
 made identically on every rank of the group. See [8.4](08-running.md#84-mpi-and-grouped-execution).
 
 > **Implementation**
-> - C: `SplitLoop` — `extern/mVMC-1.3.0/src/mVMC/splitloop.c:31`
-> - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
+> - C: `SplitLoop` — `extern/mVMC-1.4.0/src/mVMC/splitloop.c:31`
+> - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.4.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:2093`

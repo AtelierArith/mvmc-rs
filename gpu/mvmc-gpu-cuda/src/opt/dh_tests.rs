@@ -230,7 +230,7 @@ impl Cpu {
             &self.data,
             &self.state,
         );
-        // C calculateOptTransDiff after Slater (vmccal.c:214-216), in the
+        // C calculateOptTransDiff after Slater (vmccal.c:223-225), in the
         // mathematically correct real-mode slots (#370).
         let nopt = self.data.count_opt_trans_parameters();
         if nopt > 0 {

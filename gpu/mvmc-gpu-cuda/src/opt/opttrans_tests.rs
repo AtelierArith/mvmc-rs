@@ -453,7 +453,7 @@ fn resident_opt_opttrans_l128_matches_cpu_c_order() {
 /// stream synchronization for the whole warmup/optimization series. The
 /// OptTrans weights move and stay normalized. With the OptTrans flags cleared
 /// (C's effective `-o` contract: `GetInfoOptTrans` never writes the OptTrans
-/// component flags, `readdef.c:2400`) they keep their initial values.
+/// component flags, `readdef.c:2814`) they keep their initial values.
 #[test]
 #[ignore = "requires CUDA; 20-step OptTrans repeatability, transfers and timing"]
 fn resident_opt_opttrans_repeats_twenty_steps() {

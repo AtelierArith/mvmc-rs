@@ -139,7 +139,7 @@ fn run_stdface(input: &Path, gen_dir: &Path) -> i32 {
 /// authoritative C release it follows.
 fn print_version() {
     println!(
-        "mvmc-rs version {} (follows C mVMC 1.3.0)",
+        "mvmc-rs version {} (follows C mVMC 1.4.0)",
         env!("CARGO_PKG_VERSION")
     );
 }
@@ -770,7 +770,7 @@ pub fn run_cli() {
     let output_root = mpi_context.is_none_or(|context| context.is_root());
     #[cfg(not(feature = "mpi"))]
     let output_root = true;
-    // readdef.c:749-752: rank 0 reports the negative-DSROptStepDt mode on stderr.
+    // readdef.c:959-962: rank 0 reports the negative-DSROptStepDt mode on stderr.
     if data.modpara.sr_flag && output_root {
         eprintln!("remark: Diagonalization Mode");
     }
@@ -981,7 +981,7 @@ fn report_inner_profile() {
     }
 }
 
-/// C `initMultiDefMode` (`vmcmain.c:727-800`) for a serial launch: the world has one rank,
+/// C `initMultiDefMode` (`vmcmain.c:737-810`) for a serial launch: the world has one rank,
 /// so only `-m 1` is valid. Exits with C's status on every error.
 #[cfg(not(feature = "mpi"))]
 fn init_multi_def(n: i64, dir_list: &Path) {
@@ -1007,7 +1007,7 @@ fn init_multi_def(n: i64, dir_list: &Path) {
     }
 }
 
-/// C `initMultiDefMode` (`vmcmain.c:727-800`): split the world into `n` groups, read the
+/// C `initMultiDefMode` (`vmcmain.c:737-810`): split the world into `n` groups, read the
 /// directory list on rank 0, give group `g` the `g`-th name and change into it. Returns
 /// the group communicator (`comm0`), or `None` for a serial launch (a one-rank world,
 /// where only `-m 1` is valid). Failures exit with status 1 on every rank, as C's
@@ -1104,7 +1104,7 @@ fn init_multi_def(
     group
 }
 
-/// Validate the NVMCCalMode dispatch (`vmcmain.c:304-319`). The positional `initpara` is
+/// Validate the NVMCCalMode dispatch (`vmcmain.c:306-321`). The positional `initpara` is
 /// optional in both modes, so only the explicit `--physcal` alias can disagree.
 fn select_calculation(vmc_calc_mode: i64, has_physcal_flag: bool) -> Result<(), String> {
     match (vmc_calc_mode, has_physcal_flag) {

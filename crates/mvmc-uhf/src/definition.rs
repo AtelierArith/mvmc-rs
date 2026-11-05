@@ -9,17 +9,19 @@
 //! C tool accepts, and this module follows the C file instead.
 //!
 //! Documented deviations from the C source (all of them C defects or
-//! undefined behaviour, see `docs/COMPLEX_UHF.md`):
+//! undefined behaviour, see `docs/COMPLEX_UHF.md`), plus the 1.4.0 record-count
+//! fix that the 1.3.0 reader lacked:
 //!
 //! * a missing definition file is reported as an error (C calls
 //!   `fclose(NULL)` and crashes);
 //! * a namelist keyword that is not in the keyword list is ignored with a
 //!   warning (C writes `cFileNameList[-1]` or the previous keyword's slot);
-//! * a file with fewer records than its declared count is an error (#680).
-//!   mVMC 1.3.0 `ReadDefFileError` prints `Error: <file> (Broken file or Not
-//!   exist)` but returns 0, so the run continued with zero-filled terms;
-//!   upstream issp-center-dev/mVMC#81 (v1.4.0) returns 1 and aborts. Rust
-//!   prints the same C line and then fails before any output;
+//! * a file with fewer records than its declared count is an error (#680),
+//!   as in the C reference 1.4.0. mVMC 1.3.0 `ReadDefFileError` printed
+//!   `Error: <file> (Broken file or Not exist)` but returned 0, so the run
+//!   continued with zero-filled terms; upstream issp-center-dev/mVMC#81
+//!   (v1.4.0) returns 1 and aborts. Rust prints the same C line and then fails
+//!   before any output;
 //! * records beyond the declared counts are dropped with a warning (C 1.3.0
 //!   writes past the end of its heap arrays; C 1.4.0 drops them only for
 //!   `Initial` and aborts for the other files);

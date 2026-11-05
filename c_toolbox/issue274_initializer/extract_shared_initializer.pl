@@ -29,6 +29,6 @@ sub write_new {
     print {$o} $bytes or die "IO write: $!";
     close $o or die "IO output close: $!";
 }
-write_new('shared-initializer.inc', $license . "\n/* Unmodified body from vmcmake.c:359 through before copyFromBurnSample.\n * Original source SHA256 $expected; GPL-3.0-or-later. */\n" . $body);
+write_new('shared-initializer.inc', $license . "\n/* Unmodified body from vmcmake.c:439 through before copyFromBurnSample.\n * Original source SHA256 $expected; GPL-3.0-or-later. */\n" . $body);
 write_new('source-provenance.txt', "original_sha256=$expected\nbody_sha256=" . sha256_hex($body)
     . "\nbody_bytes=" . length($body) . "\nboundaries=makeInitialSample signature -> copyFromBurnSample signature\n");

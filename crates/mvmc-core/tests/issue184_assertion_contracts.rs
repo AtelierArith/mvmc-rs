@@ -1,5 +1,5 @@
 //! Focused non-InterAll assertion contracts from pinned Julia 8bb1b9e8.
-//! C parameter.c:134-152,202-252,255-313 is authoritative for DH flags/order.
+//! C parameter.c:134-152,202-252,255-316 is authoritative for DH flags/order.
 //! SHA-256: 46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0.
 //! Expectations below are analytical constants, not Rust-generated fixtures.
 use mvmc_core::parallel::partition_range;

@@ -156,7 +156,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC"
     reader = (src / "readdef.c").read_text()
     sources = [src / "readdef.c", src / "include/readdef.h", src / "include/global.h"]
     materialize(root, "modpara_reader_upstream.inc", extract(reader), sources, args.write)
@@ -164,9 +164,9 @@ def main():
     sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     lines = [
         "# C mVMC 1.3.0 modpara reader oracle (#344): SetDefaultValuesModPara + GetInfoFromModPara",
-        "# + NBlockSize_RBMRatio adjustment (readdef.c:375-380). time(NULL) replaced by sentinel.",
+        "# + NBlockSize_RBMRatio adjustment (readdef.c:403-408). time(NULL) replaced by sentinel.",
         *(f"# {name} sha256={digest}" for name, digest in sha.items()),
-        f"# compiler: {cc_version}; options: cc -O0 -I extern/mVMC-1.3.0/src/mVMC/include -I c_toolbox",
+        f"# compiler: {cc_version}; options: cc -O0 -I extern/mVMC-1.4.0/src/mVMC/include -I c_toolbox",
         f"# platform: {platform.system()} {platform.machine()} {platform.libc_ver()[0]} {platform.libc_ver()[1]}",
         "# reproduce: uv run --no-project python scripts/check_modpara_reader_c_parity.py --write",
         "# format: 'case <name> status <n>' then 'int|double|str <key> <value>' lines",

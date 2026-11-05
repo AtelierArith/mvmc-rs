@@ -97,7 +97,7 @@ def main():
             target.write_text(replacement)
     else:
         assert target.read_text() == replacement
-    source = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC/readdef.c"
+    source = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC/readdef.c"
     body = "\n".join(function(source.read_text(), signature) for signature in (
         "char *ReadBuffInt(FILE", "int ReadDefFileError(", "int CheckSite(\n",
         "int CheckPairSite(\n", "int CheckQuadSite(\n", "int GetInfoInterAll(FILE"))

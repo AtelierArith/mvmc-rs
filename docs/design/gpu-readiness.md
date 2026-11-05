@@ -343,7 +343,7 @@ Ordered by value to mvmc-rs.
    (`skew_ltl`, `pfaffian`, `skew_inv`; F64 and C64; trailing batch dims `[N,N,B..]`;
    CPU and CUDA; returns Pfaffian value (or sign plus log-abs) and a zero-pivot status per
    batch element rather than failing the batch). Reference semantics: PFAPACK
-   `dsktrf/zsktrf`, `dsktri` (`extern/mVMC-1.3.0/src/pfapack`), `n` = 16-1 024, batches of
+   `dsktrf/zsktrf`, `dsktri` (`extern/mVMC-1.4.0/src/pfapack`), `n` = 16-1 024, batches of
    1e3-1e5.
 2. **A reduction-order and determinism contract.** Document the summation order of CPU
    `dot_general`/`reduce_sum` (per provider), and add an execution policy (for example
@@ -512,7 +512,7 @@ Two independent batch axes:
   chains, each with its own SFMT stream, are the only way to fill a device during sampling.
 
 C seed contract (authoritative): `init_gen_rand(RndSeed + group1)` with
-`group1 = rank0 / NSplitSize` (`extern/mVMC-1.3.0/src/mVMC/vmcmain.c:239-257`; Rust:
+`group1 = rank0 / NSplitSize` (`extern/mVMC-1.4.0/src/mVMC/vmcmain.c:239-257`; Rust:
 `resolve_rnd_seed`, `run.rs:1976`, `base.wrapping_add(group1)`, then `seeded_rng`). Ranks
 inside one group share one stream and split the QP range; groups are independent chains.
 The accelerated sampler therefore defines **walker `w` of a device as global group

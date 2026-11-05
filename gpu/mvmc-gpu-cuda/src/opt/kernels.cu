@@ -153,7 +153,7 @@ extern "C" __global__ void opt_derivatives(double* O, const int* counts,
   if (p<nproj) { if (!lane) O[output]=counts[w*nproj+p]; return; }
   if (p<nproj+nrbm) return;  // opt_rbm_diff writes the RBM block
   if (p>=np-nopt) {
-    // C calculateOptTransDiff (vmccal.c:639-652): the sector's fixed-weight
+    // C calculateOptTransDiff (vmccal.c:652-665): the sector's fixed-weight
     // overlap over the total, O_i = sum_j QPFixWeight[j] PfM[i*NQPFix+j] / ip.
     // An invalid plane publishes Pf = 0, its exact value.
     if (!lane) {

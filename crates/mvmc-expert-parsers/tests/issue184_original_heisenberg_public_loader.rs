@@ -85,7 +85,7 @@ fn original_heisenberg_namelist_exercises_public_loader_conditions() {
     assert_eq!(data.modpara.nsite, 16);
     assert_eq!(data.modpara.nlocspin, 16);
     assert_eq!(data.modpara.ncond, 0);
-    assert_eq!(data.modpara.nelec, 8); // readdef.c:593, not a constructor override.
+    assert_eq!(data.modpara.nelec, 8); // readdef.c:661, not a constructor override.
     assert_eq!(data.modpara.vmc_calc_mode, 0);
     assert_eq!(data.modpara.nsr_opt_itr_step, 300);
     assert_eq!(data.modpara.nsr_opt_itr_smp, 30);

@@ -340,7 +340,7 @@ __device__ __forceinline__ void interval_hop_impl(
 
     // RBM log-ratio of the move (resident only): C UpdateRBMCnt applied to
     // the cached hidden fields, then LogRBMRatio. An exchange is C's two hops
-    // (ri -> rj with spin s, then rj -> ri with 1-s, vmcmake.c:241-251).
+    // (ri -> rj with spin s, then rj -> ri with 1-s, vmcmake.c:250-260).
     const bool use_rbm = resident && rbm != nullptr;
     double* theta_w = use_rbm ? theta + (size_t)w * nneuron : nullptr;
     const int hops = exchange ? 2 : 1;

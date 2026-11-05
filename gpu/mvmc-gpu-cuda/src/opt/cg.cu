@@ -62,12 +62,12 @@ extern "C" __global__ void cg_moments(double* mean, double* variance, double* ho
   }
   const double m = o / wc;
   mean[p] = m;
-  // stcopt_cg_impl.c:113 S[pi][pi] = OOdiag[pi] - O[pi]*O[pi].
+  // stcopt_cg_impl.c:129 S[pi][pi] = OOdiag[pi] - O[pi]*O[pi].
   variance[p] = __dsub_rn(oo / wc, __dmul_rn(m, m));
   ho[p] = eo / wc;
 }
 
-// stcopt_cg_impl.c:111-160 (diagonal cut) and StochasticOptCG_Init (:463-492):
+// stcopt_cg_impl.c:127-176 (diagonal cut) and StochasticOptCG_Init (:463-492):
 // x=0, d=r=g, and the initial stop test of StochasticOptCG_Main.
 extern "C" __global__ void cg_prepare(double* x, double* vec, int* active, double* st, int* ist,
     double* trace, double* history, const double* mean, const double* variance,
@@ -124,7 +124,7 @@ extern "C" __global__ void cg_prepare(double* x, double* vec, int* active, doubl
   const int nsmat = count[0];
   const double delta = cg_block_dot(r, r, active, np, scratch);
   if (!threadIdx.x) {
-    // stcopt_cg_impl.c:264-265, evaluated left to right.
+    // stcopt_cg_impl.c:490-492, evaluated left to right.
     const double thresh = tolerance * tolerance * (double)nsmat * (double)nsmat;
     const int limit = max_iter > 0 ? max_iter : nsmat;
     st[0] = delta;
@@ -158,7 +158,7 @@ extern "C" __global__ void cg_ty(double* y, double* st, const int* ist, const do
   }
 }
 
-// operate_by_S (stcopt_cg_impl.c:376-432): z = invW*(O y) - coef*<O>, then
+// operate_by_S (stcopt_cg_impl.c:618-674): z = invW*(O y) - coef*<O>, then
 // z += sdiag*DSROptStaDel*v.
 extern "C" __global__ void cg_oy(double* z, const double* st, const int* ist, const double* O,
     const double* y, const double* v, const int* active, const double* mo,
@@ -173,7 +173,7 @@ extern "C" __global__ void cg_oy(double* z, const double* st, const int* ist, co
   z[p] = __dadd_rn(value, __dmul_rn(__dmul_rn(sdiag[p], sta_del), v[p]));
 }
 
-// alpha = delta/(d.q), x += alpha*d (stcopt_cg_impl.c:307-316).
+// alpha = delta/(d.q), x += alpha*d (stcopt_cg_impl.c:536-548).
 __device__ double cg_alpha_update(double* x, const double* d, const double* q,
     const int* active, double* st, int np, double* scratch) {
   const double alpha = st[0] / cg_block_dot(d, q, active, np, scratch);
@@ -183,7 +183,7 @@ __device__ double cg_alpha_update(double* x, const double* d, const double* q,
 }
 
 // beta = (r.r)/delta, delta = beta*delta, d = r + beta*d and the stop test of
-// the next C loop iteration (stcopt_cg_impl.c:333-343, :270).
+// the next C loop iteration (stcopt_cg_impl.c:565-582, :270).
 __device__ void cg_direction(double* d, const double* r, const int* active, double* st,
     int* ist, double* trace, int np, double* scratch) {
   const double delta = st[0];
@@ -238,8 +238,8 @@ extern "C" __global__ void cg_refresh(double* vec, const int* active, double* st
   cg_direction(d, r, active, st, ist, trace, np, scratch);
 }
 
-// stcopt_cg_impl.c:221-233: a nonfinite increment returns info=1 and C stops
-// (vmcmain.c:501-504). Nothing is published; opt_update observes the status.
+// stcopt_cg_impl.c:315-327: a nonfinite increment returns info=1 and C stops
+// (vmcmain.c:503-506). Nothing is published; opt_update observes the status.
 extern "C" __global__ void cg_finish(const double* x, const int* active, int* info,
     const int* ist, int* iterations, int step, int np, int* error) {
   __shared__ int bad[32];

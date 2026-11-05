@@ -11,7 +11,7 @@ $$
 \mathcal L^{S}\mathcal L^{K}\mathcal L^{P}\;|\phi_{\rm pair}\rangle
 $$
 
-([Cマニュアル, *Expertモードの入力ファイル*](../../../extern/mVMC-1.3.0/doc/en/source/expert.rst), 75-110行目) 各因子は次のとおりです。
+([Cマニュアル, *Expertモードの入力ファイル*](../../../extern/mVMC-1.4.0/doc/en/source/expert.rst), 75-110行目) 各因子は次のとおりです。
 
 | 因子 | 定義 | 節 |
 |--------|------------|---------|
@@ -59,10 +59,10 @@ $$
 SR ベクトル $O$ ([第5章](05-theory-sr.md)) は同じ順序を使い、パラメータごとに
 2 スロット (実部、虚部の微分) を持ち、先頭に恒等成分用の組が追加されます:
 $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ \text{Slater}\ (2N_{\rm Slater}),\ \text{OptTrans}]$
-(`VMCMainCal`, `vmccal.c:197-215`)。
+(`VMCMainCal`, `vmccal.c:206-224`)。
 
 > **実装**
-> - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
+> - C: `ReadInputParameters` — `extern/mVMC-1.4.0/src/mVMC/readdef.c:1443`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
 > - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2900`
 > - 整合性: Rust は、定義ファイルの行数が宣言より少ない場合でも、各ブロックに*宣言された*幅を確保します (「スパース射影」規則、`ProjectionLayout` のドキュメント)。FSZ のメイン計算では Slater の微分が射影ブロックの直後に置かれます (RBM スロットなし)。通常のパスでは先にすべての RBM スロットを確保します (`run.rs:2887-2900`)。
@@ -79,7 +79,7 @@ $$
 ここで $I=(i,\sigma)$ はスピン軌道です。通常のスピン一重項ペアリングの場合は
 $f_{ij}\equiv F_{(i\uparrow)(j\downarrow)}$ だけが非零で、
 $|\phi_{\rm pair}\rangle=(\sum_{ij}f_{ij}c^\dagger_{i\uparrow}c^\dagger_{j\downarrow})^{N_e}|0\rangle$ となります。
-単一のスレーター行列式は、$F$ の $N_e$ 個の非零特異値がすべて 1 に等しい特別な場合です ([Cマニュアル, *パフィアン-スレーター行列式の性質*](../../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst)):
+単一のスレーター行列式は、$F$ の $N_e$ 個の非零特異値がすべて 1 に等しい特別な場合です ([Cマニュアル, *パフィアン-スレーター行列式の性質*](../../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst)):
 
 $$
 f_{ij}=\sum_{n=1}^{N_e}\Phi_{in\uparrow}\Phi_{jn\downarrow},\qquad
@@ -111,11 +111,11 @@ $\texttt{InvM}_{mn}=(X^{-1})_{mn}$ を満たします。これはすべての更
 ([4.5](04-theory-sampling.md#45-パフィアン比と逆行列の更新)) で使われる量です。
 
 > **実装**
-> - C: `CalculateMAll_fcmp` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:285`
-> - C: `calculateMAll_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:332`
-> - C: `CalculateMAll_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:516`
-> - C: `calculateMAll_child_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:557`
-> - C: `CalculateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:78`
+> - C: `CalculateMAll_fcmp` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:285`
+> - C: `calculateMAll_child_fcmp` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:332`
+> - C: `CalculateMAll_real` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:516`
+> - C: `calculateMAll_child_real` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:557`
+> - C: `CalculateMAll_fsz` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:78`
 > - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:280`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
 > - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:555`
@@ -141,7 +141,7 @@ $\texttt{InvM}_{mn}=(X^{-1})_{mn}$ を満たします。これはすべての更
 C のリーダーは $2S_z\neq0$ のときは常に `OrbitalParallel`/`OrbitalGeneral` を要求し、
 一般軌道では `NSPGaussLeg = 1` を強制します (スピン射影は通常のパスにだけ
 実装されています)。一般軌道では Lanczos法 は拒否されます
-(`readdef.c:597-617`)。C の `JudgeOrbitalMode` は Rust の
+(`readdef.c:690-710`)。C の `JudgeOrbitalMode` は Rust の
 `judge_orbital_mode` に対応しており、C の許可結果を報告します (が、強制はしません)。
 
 FSZ/一般軌道では、テーブルはスピン回転なしで構築されます。
@@ -159,8 +159,9 @@ $$
 $$
 
 ここで各フラグは対応するインデックスファイルの `ComplexType` ヘッダ値です
-(`readdef.c:641-642`)。すべて 0 なら実数カーネルが選択されます。RBM の
-ファイルはこの和に寄与しません。Rust は
+(`readdef.c:766-767`)。すべて 0 なら実数カーネルが選択されます。RBM の
+ファイルはこの和に寄与しません。C 1.4.0 は `iComplexFlgSpinJastrow` も加えますが、SpinJastrow
+ファイルは移植しておらず(拒否されます)、Rust ではこの項は常に 0 です。Rust は
 `get_all_complex_flag` (`crates/mvmc-core/src/run.rs:1713`) と
 `all_complex_flag` (`crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`) でこれを再現しており、
 どちらも同じヘッダ宣言を受け取ります。`In*` ファイルから読み込んだ虚数値はモードを
@@ -172,7 +173,7 @@ $$
 ([5.2](05-theory-sr.md#52-sr方程式))。
 
 > **実装**
-> - C: `ReadInputParameters` (`AllComplexFlag` を設定) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
+> - C: `ReadInputParameters` (`AllComplexFlag` を設定) — `extern/mVMC-1.4.0/src/mVMC/readdef.c:1443`
 > - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:2018`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - 整合性: 実数モードの実行では、C は `SlaterElm_real`/`InvM_real`/`PfM_real` のコピーを保持します。Rust は実数バッファ (`pf_m_real`, `sr_opt_oo_real`, ...) を保持し、共有コードが必要とする箇所では複素数のシャドウも保持します。
@@ -232,14 +233,14 @@ $$
 です。
 
 > **実装**
-> - C: `InitQPWeight` — `extern/mVMC-1.3.0/src/mVMC/qp.c:38`
-> - C: `UpdateQPWeight` — `extern/mVMC-1.3.0/src/mVMC/qp.c:129`
-> - C: `GaussLeg` — `extern/mVMC-1.3.0/src/mVMC/gauleg.c:32`
-> - C: `LegendrePoly` — `extern/mVMC-1.3.0/src/mVMC/legendrepoly.c:32`
-> - C: `UpdateSlaterElm_fcmp` — `extern/mVMC-1.3.0/src/mVMC/slater.c:37`
-> - C: `UpdateSlaterElm_fsz` — `extern/mVMC-1.3.0/src/mVMC/slater_fsz.c:32`
-> - C: `CalculateIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
-> - C: `CalculateLogIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:90`
+> - C: `InitQPWeight` — `extern/mVMC-1.4.0/src/mVMC/qp.c:38`
+> - C: `UpdateQPWeight` — `extern/mVMC-1.4.0/src/mVMC/qp.c:129`
+> - C: `GaussLeg` — `extern/mVMC-1.4.0/src/mVMC/gauleg.c:32`
+> - C: `LegendrePoly` — `extern/mVMC-1.4.0/src/mVMC/legendrepoly.c:32`
+> - C: `UpdateSlaterElm_fcmp` — `extern/mVMC-1.4.0/src/mVMC/slater.c:37`
+> - C: `UpdateSlaterElm_fsz` — `extern/mVMC-1.4.0/src/mVMC/slater_fsz.c:32`
+> - C: `CalculateIP_fcmp` — `extern/mVMC-1.4.0/src/mVMC/qp.c:110`
+> - C: `CalculateLogIP_fcmp` — `extern/mVMC-1.4.0/src/mVMC/qp.c:90`
 > - Rust: `init_qp_weight` — `crates/mvmc-core/src/qp.rs:12`
 > - Rust: `init_qp_weight_inplace` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:86`
 > - Rust: `update_qp_weight` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:150`
@@ -251,7 +252,7 @@ $$
 > - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:179`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
 > - 整合性: C は `w = 0.5*sin(beta[i])*weight[i]*LegendrePoly(cos(beta[i]), NSPStot)` と `QPFixWeight[i + j*NSPGaussLeg] = w*ParaQPTrans[j]` を評価し (`qp.c:73-77`)、`FlagOptTrans > 0` のときは `QPFullWeight = OptTrans[i]*QPFixWeight` とします (`qp.c:129-146`)。和 `ip += QPFullWeight[q]*pfM[q]` は `CalculateIP_fcmp` でセクター順に累積され、`CalculateLogIP_fcmp` は `clog(ip)` を返します。Rust も同じ順序に従います。Slater テーブルは、Julia の歴史的な $10^{-14}$ の振幅カットオフなしに、*宣言された*係数から再構築されます (`slater_update.rs:46`)。並進の符号 (反周期モード) は `NMPTrans < 0` のときにだけ適用されます (`qp.rs:67`)。
-> - 整合性: `-o` を指定すると、Rust は各 OptTrans 重みの実部成分を最適化対象にし、虚部成分は固定します (`set_opt_trans_opt_flags`)。これは Julia と同じです。C 1.3.0 の `GetInfoOptTrans` (`readdef.c:2385-2402`) は、二重化されていないインデックス `NProj + NSlater + i`(RBM 項なし)にフラグを書くため、重みは一度も最適化されず、無関係な射影/Slater 成分にフラグが立ちます。この C の欠陥は再現しません (#676、tmisawa/Julia-mVMC#94。[11.5](11-compatibility.md#115-未解決の観測事項) を参照)。C の `calculateOptTransDiff` (`vmccal.c:639`) は微分を連続した複素数インデックスに書き込みます (C のコメントでは「this part will not be used」)。一方 Rust の `opt_trans_diff` (`observables.rs`) は Julia と同様に (value, i·value) の組を書き込みます (#370)。OptTrans は `tests/fixtures/opttrans` のフィクスチャでカバーされています。
+> - 整合性: `-o` を指定すると、Rust は各 OptTrans 重みの実部成分を最適化対象にし、虚部成分は固定します (`set_opt_trans_opt_flags`)。これは Julia と同じです。C(1.3.0 と 1.4.0)の `GetInfoOptTrans` (`readdef.c:2799-2816`) は、二重化されていないインデックス `NProj + NSlater + i`(RBM 項なし)にフラグを書くため、重みは一度も最適化されず、無関係な射影/Slater 成分にフラグが立ちます。この C の欠陥は再現しません (#676、tmisawa/Julia-mVMC#94。[11.5](11-compatibility.md#115-未解決の観測事項) を参照)。C の `calculateOptTransDiff` (`vmccal.c:652`) は微分を連続した複素数インデックスに書き込みます (C のコメントでは「this part will not be used」)。一方 Rust の `opt_trans_diff` (`observables.rs`) は Julia と同様に (value, i·value) の組を書き込みます (#370)。OptTrans は `tests/fixtures/opttrans` のフィクスチャでカバーされています。
 
 ## 3.5 Gutzwiller因子、Jastrow因子、ダブロン-ホロン相関因子
 
@@ -270,11 +271,11 @@ C は $\operatorname{Re}\,\texttt{Proj}[k]$ だけを取ります (`LogProjVal`,
 - **4サイトのダブロン-ホロン** (`DH4`): パートナーサイトが 4 つになる以外は同様で、$m=0\ldots4$、パターンごとに $2\times5=10$ 個の係数です。
 
 > **実装**
-> - C: `MakeProjCnt` — `extern/mVMC-1.3.0/src/mVMC/projection.c:58`
-> - C: `UpdateProjCnt` — `extern/mVMC-1.3.0/src/mVMC/projection.c:155`
-> - C: `LogProjVal` — `extern/mVMC-1.3.0/src/mVMC/projection.c:32`
-> - C: `LogProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:41`
-> - C: `ProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:50`
+> - C: `MakeProjCnt` — `extern/mVMC-1.4.0/src/mVMC/projection.c:58`
+> - C: `UpdateProjCnt` — `extern/mVMC-1.4.0/src/mVMC/projection.c:169`
+> - C: `LogProjVal` — `extern/mVMC-1.4.0/src/mVMC/projection.c:32`
+> - C: `LogProjRatio` — `extern/mVMC-1.4.0/src/mVMC/projection.c:41`
+> - C: `ProjRatio` — `extern/mVMC-1.4.0/src/mVMC/projection.c:50`
 > - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:179`
 > - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:278`
 > - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:391`
@@ -318,11 +319,11 @@ $$
 (デフォルト 200) は、ベクトル化された比の評価における C のブロックサイズです。
 
 > **実装**
-> - C: `MakeRBMCnt` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:187`
-> - C: `UpdateRBMCnt` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:386`
-> - C: `LogRBMRatio` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:125`
-> - C: `RBMRatio` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:64`
-> - C: `WeightRBM` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:30`
+> - C: `MakeRBMCnt` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:187`
+> - C: `UpdateRBMCnt` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:386`
+> - C: `LogRBMRatio` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:125`
+> - C: `RBMRatio` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:64`
+> - C: `WeightRBM` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:30`
 > - Rust: `make_rbm_cnt` — `crates/mvmc-core/src/sampling/rbm.rs:160`
 > - Rust: `update_rbm_cnt_hopping` — `crates/mvmc-core/src/sampling/rbm.rs:311`
 > - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:460`
@@ -358,18 +359,18 @@ SR 更新のたびに行われます):
 3. Gutzwiller–Jastrow のシフト: すべての Gutzwiller *および* Jastrow 係数が
    最適化される場合、$N_G+N_J$ 個すべての値の共通の平均を引きます (`shiftGJ`)。
    これらのシフトは、規格化を除いて $|\psi|^2$ を変えません。フラグは
-   `SetFlagShift` (`parameter.c:255`、`readdef.c:1170` から呼ばれる) で 1 回だけ設定されます。
+   `SetFlagShift` (`parameter.c:255`、`readdef.c:1430` から呼ばれる) で 1 回だけ設定されます。
 4. Slater パラメータを、$\max_k|f_k|=4$ となるように再スケールします (`D_AmpMax`)。
 5. OptTrans が有効な場合、OptTrans の重みを最大絶対値が 1 になるように再スケールします。
 
 > **実装**
-> - C: `InitParameter` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:35`
-> - C: `ReadInitParameter` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:95`
-> - C: `SyncModifiedParameter` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:134`
-> - C: `shiftGJ` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:181`
-> - C: `shiftDH2` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:202`
-> - C: `shiftDH4` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:228`
-> - C: `D_AmpMax` (4.0) — `extern/mVMC-1.3.0/src/mVMC/parameter.c:32`
+> - C: `InitParameter` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:35`
+> - C: `ReadInitParameter` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:95`
+> - C: `SyncModifiedParameter` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:134`
+> - C: `shiftGJ` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:181`
+> - C: `shiftDH2` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:202`
+> - C: `shiftDH4` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:228`
+> - C: `D_AmpMax` (4.0) — `extern/mVMC-1.4.0/src/mVMC/parameter.c:32`
 > - Rust: `init_parameter` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:63`
 > - Rust: `sync_modified_parameter` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:167`
 > - Rust: `sync_modified_parameter` (reducer-aware wrapper) — `crates/mvmc-core/src/sync.rs:18`

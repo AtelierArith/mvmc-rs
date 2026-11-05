@@ -22,7 +22,7 @@ SHA-256 at this checkpoint:
 - Upstream `setmemory.c`: `573d1fb995de33386e7452f5e2fa34aeb05efe14b5bf4a904eb54d2ac7cf1b9e`.
 
 The extracted helper is bounded by `calculateOO_Store_real` and the following
-complex helper in `extern/mVMC-1.3.0/src/mVMC/vmccal.c`. See the include's origin
+complex helper in `extern/mVMC-1.4.0/src/mVMC/vmccal.c`. See the include's origin
 header. The driver reproduces the assignment at line 241 and base-pointer call
 at line 314. Native storage uses malloc (`setmemory.c`, lines 419/421); neither
 explicit diagnostic fill, 0 or 17, claims its otherwise-unwritten contents.
@@ -31,7 +31,7 @@ Reproduce with the repaired MPICH 4.2.0 internal-PMI/Hydra runtime:
 
 ```bash
 mpicc -std=c11 -O0 -ffp-contract=off -Wall \
-  -Iextern/mVMC-1.3.0/src/mVMC -Ic_toolbox \
+  -Iextern/mVMC-1.4.0/src/mVMC -Ic_toolbox \
   c_toolbox/mpi_issue179_store.c -o "$probe179"
 for ranks in 2 4; do
   for width in 1 2 3 4; do

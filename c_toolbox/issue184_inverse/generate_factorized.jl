@@ -8,7 +8,7 @@ startswith(stage*"/",root*"/") && error("external stage required")
 ispath(stage) && error("fresh output required")
 mkpath(stage)
 BLAS.set_num_threads(1); ENV["OPENBLAS_NUM_THREADS"]="1"
-src=joinpath(root,"extern/mVMC-1.3.0/src")
+src=joinpath(root,"extern/mVMC-1.4.0/src")
 commands=String[]; sources=String[]; objects=String[]
 preflight=String[joinpath(src,"pfapack/fortran",f) for f in
     ("zsktrf.f","zsktf2.f","zlasktrf.f","zskr2.f","zskr2k.f")]

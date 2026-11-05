@@ -20,7 +20,7 @@ open(joinpath(stage, "environment.txt"), "w") do io
         symbol = lib.interface == :ilp64 ? :openblas_get_config64_ : :openblas_get_config
         println(io,"BLAS version=",unsafe_string(ccall(Libdl.dlsym(Libdl.dlopen(lib.libname),symbol),Cstring,())))
     end
-    for source in ("extern/mVMC-1.3.0/src/ltl2inv/invert.tcc", "extern/Julia-mVMC/PfaPack.jl/src/utu2.jl", "c_toolbox/issue184_inverse/probe.cc", "c_toolbox/issue184_inverse/generate.jl")
+    for source in ("extern/mVMC-1.4.0/src/ltl2inv/invert.tcc", "extern/Julia-mVMC/PfaPack.jl/src/utu2.jl", "c_toolbox/issue184_inverse/probe.cc", "c_toolbox/issue184_inverse/generate.jl")
         println(io,source," sha256=",bytes2hex(sha256(read(joinpath(root,source)))))
     end
     println(io,"compiler=",read(`c++ --version`,String))

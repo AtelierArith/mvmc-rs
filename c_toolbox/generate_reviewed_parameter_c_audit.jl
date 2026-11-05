@@ -13,7 +13,7 @@ startswith(output * "/", repo * "/") && error("stage must be outside repository"
 ispath(output) && error("stage already exists; no overwrite")
 seed = parse(UInt32, seed_text)
 initial == "-" || (initial = realpath(initial))
-vendor = joinpath(repo, "extern/mVMC-1.3.0/src")
+vendor = joinpath(repo, "extern/mVMC-1.4.0/src")
 function extract(source, start, stop)
     a = findfirst(start, source); a === nothing && error("missing extraction start")
     b = findnext(stop, source, last(a)+1); b === nothing && error("missing extraction stop")
@@ -90,7 +90,7 @@ for (section, key) in enumerate(keys15)
 end
 npara = widths[1]+widths[2]+6widths[3]+10widths[4]+sum(widths[5:end])
 length(mapped) == npara || error("declared pack width")
-allcomplex = sum(complex[1:4])+complex[14] # C readdef.c:641–642, not RBM headers.
+allcomplex = sum(complex[1:4])+complex[14] # C readdef.c:766–767, not RBM headers.
 parameter_path = joinpath(vendor,"mVMC/parameter.c")
 reader_path = joinpath(vendor,"mVMC/readdef.c")
 parameter = read(parameter_path,String); reader=read(reader_path,String)
@@ -150,7 +150,7 @@ open(joinpath(output,"provenance.txt"),"w") do io
         println(io,"$(prefix)$(phase)_next624_sha256=",bytes2hex(sha256(read(joinpath(output,"$prefix$phase-next624.txt")))))
     end
     println(io,"architecture=$(Sys.MACHINE)\nJulia=$VERSION orchestration only; no reference package; BLAS=none\ngenerated_utc=$(now(UTC))")
-    for (index,path) in enumerate(sort!(unique(vcat([namelist,parameter_path,reader_path,driver,@__FILE__,joinpath(vendor,"sfmt/SFMT.c"),joinpath(repo,"extern/mVMC-1.3.0/COPYING")],collect(values(definitions)),initial=="-" ? String[] : [initial]))))
+    for (index,path) in enumerate(sort!(unique(vcat([namelist,parameter_path,reader_path,driver,@__FILE__,joinpath(vendor,"sfmt/SFMT.c"),joinpath(repo,"extern/mVMC-1.4.0/COPYING")],collect(values(definitions)),initial=="-" ? String[] : [initial]))))
         println(io,"source_or_input_sha256.$index=",bytes2hex(sha256(read(path)))," ",path)
     end
 end

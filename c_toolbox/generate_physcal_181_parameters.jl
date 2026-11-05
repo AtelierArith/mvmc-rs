@@ -3,7 +3,7 @@
 using SHA, Dates
 VERSION == v"1.13.1" || error("Julia 1.13.1 required")
 const repo = normpath(joinpath(@__DIR__, ".."))
-const vendor = joinpath(repo, "extern", "mVMC-1.3.0", "src")
+const vendor = joinpath(repo, "extern", "mVMC-1.4.0", "src")
 const fixtures = joinpath(repo, "tests", "fixtures", "physcal_181")
 const parameter_path = joinpath(vendor, "mVMC", "parameter.c")
 const reader_path = joinpath(vendor, "mVMC", "readdef.c")

@@ -8,7 +8,7 @@ docker run --rm -v "$repo:/repo:ro" -v "$out:/out" \
   vsc-mvmc-rs-741feed754ed4827a429135e5fcc0e7623f1f847d228698b066da094a8819e32-uid:latest bash -lc '
 set -euo pipefail
 rm -rf /out/src /out/build
-cp -r /repo/extern/mVMC-1.3.0 /out/src
+cp -r /repo/extern/mVMC-1.4.0 /out/src
 mkdir -p /out/build && cd /out/build
 export CC=gcc CXX=g++ FC=gfortran
 cmake ../src -DCMAKE_BUILD_TYPE=Release -DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF -DMPI_C_COMPILER=/opt/mpich/bin/mpicc > cmake.log 2>&1

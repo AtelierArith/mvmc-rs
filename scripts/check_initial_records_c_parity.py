@@ -55,7 +55,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src"
     materialize(root, "initial_records_upstream.inc",
                 function((src / "mVMC/parameter.c").read_text(), "int ReadInitParameter(char *initFile)"),
                 [src / "mVMC/parameter.c"], args.write)

@@ -211,7 +211,7 @@ keeps the Julia GPU tape contract; the physics follows C `qp.c`, `slater.c`,
 `vmccal.c` and `parameter.c`:
 
 - **Layout.** The `NQPOptTrans` weights are the last parameter block, after
-  projection, RBM and Slater (C `setmemory.c:302`). The planes are
+  projection, RBM and Slater (C `setmemory.c:334`). The planes are
   `NQPFull = NQPFix * NQPOptTrans` with `q = opt*NQPFix + NSPGaussLeg*mp + sp`.
   Each Slater table composes the OptTrans map before QPTrans, with both signs
   (C `slater.c:52-90`); setup builds the plane index tables once.
@@ -221,7 +221,7 @@ keeps the Julia GPU tape contract; the physics follows C `qp.c`, `slater.c`,
   update and before the rebuild, so sampling, energies and derivatives always
   use the current weights. There are no new transfers.
 - **Derivatives.** `opt_derivatives` writes C `calculateOptTransDiff`
-  (`vmccal.c:639-652`), `O_i = sum_j QPFixWeight[j] Pf[i*NQPFix+j] / ip`,
+  (`vmccal.c:652-665`), `O_i = sum_j QPFixWeight[j] Pf[i*NQPFix+j] / ip`,
   summed in C's order and divided as C does. An invalid plane publishes
   `Pf = 0` (#573). The Slater derivatives sum every plane with its full
   weight, as C `SlaterElmDiff_fcmp` does. The resident path keeps the
@@ -234,14 +234,14 @@ keeps the Julia GPU tape contract; the physics follows C `qp.c`, `slater.c`,
 - **Activation and flags.** The resident parser activates OptTrans from an
   `OptTrans` definition and optimizes every real component, as Julia does.
   C activates OptTrans only with `-o`. Its `GetInfoOptTrans` writes
-  `OptFlag[fidx]` with an undoubled index (`readdef.c:2400`), so the OptTrans
+  `OptFlag[fidx]` with an undoubled index (`readdef.c:2814`), so the OptTrans
   component flags are never written. That is a C defect (#676,
   tmisawa/Julia-mVMC#94): the Rust C-order CLI (`-o`) also optimizes the real
   weight components now. A resident model with those flags cleared keeps the
   weights at their input values (`resident_opt_opttrans_repeats_twenty_steps`).
 
 PhysCal uses the normalized input weights (C normalizes them at setup for both
-modes, `vmcmain.c:276`) and never changes them. See
+modes, `vmcmain.c:278`) and never changes them. See
 `gpu/mvmc-gpu-cuda/tests/fixtures/opttrans/README.md` for inputs, bounds and
 timings.
 
@@ -285,7 +285,7 @@ there is no per-iteration host read.
 
 **Results and failures.** `OptResult::cg_iterations` returns C's iteration
 count for each step, the last `zqp_SRinfo.dat` column. A nonfinite
-increment is C's `info=1`, after which C stops (`vmcmain.c:501-504`). The
+increment is C's `info=1`, after which C stops (`vmcmain.c:503-506`). The
 device latches `RESIDENT_CG` (status 7) and publishes nothing.
 
 **Validation** (`opt::cg_tests`). The references are the CPU CG on the GPU's

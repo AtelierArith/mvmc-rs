@@ -2,7 +2,7 @@
 using SHA
 VERSION == v"1.13.1" || error("Julia 1.13.1 required")
 repo = dirname(@__DIR__)
-source_path = joinpath(repo, "extern/mVMC-1.3.0/src/mVMC/readdef.c")
+source_path = joinpath(repo, "extern/mVMC-1.4.0/src/mVMC/readdef.c")
 source = read(source_path, String)
 function body(first_marker, next_marker)
     first_pos = first(findlast(first_marker, source))
@@ -40,10 +40,10 @@ mktempdir() do work
     run(`cc -std=c11 -O0 $path -o $binary`)
     write(joinpath(fixture, "ordered-pairs.txt"), read(`$binary`, String))
     write(joinpath(fixture, "provenance.txt"),
-        "source=extern/mVMC-1.3.0/src/mVMC/readdef.c\nsource_sha256=$(bytes2hex(sha256(read(source_path))))\n" *
+        "source=extern/mVMC-1.4.0/src/mVMC/readdef.c\nsource_sha256=$(bytes2hex(sha256(read(source_path))))\n" *
         "generator_sha256=$(bytes2hex(sha256(read(@__FILE__))))\ndriver_sha256=$(bytes2hex(sha256(driver)))\n" *
         "architecture=$(Sys.MACHINE)\njulia=$VERSION\ncompiler=$(strip(read(`cc --version`, String)))\noptions=-std=c11 -O0\n" *
         "boundaries=ReadPairHopValue through before ReadPairDValue; ReadPairDValue through before GetInfoOptOrbitalParalell\n" *
         "scope=actual C pair readers, supplied literal records; PairHop expands both directions; no full definition reader, MPI, BLAS, RNG or Lanczos measurement\n" *
-        "count_authority=readdef.c:697 NPairHopping=2*declared count\n")
+        "count_authority=readdef.c:832 NPairHopping=2*declared count\n")
 end

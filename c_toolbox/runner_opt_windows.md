@@ -56,7 +56,7 @@ The pinned Julia `_add_parameter_delta_direct!` in
 `MVMCOptimizers.jl/src/stochastic_opt.jl:259` updates mapped term locations;
 `parameter_sync.jl:226` packs those locations into an initially zero vector.
 Unmapped declared RBM slots consequently lose solver updates. C instead updates
-the dense `para` vector via `smatToParaIdx` in `stcopt_cg_impl.c:229–234`.
+the dense `para` vector via `smatToParaIdx` in `stcopt_cg_impl.c:323–328`.
 The first RBM-FSZ CG prefix1 difference is ChargeRBM_PhysLayer index1 (zero
 based), global Para index22, output column48: a retained value of
 `-0.0569751086369507942` versus the historical mapped-only zero.

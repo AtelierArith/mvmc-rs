@@ -92,7 +92,7 @@ def read_modpara_extra(text, extra):
 
 def build_cases(root):
     root = Path(root)
-    data = root / "extern/mVMC-1.3.0/test/python/data"
+    data = root / "extern/mVMC-1.4.0/test/python/data"
     cases = {}
 
     # --- verbatim upstream inputs ---------------------------------------

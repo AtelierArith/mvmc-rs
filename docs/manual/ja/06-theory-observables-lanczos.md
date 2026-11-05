@@ -28,7 +28,7 @@ $$
 $$
 
 ($w=1$)。因子化された(`TwoBodyGEx`)量は、積形式の推定量
-$\langle F^\dagger(x,A)F(x,B)\rangle$ です(C マニュアル([*Power Lanczos method*](../../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst)))。
+$\langle F^\dagger(x,A)F(x,B)\rangle$ です(C マニュアル([*Power Lanczos method*](../../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst)))。
 これは*同じ*サンプルの**1体**局所値から構築されるため(各 `TwoBodyGEx` の行は1体リスト内の2つの位置を保持します。C では `CisAjsCktAltIdx[idx][0..1]`、Rust では `green_two_ex_indices`)、2電子
 振幅を必要としません。すべての局所値はまずサンプルごとに保存され
 (`LocalCisAjs`, `LocalCisAjsCktAltDC`)、その後で累積されます。
@@ -37,12 +37,12 @@ PhysCal は `NDataQtySmp` 回、サンプリング(最初の呼び出しには `
 番号付きの出力ファイル一式(`NDataIdxStart`, `NDataIdxStart+1`, ...)を1組書き出します。
 
 > **実装**
-> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - C: `CalculateGreenFunc` — `extern/mVMC-1.3.0/src/mVMC/calgrn.c:32`
-> - C: `WeightAverageGreenFunc` — `extern/mVMC-1.3.0/src/mVMC/average.c:209`
-> - C: `GreenFunc1` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:41`
-> - C: `GreenFunc2` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:86`
-> - C: `CalculateGreenFunc_fsz` — `extern/mVMC-1.3.0/src/mVMC/calgrn_fsz.c:33`
+> - C: `VMCPhysCal` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:533`
+> - C: `CalculateGreenFunc` — `extern/mVMC-1.4.0/src/mVMC/calgrn.c:32`
+> - C: `WeightAverageGreenFunc` — `extern/mVMC-1.4.0/src/mVMC/average.c:209`
+> - C: `GreenFunc1` — `extern/mVMC-1.4.0/src/mVMC/locgrn.c:41`
+> - C: `GreenFunc2` — `extern/mVMC-1.4.0/src/mVMC/locgrn.c:92`
+> - C: `CalculateGreenFunc_fsz` — `extern/mVMC-1.4.0/src/mVMC/calgrn_fsz.c:33`
 > - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:908`
 > - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:518`
 > - Rust: `ordinary_green_values` — `crates/mvmc-core/src/observables/green_measurements.rs:233`
@@ -50,7 +50,7 @@ PhysCal は `NDataQtySmp` 回、サンプリング(最初の呼び出しには `
 > - Rust: `normalize_physcal_green` — `crates/mvmc-core/src/run.rs:250`
 > - Rust: `calculate_green_func_fsz` — `crates/mvmc-core/src/observables/fsz_measurements.rs:17`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
-> - 整合性: C は `PhysCisAjsCktAlt[idx] += w*LocalCisAjs[idx0]*conj(LocalCisAjs[idx1])` を累積します(`calgrn.c:110`)。Rust の `accumulate_two_body_gex_sample` は同じ順序で `weight * one_body[first] * one_body[second].conj()` を形成します。規格化では、事前に計算した $W$ の逆数を掛けます(`const double complex invW = 1.0/Wc`、`average.c:278`。ランク0での `SafeMpiReduce_fcmp` の後に適用、`average.c:287-290`)。Rust は C99 方式の `c_complex::divide(1, wc)` を使って各値に掛けます(`run.rs:249-278`)。要素ごとの除算は行いません。C では、平均されたグリーン関数はルートランクにのみ存在し(`weightAverageReduce` はランク0へ縮約します)、ファイルを書くのもルートのみです。サンプルごとの結果は*同じ*番号付きファイル一式に出力され、ファイルは `NDataIdxStart + sample` ごとに再作成(`"w"`)されます。
+> - 整合性: C は `PhysCisAjsCktAlt[idx] += w*LocalCisAjs[idx0]*conj(LocalCisAjs[idx1])` を累積します(`calgrn.c:117`)。Rust の `accumulate_two_body_gex_sample` は同じ順序で `weight * one_body[first] * one_body[second].conj()` を形成します。規格化では、事前に計算した $W$ の逆数を掛けます(`const double complex invW = 1.0/Wc`、`average.c:279`。ランク0での `SafeMpiReduce_fcmp` の後に適用、`average.c:288-291`)。Rust は C99 方式の `c_complex::divide(1, wc)` を使って各値に掛けます(`run.rs:249-278`)。要素ごとの除算は行いません。C では、平均されたグリーン関数はルートランクにのみ存在し(`weightAverageReduce` はランク0へ縮約します)、ファイルを書くのもルートのみです。サンプルごとの結果は*同じ*番号付きファイル一式に出力され、ファイルは `NDataIdxStart + sample` ごとに再作成(`"w"`)されます。
 
 ## 6.2 1ステップ Lanczos 波動関数
 
@@ -71,7 +71,7 @@ $$
 E_{\rm LS}(\alpha)=\frac{h_1+\alpha\,(h_{2(11)}+h_{2(20)})+\alpha^2h_{3(12)}}{1+2\alpha h_1+\alpha^2h_{2(11)}}
 $$
 
-です([Cマニュアル, *Determination of $\alpha$*](../../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst))。$dE_{\rm LS}/d\alpha=0$ とおくと2次
+です([Cマニュアル, *Determination of $\alpha$*](../../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst))。$dE_{\rm LS}/d\alpha=0$ とおくと2次
 方程式が得られます(商の微分法則から直接導出)。
 
 $$
@@ -125,15 +125,15 @@ $$
 2体版の `calHCACA` を使います。
 
 > **実装**
-> - C: `LSLocalQ` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:76`
-> - C: `calculateHK` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:122`
-> - C: `calculateHW` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:139`
-> - C: `calHCA` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:180`
-> - C: `calHCACA` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:449`
-> - C: `calculateQQQQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:832`
-> - C: `CalculateEne` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:270`
-> - C: `CalculateEneByAlpha` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:298`
-> - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:149`
+> - C: `LSLocalQ` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:76`
+> - C: `calculateHK` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:122`
+> - C: `calculateHW` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:139`
+> - C: `calHCA` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:180`
+> - C: `calHCACA` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:449`
+> - C: `calculateQQQQ` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:877`
+> - C: `CalculateEne` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:270`
+> - C: `CalculateEneByAlpha` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:298`
+> - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:149`
 > - Rust: `accumulate_lanczos_qqqq` — `crates/mvmc-core/src/lanczos.rs:44`
 > - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - Rust: `energy_by_alpha` — `crates/mvmc-core/src/lanczos.rs:128`
@@ -150,7 +150,7 @@ A_{\rm LS}(\alpha)=\frac{\langle\phi|A|\phi\rangle}{\langle\phi|\phi\rangle}
 $$
 
 です。ここで $A_0=\langle F(A)\rangle$、$A_{1(10)}=\langle F^\dagger(H)F(A)\rangle$、$A_{1(01)}=\langle F(AH)\rangle$、
-$A_{2(11)}=\langle F^\dagger(H)F(AH)\rangle$ です([Cマニュアル](../../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst))。
+$A_{2(11)}=\langle F^\dagger(H)F(AH)\rangle$ です([Cマニュアル](../../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst))。
 $A=c^\dagger_ic_j$ および $A=c^\dagger_ic_jc^\dagger_kc_l$ について、局所値
 $F(A)$ と $F(HA)=\langle\psi|HA|x\rangle/\langle\psi|x\rangle$ は `LSLCisAjs` と `LSLCisAjsCktAlt`
 (`LSLocalCisAjs`、`calHCA`、`calHCACA`)です。モーメントテンソル `QCisAjsQ`、`QCisAjsCktAltQ`、
@@ -166,11 +166,11 @@ $$
 (`zvo_ls_cisajs_NNN.dat`、`zvo_ls_cisajscktalt_NNN.dat`、`zvo_ls_cisajscktaltex_NNN.dat`。[第9章](09-output-files.md)を参照)。
 
 > **実装**
-> - C: `CalculatePhysVal_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:336`
-> - C: `CalculatePhysVal_real` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:313`
-> - C: `LSLocalCisAjs` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:98`
-> - C: `calculateQCAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:852`
-> - C: `calculateQCACAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:871`
+> - C: `CalculatePhysVal_fcmp` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:336`
+> - C: `CalculatePhysVal_real` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:313`
+> - C: `LSLocalCisAjs` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:98`
+> - C: `calculateQCAQ` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:897`
+> - C: `calculateQCACAQ` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:916`
 > - Rust: `lanczos_phys_values` — `crates/mvmc-core/src/io.rs:537`
 > - Rust: `calculate_lanczos_green` — `crates/mvmc-core/src/observables.rs:2484`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`

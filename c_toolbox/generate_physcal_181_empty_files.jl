@@ -1,7 +1,7 @@
 # Explicit optional C file-opening oracle; no sampling/MPI or numerical oracle.
 using SHA
 repo = dirname(@__DIR__)
-source_path = joinpath(repo, "extern/mVMC-1.3.0/src/mVMC/initfile.c")
+source_path = joinpath(repo, "extern/mVMC-1.4.0/src/mVMC/initfile.c")
 source = read(source_path, String)
 start = first(findfirst("void InitFilePhysCal(", source))
 stop = first(findnext("void CloseFile(", source, start)) - 1

@@ -20,7 +20,7 @@ uname -a > "$out/platform.txt"
 pkg-config --modversion openblas > "$out/blas.txt"
 printf 'BLAS/OMP/MKL/BLIS threads=1; ABI=LP64; timeout=10s; kill-after=2s\n' > "$out/environment.txt"
 sha256sum "$source_dir/zero_sr_boundary.c" "$source_dir/step14_sr_boundary.c" "$source_dir/run.sh" "$source_dir/README.md" > "$out/local-sources.sha256"
-sha256sum "$repo/extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c" "$repo/extern/mVMC-1.3.0/src/mVMC/stcopt.c" > "$out/upstream-sources.sha256"
+sha256sum "$repo/extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c" "$repo/extern/mVMC-1.4.0/src/mVMC/stcopt.c" > "$out/upstream-sources.sha256"
 printf 'probe\tlaunch_exit\n' > "$out/results.tsv"
 bad=0
 for name in zero_sr_boundary step14_sr_boundary; do

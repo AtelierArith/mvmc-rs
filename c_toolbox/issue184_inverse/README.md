@@ -13,8 +13,8 @@ Reproduce from repository root with a fresh external output destination:
 
 ```sh
 probe_stage=$(mktemp -d /tmp/mvmc-issue184-inverse.XXXXXX)
-gfortran -O0 -ffp-contract=off -J"$probe_stage" -c extern/mVMC-1.3.0/src/ltl2inv/ilaenv_wrap.f90 -o "$probe_stage/ilaenv.o"
-c++ -std=c++17 -O0 -ffp-contract=off -DBLAS_EXTERNAL -Iextern/mVMC-1.3.0/src/common -Iextern/mVMC-1.3.0/src/common/deps -Iextern/mVMC-1.3.0/src/ltl2inv c_toolbox/issue184_inverse/probe.cc extern/mVMC-1.3.0/src/ltl2inv/ilaenv_lauum.cc "$probe_stage/ilaenv.o" -lopenblas -lgfortran -o "$probe_stage/probe"
+gfortran -O0 -ffp-contract=off -J"$probe_stage" -c extern/mVMC-1.4.0/src/ltl2inv/ilaenv_wrap.f90 -o "$probe_stage/ilaenv.o"
+c++ -std=c++17 -O0 -ffp-contract=off -DBLAS_EXTERNAL -Iextern/mVMC-1.4.0/src/common -Iextern/mVMC-1.4.0/src/common/deps -Iextern/mVMC-1.4.0/src/ltl2inv c_toolbox/issue184_inverse/probe.cc extern/mVMC-1.4.0/src/ltl2inv/ilaenv_lauum.cc "$probe_stage/ilaenv.o" -lopenblas -lgfortran -o "$probe_stage/probe"
 OPENBLAS_NUM_THREADS=1 julia +1.13.1 --startup-file=no --project=extern/Julia-mVMC c_toolbox/issue184_inverse/generate.jl "$probe_stage/probe" "$probe_stage/acquired"
 ```
 

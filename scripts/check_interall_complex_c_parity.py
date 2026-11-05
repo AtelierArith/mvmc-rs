@@ -24,7 +24,7 @@ def main():
     args = parser.parse_args()
     kind = native_platform(args.platform)
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC"
     selected = {
         "projection.c": ["inline double ProjRatio(", "void UpdateProjCnt("],
         "pfupdate.c": ["void CalculateNewPfM("],

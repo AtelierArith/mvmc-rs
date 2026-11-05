@@ -69,7 +69,7 @@ def main():
         if not target.exists() or target.read_text() != complete: target.write_text(complete)
     else:
         assert target.read_text() == complete, "historical Jastrow replacement changed"
-    source = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC/readdef.c"
+    source = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC/readdef.c"
     reader = source.read_text()
     body = "\n".join(function(reader, signature) for signature in (
         "int ReadDefFileError(", "int CheckSite(\n", "int CheckPairSite(\n",

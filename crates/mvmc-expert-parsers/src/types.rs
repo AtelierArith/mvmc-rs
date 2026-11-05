@@ -163,7 +163,7 @@ pub struct ModParaParameters {
     pub dsr_opt_sta_del: f64,
     /// `DSROptStepDt`.
     ///
-    /// C `GetInfoFromModPara` callers (readdef.c:749-755) store a negative
+    /// C `GetInfoFromModPara` callers (readdef.c:959-965) store a negative
     /// value as `SRFlag = 1` and negate it, so this field is always the
     /// non-negative step the SR update uses. Set `sr_flag` for the sign.
     pub dsr_opt_step_dt: f64,
@@ -247,7 +247,7 @@ impl ModParaParameters {
     }
 }
 
-/// C defaults of `SetDefaultValuesModPara` (`readdef.c:1756-1823`).
+/// C defaults of `SetDefaultValuesModPara` (`readdef.c:2064-2143`).
 ///
 /// Fields without a modpara keyword in C keep these values. The file heads
 /// have no C default (zero-initialized globals); `zvo`/`zqp` apply only to

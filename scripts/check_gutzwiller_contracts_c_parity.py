@@ -45,7 +45,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    source = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC/readdef.c"
+    source = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC/readdef.c"
     reader = source.read_text()
     body = "\n".join(function(reader, signature) for signature in (
         "int ReadDefFileError(", "int CheckSite(\n", "int GetInfoOpt(FILE",

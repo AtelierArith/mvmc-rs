@@ -29,7 +29,7 @@ use crate::PivotIndex1Based;
 ///
 /// Follows the authoritative C `DSKR2` operation order: the upper rank-2
 /// update evaluates `(A + X*t1) - Y*t2` as in
-/// `extern/mVMC-1.3.0/src/pfapack/fortran/dskr2.f` (Julia's
+/// `extern/mVMC-1.4.0/src/pfapack/fortran/dskr2.f` (Julia's
 /// `A += (X*t1 - Y*t2)` grouping is intentionally not used).
 pub fn dsktf2(a: &mut SqMat<'_, f64>, pivots: &mut [PivotIndex1Based]) -> Result<(), usize> {
     sktf2_generic::<f64, _>(a, pivots, |x| x.abs(), false, true)

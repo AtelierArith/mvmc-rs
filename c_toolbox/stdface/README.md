@@ -13,12 +13,12 @@ directory; the Rust tests read only the checked-in fixtures.
 
 `vmcdry.out` (`src/mVMC/vmcdry.c`) only calls `StdFace_main`, as does `dry.c`; the mVMC
 executable's `-s` option calls the same `StdFace_main` and then reads `namelist.def`.
-The vendored sources in `extern/mVMC-1.3.0/` are not modified.
+The vendored sources in `extern/mVMC-1.4.0/` are not modified.
 
 ## Origin and hashes
 
 `complex_expr.c` copies the expressions verbatim from
-`extern/mVMC-1.3.0/src/StdFace/src/StdFace_ModelUtil.c` (functions `StdFace_HubbardLocal`,
+`extern/mVMC-1.4.0/src/StdFace/src/StdFace_ModelUtil.c` (functions `StdFace_HubbardLocal`,
 `StdFace_MagField`, `StdFace_GeneralJ`; extraction boundary: the single return/assignment
 expressions of those functions, wrapped in `noinline` helpers with runtime operands).
 
@@ -44,7 +44,7 @@ imaginary part, `real - complex` negates it, `complex * complex` is the textbook
 
 `build_reference.sh <dir> --fixed` copies the vendored sources to a temporary directory, applies
 `lattice_defects.patch` (corrections of the C lattice defects reported as Julia-mVMC#66; the patch is
-a plain unified diff against `extern/mVMC-1.3.0/src/StdFace/src`) and builds `mvmc_dry_fixed.out`.
+a plain unified diff against `extern/mVMC-1.4.0/src/StdFace/src`) and builds `mvmc_dry_fixed.out`.
 `generate_fixtures.py <mvmc_dry.out> <mvmc_dry_fixed.out>` stores the C output in `expected/` and, where the
 corrected build differs, `expected_fixed/` (see `tests/fixtures/stdface/README.md`).
 `cases_defects.py` holds the inputs added for the corrections.

@@ -264,7 +264,7 @@ full checks; include `--all-features --run-ignored all` for optional coverage.
 
 The manual (`docs/manual/` and `docs/manual/ja/`) cites code as `path:LINE`. The
 Lint job runs `python3 scripts/check_manual_citations.py --tolerant` (standard
-library only; needs the `extern/mVMC-1.3.0` submodule for C citations). In this
+library only; needs the `extern/mVMC-1.4.0` submodule for C citations). In this
 mode a citation whose symbol moved but is still within `--window` lines (default
 400) only prints a warning with the corrected line. It fails when a file, symbol,
 relative link or anchor is missing, or the symbol is outside the window.

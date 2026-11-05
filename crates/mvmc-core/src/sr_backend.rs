@@ -304,7 +304,7 @@ pub struct COrderSr {
 }
 
 /// Real store Gram `O O^T` as C `calculateOO_Store_real` computes it: one `DGEMM('N', 'T')`
-/// of the `[n, samples]` store with itself (`vmccal.c:685-689`), full matrix, for every size.
+/// of the `[n, samples]` store with itself (`vmccal.c:714-718`), full matrix, for every size.
 ///
 /// Julia selected SYRK for `max(n, samples) >= 4` and a generic `muladd` loop below; neither is
 /// C's call (issue #449). The summation inside DGEMM is the BLAS provider's; the sampled sum per

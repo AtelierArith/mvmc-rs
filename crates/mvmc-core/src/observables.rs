@@ -275,7 +275,7 @@ pub fn calculate_oo(
             |offset: usize, row: &mut [Complex64]| {
                 let i = offset + 2;
                 for j in 0..size_2 {
-                    // C vmccal.c:788 scales O[j] before the complex product.
+                    // C vmccal.c:833 scales O[j] before the complex product.
                     // Keep that order independently within each observed row.
                     row[j] += (sr_opt_o[j] * w) * sr_opt_o[i].conj();
                 }
@@ -915,7 +915,7 @@ pub(crate) fn spin_code(spin: Spin) -> u8 {
 /// OptTrans derivative components in sector order, using fixed QP weights.
 /// Each sector writes the (value, i*value) pair of its real/imaginary
 /// components. C `calculateOptTransDiff` writes one value per sector into
-/// consecutive slots instead (`vmccal.c:639`), a defect kept out of Rust
+/// consecutive slots instead (`vmccal.c:652`), a defect kept out of Rust
 /// (#370, tmisawa/Julia-mVMC#55; flags #676, tmisawa/Julia-mVMC#94).
 pub fn opt_trans_diff(
     sr_opt_o: &mut [Complex64],

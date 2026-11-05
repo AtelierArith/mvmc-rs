@@ -1,6 +1,6 @@
 //! With `-o`, the OptTrans weights are optimized (#676).
 //!
-//! C 1.3.0 `GetInfoOptTrans` writes undoubled flags at `NProj + NSlater + i`,
+//! C `GetInfoOptTrans` (1.3.0 and 1.4.0) writes undoubled flags at `NProj + NSlater + i`,
 //! which freezes the weights and flags unrelated components (a C defect,
 //! tmisawa/Julia-mVMC#94). Rust optimizes the real weight components only,
 //! as Julia and the resident GPU runners do.

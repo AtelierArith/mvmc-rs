@@ -239,7 +239,7 @@ def main():
             "crates/mvmc-core/src/observables.rs",
             "crates/mvmc-cli/src/main.rs",
             "crates/mvmc-expert-parsers/src/utils/opt_flag.rs",
-            "extern/mVMC-1.3.0/src/mVMC/vmccal.c",
+            "extern/mVMC-1.4.0/src/mVMC/vmccal.c",
             "scripts/bench_native_c.py",
         )
     ]

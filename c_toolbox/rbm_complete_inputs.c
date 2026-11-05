@@ -13,7 +13,7 @@
  *   /tmp/rbm_complete <section 0-8> <Nsite> <neurons> <file>
  *
  * Section order: Charge/Spin/General PhysLayer, Charge/Spin/General
- * HiddenLayer, Charge/Spin/General PhysHidden (C readdef.c:936-1008).
+ * HiddenLayer, Charge/Spin/General PhysHidden (C readdef.c:1185-1257).
  */
 #include <stdio.h>
 #include <stdlib.h>

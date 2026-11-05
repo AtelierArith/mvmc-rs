@@ -1,8 +1,8 @@
 # ComplexUHF initial-orbital tool (`mvmc uhf`)
 
 Issue #350, related to #185. Pure-Rust port of the C tool in
-`extern/mVMC-1.3.0/src/ComplexUHF/` (documented in
-`extern/mVMC-1.3.0/doc/en/source/appendix.rst`). The C source is the
+`extern/mVMC-1.4.0/src/ComplexUHF/` (documented in
+`extern/mVMC-1.4.0/doc/en/source/appendix.rst`). The C source is the
 authority for input contract, operation order, SFMT draw order and output
 format. The implementation is the crate `crates/mvmc-uhf`; the command line is
 
@@ -120,9 +120,9 @@ reported with the PR for issue #350.
 | C source | C behaviour | Rust behaviour |
 | --- | --- | --- |
 | `readdef.c:186-188`, `:438-440` | `fclose(NULL)` after a failed `fopen` of a definition file: segmentation fault | error naming the file, exit 1, no partial outputs |
-| `readdef.c:975` (`GetFileName`) | an unknown namelist keyword leaves `itmpKWidx` at `-1` (or stale) and then writes `cFileNameList[itmpKWidx]`: heap underflow / overwritten previous keyword | warning, keyword ignored |
-| `readdef.c:70-74` `ReadDefFileError` | returns 0, so every `info = ReadDefFileError(...)` record-count mismatch is only printed and never fails; a short file runs with zero-filled terms. Upstream issp-center-dev/mVMC#81 (v1.4.0) returns 1 and aborts | see the record-count contract below (#680) |
-| `readdef.c:609` and the index uses in `readdef.c`, `initial.c`, `makeham.c` | the AP-only `Orbital` reader writes `OrbitalIdx` before `CheckPairSite`; `LocSpn[x0]`, `Initial`, Transfer, InterAll and orbital indices are never range checked | range errors for sites, spins and orbital indices |
+| `readdef.c:979` (`GetFileName`) | an unknown namelist keyword leaves `itmpKWidx` at `-1` (or stale) and then writes `cFileNameList[itmpKWidx]`: heap underflow / overwritten previous keyword | warning, keyword ignored |
+| 1.3.0 `ReadDefFileError` (fixed in 1.4.0, `readdef.c:70-74`) | returned 0, so every `info = ReadDefFileError(...)` record-count mismatch is only printed and never fails; a short file runs with zero-filled terms. Upstream issp-center-dev/mVMC#81 (v1.4.0) returns 1 and aborts | see the record-count contract below (#680) |
+| `readdef.c:608` and the index uses in `readdef.c`, `initial.c`, `makeham.c` | the AP-only `Orbital` reader writes `OrbitalIdx` before `CheckPairSite`; `LocSpn[x0]`, `Initial`, Transfer, InterAll and orbital indices are never range checked | range errors for sites, spins and orbital indices |
 | `readdef.c:356-366`, `output.c` gap | `Ncond` not set (`Ne` only, as documented), or `Nsize = 2*Nsite`, gives `Nsize = 0` or no gap index: `EigenValues[-1]`/`[2*Nsite]` is read | error requiring `0 < Nsize < 2*Nsite` |
 | `matrixlapack.c:235-275` `ZHEEVall` | a non-zero LAPACK `info` returns 0 and the caller keeps stale arrays | error |
 | orbital readers | a short line reuses stale `i`, `j` and index variables | error |

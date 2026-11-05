@@ -25,10 +25,15 @@ tmisawa/Julia-mVMC#95.
   - `src/pfapack` ebaa11b7
 
   These are identical to the 1.3.0 pins.
-- **Until #682 lands:** AGENTS.md and the docs still cite 1.3.0. Treat 1.4.0 as
-  the target for new work.
-- **Fixtures:** historical fixtures stay labelled 1.3.0 unless they are
-  regenerated with recorded provenance.
+- **Status (#682):** the submodule is now `extern/mVMC-1.4.0`. AGENTS.md, the
+  docs, scripts, `c_toolbox` and code comments cite it as the authority. C
+  `file:line` citations in docs and comments were remapped to 1.4.0 line
+  numbers from the diff hunks between `d73d06bd` and `v1.4.0`; citations of
+  lines that 1.4.0 changed were checked by hand.
+- **Fixtures and artifacts:** historical fixtures, benchmark results under
+  `benchmark/**/results/` and other generated evidence stay labelled 1.3.0
+  (`d73d06bd`) unless they are regenerated with recorded provenance. They are
+  records of the 1.3.0 reference, not claims about 1.4.0.
 - **1.4.0 contract changes to adopt** (#682):
   - SR-CG aborts by default at max iterations.
   - `NSRCG=2` means DiagScale-preconditioned CG, with `RescaleSmat` and
@@ -63,10 +68,10 @@ Recorded instances:
 |---|---|---|---|
 | Real-mode `calculateOptTransDiff` writes through a complex pointer, dropping derivative 1 (`vmccal.c`) | #370 | Julia-mVMC#55 | correct real-mode slots |
 | `-b` varbin writes only half of the complex parameters | (2026-10-06) | — | all parameters, with the C header shape |
-| Real-mode samplers and Hamiltonian omit the RBM factor; `RBMDiff` reads an unfilled `RBMCnt` (`vmcmake_real.c`, `calham_real.c`, `vmccal.c:120,205`) | #669, PR #671 | Julia-mVMC#59 | RBM factor in sampling and every Green kernel, following the complex path |
-| `GetInfoOptTrans` writes `OptFlag[NProj + NOrbitalIdx + i]`: undoubled index, no RBM offset (`readdef.c:1067-1068, 2400`), so OptTrans weights are never optimized | #676 (replaces the #100 emulation) | Julia-mVMC#94 | OptTrans real components optimized; no stray flags |
-| ComplexUHF ignores `ReadDefFileError` on short definition files (fixed upstream in 1.4.0 #81) | #680 | — | error before running |
-| `getUpdateType` returns `NONE` for `NExUpdatePath` outside the defined paths, so the sampler never moves (`vmcmake.c:606-629`; 1.4.0 defines 4-6, other values still no-op) | #681 | — | values other than 0-3 rejected before any output |
+| Real-mode samplers and Hamiltonian omit the RBM factor; `RBMDiff` reads an unfilled `RBMCnt` (`vmcmake_real.c`, `calham_real.c`, `vmccal.c:120,214`) | #669, PR #671 | Julia-mVMC#59 | RBM factor in sampling and every Green kernel, following the complex path |
+| `GetInfoOptTrans` writes `OptFlag[NProj + NOrbitalIdx + i]`: undoubled index, no RBM offset (`readdef.c:1327-1328, 2814`), so OptTrans weights are never optimized | #676 (replaces the #100 emulation) | Julia-mVMC#94 | OptTrans real components optimized; no stray flags |
+| ComplexUHF 1.3.0 ignores `ReadDefFileError` on short definition files (fixed upstream in 1.4.0 #81, which Rust follows; no longer a deviation under 1.4.0) | #680 | — | error before running |
+| `getUpdateType` returns `NONE` for `NExUpdatePath` outside the defined paths, so the sampler never moves (`vmcmake.c:797-826`; 1.4.0 defines 4-6, other values still no-op) | #681 | — | values other than 0-3 rejected before any output |
 
 Other C defects reported upstream are Julia-mVMC#56 (NSRCG≥2 with NStore=0
 undefined behaviour), #57 (Ne=0 admitted), and #58–#63.

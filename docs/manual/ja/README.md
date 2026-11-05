@@ -35,7 +35,7 @@ Rust 関数との対応を示します。後半の章は利用リファレンス
 主要な式のあとには、次の形式のボックスが置かれます。
 
 > **実装**
-> - C: `Function` — `extern/mVMC-1.3.0/src/mVMC/file.c:LINE`
+> - C: `Function` — `extern/mVMC-1.4.0/src/mVMC/file.c:LINE`
 > - Rust: `function` — `crates/<crate>/src/file.rs:LINE`
 > - 整合性: 数値比較で重要になる演算順序や契約に関する注記。
 
@@ -45,7 +45,7 @@ Rust 関数との対応を示します。後半の章は利用リファレンス
   **C が基準(正)** です。Julia-mVMC は Rust の公開 API とランナー構造の設計リファレンスです。
   [AGENTS.md](../../../AGENTS.md) と [第 11 章](11-compatibility.md) を参照してください。
 - ファイルと行番号は次に対して確認しました。
-  - C リファレンス `extern/mVMC-1.3.0`(git サブモジュール、コミット `d73d06bd`)
+  - C リファレンス `extern/mVMC-1.4.0`(git サブモジュール、タグ `v1.4.0`、コミット `e83aa6cb`)
   - このリポジトリのコミット `37348eac`(`main`、"Add public RBM flag refresh and manual orbital mode (#336)")
 
   行番号はコードの変更とともにずれていきます。安定したキーはシンボル名です。
@@ -59,9 +59,9 @@ Rust 関数との対応を示します。後半の章は利用リファレンス
 
 ## 参照した資料
 
-- C マニュアル: `extern/mVMC-1.3.0/doc/en/source/{algorithm,expert,output,standard,start,tutorial}.rst`
+- C マニュアル: `extern/mVMC-1.4.0/doc/en/source/{algorithm,expert,output,standard,start,tutorial}.rst`
   (日本語版マニュアルは `doc/ja`)。
-- C 実装: `extern/mVMC-1.3.0/src/mVMC/`。
+- C 実装: `extern/mVMC-1.4.0/src/mVMC/`。
 - Julia ドキュメント(構成のみ): `extern/Julia-mVMC/docs/src/en/*.md`。
 - Rust ワークスペース: `crates/`。
 

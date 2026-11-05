@@ -30,7 +30,7 @@ for name in args.workloads.split(","):
 base = args.out.resolve()
 base.mkdir(parents=True, exist_ok=False)
 sources = [
-    root / "extern/mVMC-1.3.0/src/mVMC" / name
+    root / "extern/mVMC-1.4.0/src/mVMC" / name
     for name in ["vmcmain.c", "vmccal.c", "stcopt_dposv.c", "readdef.c"]
 ]
 sources.extend([args.c.resolve(), args.rust.resolve(), Path(__file__)])

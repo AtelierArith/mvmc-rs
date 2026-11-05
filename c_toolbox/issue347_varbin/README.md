@@ -1,6 +1,6 @@
 # Issue #347: C `vmc.out -b` varbin layout probe
 
-Full-executable validation (not a standalone kernel): builds the unmodified `extern/mVMC-1.3.0`
+Full-executable validation (not a standalone kernel): builds the unmodified `extern/mVMC-1.4.0`
 `vmc.out` and runs it with `-b` on the tiny Heisenberg-chain inputs to produce
 `tests/fixtures/issue347_varbin/c_expected/`. The Rust build and tests never read this directory.
 

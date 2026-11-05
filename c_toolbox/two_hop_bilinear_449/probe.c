@@ -1,5 +1,5 @@
 /* Standalone kernel check for issue #449: the two-hop bilinear form of the authoritative C
- * `calculateNewPfMTwo_child_real` (extern/mVMC-1.3.0/src/mVMC/pfupdate_two_real.c:161-177),
+ * `calculateNewPfMTwo_child_real` (extern/mVMC-1.4.0/src/mVMC/pfupdate_two_real.c:163-180),
  * evaluated for the inputs of tests/fixtures/pfaffian_cg/two_hop_bilinear.txt.
  *
  * The loops below are the C source lines verbatim (renamed variables only). This is a
@@ -43,7 +43,7 @@ int main(void) {
     const double *vec_b = vec_a + nsize;
     int msi, msj;
     double bMa = 0.0, tmp;
-    /* --- extern/mVMC-1.3.0/src/mVMC/pfupdate_two_real.c:167-177 --- */
+    /* --- extern/mVMC-1.4.0/src/mVMC/pfupdate_two_real.c:169-180 --- */
     for (msi = 0; msi < nsize; msi++) {
       const double *invM_i = invM + msi * nsize;
       tmp = 0.0;

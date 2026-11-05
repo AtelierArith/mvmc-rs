@@ -1434,7 +1434,7 @@ fn no_factored_terms_preserve_one_body_order_and_duplicate_rows() {
         fs::read_to_string(reference).unwrap(),
         "declared_records=2\ncount_after_mode2_dedup=1\nnormal_reader_status=1\nwith_gex_canonical_count=1\nindirect_reader_status=0\n"
     );
-    // C readdef.c:577–585 deduplicates in mode2, then :1046 selects the
+    // C readdef.c:645–653 deduplicates in mode2, then :1046 selects the
     // normal reader without GEx. :2299 rejects two rows vs reduced count1.
     // Rust's safe early diagnostic does not emulate the upstream extra write.
     let _ = fs::remove_dir_all(out);

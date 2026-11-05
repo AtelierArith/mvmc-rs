@@ -125,7 +125,7 @@ function c_definition_flags(inputs)
         count = parse(Int, split(lines[2])[2])
         append!(flags, zeros(Int, 2count))
         append!(written, zeros(Int, 2count))
-        # Native readdef.c:1064–1070,2385–2402 writes contiguous entries at
+        # Native readdef.c:1324–1330,2799–2816 writes contiguous entries at
         # NProj+NOrbitalIdx, NOT interleaved entries at the parameter tail.
         flags[n_proj+n_slater+1:n_proj+n_slater+count] .= 1
         written[n_proj+n_slater+1:n_proj+n_slater+count] .= 1
@@ -240,7 +240,7 @@ for (name, mode) in models
             println(io, "stage=after fixed record and named In overlays; no initialization or sampling")
             println(io, "flags=independent C GetInfoOpt/OptTrans enumeration from definition records, not Julia Boolean flags or Rust state")
             println(io, "flags_written=exact C reader writes; unwritten cells are not independent expectations for native allocation contents")
-            println(io, "C_flag_source_sha256=$(bytes2hex(sha256(read(joinpath(repo, "extern", "mVMC-1.3.0", "src", "mVMC", "readdef.c")))))")
+            println(io, "C_flag_source_sha256=$(bytes2hex(sha256(read(joinpath(repo, "extern", "mVMC-1.4.0", "src", "mVMC", "readdef.c")))))")
         end
         continue
     end

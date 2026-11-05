@@ -11,7 +11,7 @@ $$
 \mathcal L^{S}\mathcal L^{K}\mathcal L^{P}\;|\phi_{\rm pair}\rangle
 $$
 
-([C manual, *Input files for Expert mode*](../../extern/mVMC-1.3.0/doc/en/source/expert.rst), lines 75-110) with
+([C manual, *Input files for Expert mode*](../../extern/mVMC-1.4.0/doc/en/source/expert.rst), lines 75-110) with
 
 | Factor | Definition | Section |
 |--------|------------|---------|
@@ -60,10 +60,10 @@ parameter component is optimized only if its flag equals 1.
 The SR vector $O$ ([chapter 5](05-theory-sr.md)) uses the same order with two
 slots (real, imaginary derivative) per parameter and an extra leading pair for
 the identity: $[1,\ \text{proj}\ (2N_{\rm proj}),\ \text{RBM}\ (2N_{\rm RBM}),\ \text{Slater}\ (2N_{\rm Slater}),\ \text{OptTrans}]$
-(`VMCMainCal`, `vmccal.c:197-215`).
+(`VMCMainCal`, `vmccal.c:206-224`).
 
 > **Implementation**
-> - C: `ReadInputParameters` — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
+> - C: `ReadInputParameters` — `extern/mVMC-1.4.0/src/mVMC/readdef.c:1443`
 > - Rust: `projection_layout` — `crates/mvmc-expert-parsers/src/types.rs:1317`
 > - Rust: `accumulate_observables_local` — `crates/mvmc-core/src/run.rs:2900`
 > - Parity: Rust reserves the *declared* widths for each block even when the definition file lists fewer rows (the "sparse projection" rule, `ProjectionLayout` docs). The FSZ main-calculation places the Slater derivatives immediately after the projection block (no RBM slot), the normal path reserves all RBM slots first (`run.rs:2887-2900`).
@@ -81,7 +81,7 @@ where $I=(i,\sigma)$ is a spin-orbital. For the usual spin-singlet-pairing case
 only $f_{ij}\equiv F_{(i\uparrow)(j\downarrow)}$ is nonzero and
 $|\phi_{\rm pair}\rangle=(\sum_{ij}f_{ij}c^\dagger_{i\uparrow}c^\dagger_{j\downarrow})^{N_e}|0\rangle$.
 A single Slater determinant is the special case in which the $N_e$ nonzero
-singular values of $F$ equal 1 ([C manual, *Properties of the Pfaffian-Slater determinant*](../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst)):
+singular values of $F$ equal 1 ([C manual, *Properties of the Pfaffian-Slater determinant*](../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst)):
 
 $$
 f_{ij}=\sum_{n=1}^{N_e}\Phi_{in\uparrow}\Phi_{jn\downarrow},\qquad
@@ -114,11 +114,11 @@ $\texttt{InvM}_{mn}=(X^{-1})_{mn}$. This is the quantity used by every update
 formula in [4.5](04-theory-sampling.md#45-pfaffian-ratio-and-inverse-updates).
 
 > **Implementation**
-> - C: `CalculateMAll_fcmp` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:285`
-> - C: `calculateMAll_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:332`
-> - C: `CalculateMAll_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:516`
-> - C: `calculateMAll_child_real` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:557`
-> - C: `CalculateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/matrix.c:78`
+> - C: `CalculateMAll_fcmp` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:285`
+> - C: `calculateMAll_child_fcmp` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:332`
+> - C: `CalculateMAll_real` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:516`
+> - C: `calculateMAll_child_real` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:557`
+> - C: `CalculateMAll_fsz` — `extern/mVMC-1.4.0/src/mVMC/matrix.c:78`
 > - Rust: `calc_m_all_complex` — `crates/mvmc-core/src/pfaffian.rs:280`
 > - Rust: `calc_m_all_real` — `crates/mvmc-core/src/pfaffian.rs:134`
 > - Rust: `calc_m_all_fsz_complex` — `crates/mvmc-core/src/pfaffian.rs:555`
@@ -145,7 +145,7 @@ orbital definition files are present. The parser records them in
 The C reader requires `OrbitalParallel`/`OrbitalGeneral` whenever $2S_z\neq0$,
 and forces `NSPGaussLeg = 1` for general orbitals (spin projection is only
 implemented for the normal path); Lanczos is rejected for general orbitals
-(`readdef.c:597-617`). C `JudgeOrbitalMode` is mirrored by Rust's
+(`readdef.c:690-710`). C `JudgeOrbitalMode` is mirrored by Rust's
 `judge_orbital_mode`, which reports (but does not impose) the C admission result.
 
 For FSZ/general orbitals the table is built without spin rotation,
@@ -163,8 +163,9 @@ $$
 $$
 
 where each flag is the `ComplexType` header value of the corresponding index
-file (`readdef.c:641-642`), and all-zero selects the real kernels. The RBM
-files do not contribute to this sum. Rust mirrors this with
+file (`readdef.c:766-767`), and all-zero selects the real kernels. The RBM
+files do not contribute to this sum. C 1.4.0 also adds `iComplexFlgSpinJastrow`; the
+SpinJastrow file is not ported (it is rejected), so that term is always 0 in Rust. Rust mirrors this with
 `get_all_complex_flag` (`crates/mvmc-core/src/run.rs:1713`) and
 `all_complex_flag` (`crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`), which
 take the same header declarations; an imaginary value loaded from an
@@ -177,7 +178,7 @@ real and imaginary parts are $2N_{\rm para}$ independent real variables
 ([5.2](05-theory-sr.md#52-the-sr-equations)).
 
 > **Implementation**
-> - C: `ReadInputParameters` (sets `AllComplexFlag`) — `extern/mVMC-1.3.0/src/mVMC/readdef.c:1183`
+> - C: `ReadInputParameters` (sets `AllComplexFlag`) — `extern/mVMC-1.4.0/src/mVMC/readdef.c:1443`
 > - Rust: `get_all_complex_flag` — `crates/mvmc-core/src/run.rs:2018`
 > - Rust: `all_complex_flag` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:23`
 > - Parity: real-mode runs hold `SlaterElm_real`/`InvM_real`/`PfM_real` copies in C; Rust keeps real buffers (`pf_m_real`, `sr_opt_oo_real`, ...) and a complex shadow where the shared code needs it.
@@ -233,14 +234,14 @@ $$
 $$
 
 > **Implementation**
-> - C: `InitQPWeight` — `extern/mVMC-1.3.0/src/mVMC/qp.c:38`
-> - C: `UpdateQPWeight` — `extern/mVMC-1.3.0/src/mVMC/qp.c:129`
-> - C: `GaussLeg` — `extern/mVMC-1.3.0/src/mVMC/gauleg.c:32`
-> - C: `LegendrePoly` — `extern/mVMC-1.3.0/src/mVMC/legendrepoly.c:32`
-> - C: `UpdateSlaterElm_fcmp` — `extern/mVMC-1.3.0/src/mVMC/slater.c:37`
-> - C: `UpdateSlaterElm_fsz` — `extern/mVMC-1.3.0/src/mVMC/slater_fsz.c:32`
-> - C: `CalculateIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
-> - C: `CalculateLogIP_fcmp` — `extern/mVMC-1.3.0/src/mVMC/qp.c:90`
+> - C: `InitQPWeight` — `extern/mVMC-1.4.0/src/mVMC/qp.c:38`
+> - C: `UpdateQPWeight` — `extern/mVMC-1.4.0/src/mVMC/qp.c:129`
+> - C: `GaussLeg` — `extern/mVMC-1.4.0/src/mVMC/gauleg.c:32`
+> - C: `LegendrePoly` — `extern/mVMC-1.4.0/src/mVMC/legendrepoly.c:32`
+> - C: `UpdateSlaterElm_fcmp` — `extern/mVMC-1.4.0/src/mVMC/slater.c:37`
+> - C: `UpdateSlaterElm_fsz` — `extern/mVMC-1.4.0/src/mVMC/slater_fsz.c:32`
+> - C: `CalculateIP_fcmp` — `extern/mVMC-1.4.0/src/mVMC/qp.c:110`
+> - C: `CalculateLogIP_fcmp` — `extern/mVMC-1.4.0/src/mVMC/qp.c:90`
 > - Rust: `init_qp_weight` — `crates/mvmc-core/src/qp.rs:12`
 > - Rust: `init_qp_weight_inplace` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:86`
 > - Rust: `update_qp_weight` — `crates/mvmc-expert-parsers/src/utils/qp_weight.rs:150`
@@ -252,7 +253,7 @@ $$
 > - Rust: `calculate_log_ip_complex` — `crates/mvmc-core/src/observables.rs:179`
 > - Rust: `translated_site` — `crates/mvmc-core/src/qp.rs:33`
 > - Parity: C evaluates `w = 0.5*sin(beta[i])*weight[i]*LegendrePoly(cos(beta[i]), NSPStot)` and `QPFixWeight[i + j*NSPGaussLeg] = w*ParaQPTrans[j]` (`qp.c:73-77`); `QPFullWeight = OptTrans[i]*QPFixWeight` when `FlagOptTrans > 0` (`qp.c:129-146`). The sum `ip += QPFullWeight[q]*pfM[q]` is accumulated in sector order in `CalculateIP_fcmp`; `CalculateLogIP_fcmp` returns `clog(ip)`. Rust follows the same order; the Slater table is rebuilt from the *declared* coefficient without Julia's historical $10^{-14}$ amplitude cutoff (`slater_update.rs:46`). The translation sign (anti-periodic mode) is applied only when `NMPTrans < 0` (`qp.rs:67`).
-> - Parity: with `-o`, Rust activates the real component of every OptTrans weight and leaves the imaginary component fixed (`set_opt_trans_opt_flags`), as Julia does. C 1.3.0 `GetInfoOptTrans` (`readdef.c:2385-2402`) instead writes undoubled flags at `NProj + NSlater + i` without the RBM term, so the weights are never optimized and unrelated projection/Slater components are flagged; this C defect is not reproduced (#676, tmisawa/Julia-mVMC#94; see [11.5](11-compatibility.md#115-open-observations)). C's `calculateOptTransDiff` (`vmccal.c:639`) writes the derivative at consecutive complex indices ("this part will not be used" in the C comment), while Rust's `opt_trans_diff` (`observables.rs`) writes (value, i·value) pairs like Julia (#370). OptTrans is covered by fixtures in `tests/fixtures/opttrans`.
+> - Parity: with `-o`, Rust activates the real component of every OptTrans weight and leaves the imaginary component fixed (`set_opt_trans_opt_flags`), as Julia does. C `GetInfoOptTrans` (1.3.0 and 1.4.0) (`readdef.c:2799-2816`) instead writes undoubled flags at `NProj + NSlater + i` without the RBM term, so the weights are never optimized and unrelated projection/Slater components are flagged; this C defect is not reproduced (#676, tmisawa/Julia-mVMC#94; see [11.5](11-compatibility.md#115-open-observations)). C's `calculateOptTransDiff` (`vmccal.c:652`) writes the derivative at consecutive complex indices ("this part will not be used" in the C comment), while Rust's `opt_trans_diff` (`observables.rs`) writes (value, i·value) pairs like Julia (#370). OptTrans is covered by fixtures in `tests/fixtures/opttrans`.
 
 ## 3.5 Gutzwiller, Jastrow and doublon-holon factors
 
@@ -271,11 +272,11 @@ C takes only $\operatorname{Re}\,\texttt{Proj}[k]$ (`LogProjVal`, `LogProjRatio`
 - **4-site doublon–holon** (`DH4`): same with four partner sites, $m=0\ldots4$, $2\times5=10$ coefficients per pattern.
 
 > **Implementation**
-> - C: `MakeProjCnt` — `extern/mVMC-1.3.0/src/mVMC/projection.c:58`
-> - C: `UpdateProjCnt` — `extern/mVMC-1.3.0/src/mVMC/projection.c:155`
-> - C: `LogProjVal` — `extern/mVMC-1.3.0/src/mVMC/projection.c:32`
-> - C: `LogProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:41`
-> - C: `ProjRatio` — `extern/mVMC-1.3.0/src/mVMC/projection.c:50`
+> - C: `MakeProjCnt` — `extern/mVMC-1.4.0/src/mVMC/projection.c:58`
+> - C: `UpdateProjCnt` — `extern/mVMC-1.4.0/src/mVMC/projection.c:169`
+> - C: `LogProjVal` — `extern/mVMC-1.4.0/src/mVMC/projection.c:32`
+> - C: `LogProjRatio` — `extern/mVMC-1.4.0/src/mVMC/projection.c:41`
+> - C: `ProjRatio` — `extern/mVMC-1.4.0/src/mVMC/projection.c:50`
 > - Rust: `make_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:179`
 > - Rust: `update_proj_cnt` — `crates/mvmc-core/src/sampling/projection.rs:278`
 > - Rust: `log_proj_val` — `crates/mvmc-core/src/sampling/projection.rs:391`
@@ -317,11 +318,11 @@ the full complex ratio `RBMRatio` multiplies the amplitude ratio. `NBlockSize_RB
 (default 200) is the C block size for the vectorized ratio evaluation.
 
 > **Implementation**
-> - C: `MakeRBMCnt` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:187`
-> - C: `UpdateRBMCnt` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:386`
-> - C: `LogRBMRatio` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:125`
-> - C: `RBMRatio` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:64`
-> - C: `WeightRBM` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:30`
+> - C: `MakeRBMCnt` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:187`
+> - C: `UpdateRBMCnt` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:386`
+> - C: `LogRBMRatio` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:125`
+> - C: `RBMRatio` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:64`
+> - C: `WeightRBM` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:30`
 > - Rust: `make_rbm_cnt` — `crates/mvmc-core/src/sampling/rbm.rs:160`
 > - Rust: `update_rbm_cnt_hopping` — `crates/mvmc-core/src/sampling/rbm.rs:311`
 > - Rust: `log_rbm_ratio` — `crates/mvmc-core/src/sampling/rbm.rs:460`
@@ -357,18 +358,18 @@ every SR update):
 3. Gutzwiller–Jastrow shift: if all Gutzwiller *and* Jastrow coefficients are
    optimized, subtract the common mean of all $N_G+N_J$ values (`shiftGJ`).
    These shifts do not change $|\psi|^2$ up to normalization; the flags are set
-   once by `SetFlagShift` (`parameter.c:255`, called at `readdef.c:1170`).
+   once by `SetFlagShift` (`parameter.c:255`, called at `readdef.c:1430`).
 4. Rescale the Slater parameters so that $\max_k|f_k|=4$ (`D_AmpMax`).
 5. If OptTrans is active, rescale the OptTrans weights to unit maximum modulus.
 
 > **Implementation**
-> - C: `InitParameter` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:35`
-> - C: `ReadInitParameter` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:95`
-> - C: `SyncModifiedParameter` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:134`
-> - C: `shiftGJ` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:181`
-> - C: `shiftDH2` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:202`
-> - C: `shiftDH4` — `extern/mVMC-1.3.0/src/mVMC/parameter.c:228`
-> - C: `D_AmpMax` (4.0) — `extern/mVMC-1.3.0/src/mVMC/parameter.c:32`
+> - C: `InitParameter` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:35`
+> - C: `ReadInitParameter` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:95`
+> - C: `SyncModifiedParameter` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:134`
+> - C: `shiftGJ` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:181`
+> - C: `shiftDH2` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:202`
+> - C: `shiftDH4` — `extern/mVMC-1.4.0/src/mVMC/parameter.c:228`
+> - C: `D_AmpMax` (4.0) — `extern/mVMC-1.4.0/src/mVMC/parameter.c:32`
 > - Rust: `init_parameter` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:63`
 > - Rust: `sync_modified_parameter` — `crates/mvmc-expert-parsers/src/utils/parameter_init.rs:167`
 > - Rust: `sync_modified_parameter` (reducer-aware wrapper) — `crates/mvmc-core/src/sync.rs:18`

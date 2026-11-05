@@ -15,7 +15,7 @@
 //!
 //! C defects (documented, not reproduced): `NSplitSize > 1` with stored O
 //! (`NStore != 0`) or SR-CG reads unwritten memory in `calculateOO_Store`
-//! (`vmccal.c:314-318`, tmisawa/Julia-mVMC#61). Their `<OO>` is not compared with C;
+//! (`vmccal.c:323-327`, tmisawa/Julia-mVMC#61). Their `<OO>` is not compared with C;
 //! Rust grouped stored `<OO>` is asserted against Rust grouped direct `<OO>`, and
 //! grouped SR-CG must be rejected. Real-mode OptTrans derivative slots follow C's
 //! mis-offset layout (#370); those slots are excluded as in the serial gate. PhysCal
@@ -457,7 +457,7 @@ mod mpi_matrix {
         }
         if let Some(((state0, _), _)) = control {
             // Rust grouped stored <OO> equals Rust grouped direct <OO> (the C
-            // value is wrong; vmccal.c:314-318).
+            // value is wrong; vmccal.c:323-327).
             let direct = find(all, cell, "d0", cell.width).unwrap();
             let mut a = as_complex(&state, all_complex, "oo");
             if all_complex {

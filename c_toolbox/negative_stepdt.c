@@ -1,5 +1,5 @@
 /* Optional #367 probe: unmodified C negative-DSROptStepDt normalization
- * (readdef.c:749-755), the SRinfo header selection (initfile.c:47-54) and the
+ * (readdef.c:959-965), the SRinfo header selection (initfile.c:47-59) and the
  * direct-solver system construction stcOptInit (stcopt_dposv.c), all extracted
  * verbatim into negative_stepdt_upstream.inc, followed by LAPACK dposv exactly
  * as stcOptMain calls it. Standalone kernel check on fixed well-conditioned

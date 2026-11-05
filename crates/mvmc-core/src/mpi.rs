@@ -130,7 +130,7 @@ impl MpiContext {
         self.universe.as_ref()
     }
 
-    /// C `initMultiDefMode` communicator split (`vmcmain.c:752-762`): `n` groups by the
+    /// C `initMultiDefMode` communicator split (`vmcmain.c:762-772`): `n` groups by the
     /// div/mod rule of [`crate::multidef::group_of_rank`], keyed by the parent rank. The
     /// returned context is the group's `comm0`. `n` must satisfy
     /// [`crate::multidef::check_world`].

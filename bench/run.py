@@ -156,7 +156,7 @@ def main():
     binaries = {item["target"]["name"]: Path(item["executable"])
                 for line in build.splitlines() if line.startswith("{")
                 for item in [json.loads(line)] if item.get("reason") == "compiler-artifact" and item.get("executable")}
-    csource = ROOT / "extern/mVMC-1.3.0"
+    csource = ROOT / "extern/mVMC-1.4.0"
     copied = out / "c-source"
     shutil.copytree(csource, copied, ignore=shutil.ignore_patterns(".git"))
     cbuild = out / "c-build"

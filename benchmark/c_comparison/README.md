@@ -37,7 +37,7 @@ scripts/audit_native_c_system.py C-system.json Rust-diagnostics.json`.
 
 ## Historical timing round before #492
 
-Fresh measurements of the authoritative, unmodified `extern/mVMC-1.3.0`
+Fresh measurements of the authoritative, unmodified `extern/mVMC-1.4.0`
 executable and the current Rust CLI are in `results/`. Both executables run
 inside the same Linux x86_64 Dev Container, sequentially and interleaved by
 workload. This reuses the inputs and workload overrides in

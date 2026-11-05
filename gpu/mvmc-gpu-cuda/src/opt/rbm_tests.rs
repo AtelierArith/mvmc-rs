@@ -35,7 +35,7 @@ pub(crate) fn nphys(model: &Model) -> usize {
 
 /// Host replay of the resident tape contract (`interval_hop_impl`), as
 /// `dh_tests::replay`, with C UpdateRBMCnt on the proposal (an exchange is C's
-/// two hops, `vmcmake.c:241-251`) and C LogRBMRatio added to LogProjRatio.
+/// two hops, `vmcmake.c:250-260`) and C LogRBMRatio added to LogProjRatio.
 pub(crate) struct Replay {
     pub cfg: Vec<i32>,
     pub accepted: Vec<i32>,

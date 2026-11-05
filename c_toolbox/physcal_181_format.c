@@ -1,5 +1,5 @@
 /* Optional fixed-value formatting probe. Templates copied verbatim from
- * mVMC-1.3.0 src/mVMC/vmcmain.c:666-687; no computed numerical oracle.
+ * mVMC-1.3.0 src/mVMC/vmcmain.c:668-689; no computed numerical oracle.
  * Reproduce: cc -std=c11 physcal_181_format.c -o /tmp/physcal181-format
  * /tmp/physcal181-format ../tests/fixtures/physcal_181/formatting
  * Cargo never builds or invokes this program.
@@ -25,11 +25,11 @@ int main(int argc, char **argv) {
     fprintf(file, "%d %d %d %d %d %d %d %d % .18e % .18e\n", 0, 0, 1, 1, 2, 0, 3, 1, -5.0, 6.0);
     fprintf(file, "\n"); fclose(file);
     file = open_file(argv[1], "out.dat");
-    /* vmcmain.c:647, supplied literal result values, not calculated variance. */
+    /* vmcmain.c:649, supplied literal result values, not calculated variance. */
     fprintf(file, "% .18e % .18e  % .18e % .18e %.18e %.18e\n", 1.0, 1.0, 2.0, -1.0, 0.5, 0.25);
     fclose(file);
     file = open_file(argv[1], "var-full.dat");
-    /* vmcmain.c:655-657: full declared Para storage, including reserved slots.
+    /* vmcmain.c:657-659: full declared Para storage, including reserved slots.
      * Gutz2,Jast2,DH2(6),DH4(10),nine RBM slots,Slater2,OptTrans2 = 33.
      * Literal dyadic coefficients; unmapped Gutz/Jast slots 1 and 3 are zero. */
     fprintf(file, "% .18e % .18e 0.0 % .18e % .18e 0.0 ", -3.0, 0.0, 9.0, 0.0);
