@@ -8,20 +8,11 @@ one-step Rust test. An absent reference checkout or required namelist fails
 Initialize the pinned submodules below before ordinary workspace testing.
 Fixtures are read-only; no C, Julia or toolbox executable is invoked.
 
-The four `phase5_regression_50step` comparisons are long historical fixture
-gates. They are explicitly ignored by default, not removed or weakened:
-
-```sh
-MVMC_RS_PHASE5_50STEP=1 cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test phase5_regression_50step --run-ignored only --no-fail-fast --retries 0
-env -u MVMC_RS_PHASE5_50STEP cargo nextest run --locked -p mvmc-core --cargo-profile test-fast --test phase5_regression_50step --run-ignored only --no-fail-fast --retries 0
-```
-
-The second command deliberately fails all four gates with `NotRun`. Empty
-selectors also fail `NotRun`, while `skip` fails `ExplicitSkip`. Selected gates
-require the checkout, model namelist and `reference/<model>/zvo_out_first50.dat`;
-absence fails `MissingFixture` before sampling. Numerical bodies, seed 1,
-50-step counts and existing tolerance budgets are unchanged. These historical
-expectations are not newly generated Julia 1.13 or full C parity evidence.
+The `phase5_regression_50step` and `phase5_regression_20step` gates and their Julia
+50-step goldens (`reference/<model>/zvo_out_first50.dat`) were removed with the
+other Julia CPU references in #695. The 10-step gates `phase4_zvo_gate*` and
+`phase5_zvo_gate_hubbard` compare with C 1.4.0 rows in
+`tests/fixtures/c_integration_reference/`.
 
 Three new default reporting regressions use isolated subprocess environments
 and fresh empty temporary directories, never deleting or replacing real

@@ -1,5 +1,5 @@
-//! F039/F041 Transfer boundary; C readdef.c1973-2001, SHA256
-//! 6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9.
+//! F039/F041 Transfer boundary; C 1.4.0 readdef.c 2304-2332 (unchanged from 1.3.0), SHA256
+//! 9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3.
 //! Independent literals only: no toolbox/reference program is read or invoked.
 
 use std::fs;

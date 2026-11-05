@@ -1,9 +1,10 @@
 # Upstream ctest references (issue #180)
 
 `ref_mean.dat` / `ref_std.dat` per model are byte-identical copies of the C-shipped
-files `extern/mVMC-1.3.0/test/python/data/<CModel>/ref/ref_{mean,std}.dat`
-(mVMC v1.3.0, submodule commit `d73d06bd529d3b2573f38eb5817c4a5f52971006`; model
-mapping in `models.tsv`). They are also the `ctest_ref/` files of
+files `extern/mVMC-1.4.0/test/python/data/<CModel>/ref/ref_{mean,std}.dat`
+(mVMC v1.4.0, submodule commit `e83aa6cb1e37bfc4876848787ed2f61721a7e972`; model
+mapping in `models.tsv`). They were copied from v1.3.0 (`d73d06bd`); all 26 files
+are byte-identical in v1.4.0 (checked with `cmp` in #695). They are also the `ctest_ref/` files of
 `extern/Julia-mVMC/test/integration/reference/<model>/` (submodule commit
 `c0788c34a6a5753c611633a97cd1ea233203320c`); the copy script verified C and Julia
 files are identical (`cmp`) before copying. SHA-256 of every reference file is in

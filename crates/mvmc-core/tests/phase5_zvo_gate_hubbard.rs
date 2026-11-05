@@ -27,12 +27,11 @@ fn hubbard_chain_real_zvo_out_first10_matches_reference() {
         .join("inputs")
         .join("hubbard_chain_real")
         .join("namelist.def");
-    let reference = julia
-        .join("test")
-        .join("integration")
-        .join("reference")
-        .join("hubbard_chain_real")
-        .join("zvo_out_first10.dat");
+    // First ten optimization rows of C 1.4.0 on the same inputs
+    // (tests/fixtures/c_integration_reference, c_toolbox/integration_reference).
+    let reference = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../tests/fixtures/c_integration_reference/hubbard_chain_real/zvo_out_first10.dat",
+    );
     if !namelist.is_file() || !reference.is_file() {
         support::missing_fixture(
             "phase5-hubbard",

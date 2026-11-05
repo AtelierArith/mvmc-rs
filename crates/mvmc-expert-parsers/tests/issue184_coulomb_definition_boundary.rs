@@ -1,6 +1,6 @@
 //! F034/F041: original Coulomb helper conditions plus separate C file boundaries.
-//! C readdef.c2017-2037/2064-2084 SHA256
-//! 6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9.
+//! C 1.4.0 readdef.c 2348-2368/2395-2415 (unchanged from 1.3.0) SHA256
+//! 9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3.
 //! Independent literal values; no native/oracle/runtime dependency.
 use mvmc_expert_parsers::parsers::coulomb::{
     parse_coulomb_inter_content, parse_coulomb_inter_definition, parse_coulomb_intra_content,

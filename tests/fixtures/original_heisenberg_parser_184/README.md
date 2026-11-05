@@ -16,10 +16,10 @@ M0199, numerical sampling, initialization, or SR execution.
 
 Source assertions: `test_parse_expert_mode_files.jl`, SHA256
 `dcf0f3d8ed0a272e06696a32ec5e3e060b3acee153392144c6594b9cb662cc10`,
-lines 118–184. C authority is `extern/mVMC-1.3.0/src/mVMC/readdef.c`, SHA256
-`6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`:
-line 593 derives Ne=(NLocSpin+NCond)/2; GetInfoGutzwiller 2117–2142
-requires 16 integer mappings plus one flag; GetInfoJastrow 2144–2175
+lines 118–184. C authority is `extern/mVMC-1.4.0/src/mVMC/readdef.c`, SHA256
+`9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3`:
+line 661 derives Ne=(NLocSpin+NCond)/2; GetInfoGutzwiller 2450–2475
+requires 16 integer mappings plus one flag; GetInfoJastrow 2477–2587
 requires 240 directional non-diagonal mappings plus one flag. Orbital has
 256 site-pair rows plus 64 flags; TransSym has four weights plus 64 site
 maps. This audit establishes supported input shapes, not a full native C run.

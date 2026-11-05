@@ -5,8 +5,8 @@
 reader status, encoded definition (`|` represents a newline), site-index array,
 and full real/imaginary flag array. Rejected records have `-` array lines.
 
-Source: authoritative `extern/mVMC-1.3.0/src/mVMC/readdef.c`, SHA-256
-`6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`.
+Source: authoritative `extern/mVMC-1.4.0/src/mVMC/readdef.c`, SHA-256
+`9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3`.
 The optional driver and verbatim GPL excerpts are stored in `c_toolbox/`.
 Reproduction: `python3 scripts/check_gutzwiller_contracts_c_parity.py`;
 explicit regeneration: append `--write`. Apple clang 17 compiles with `-O0`;
