@@ -19,8 +19,7 @@
 //!   borrowed view of the canonical parser terms.
 //! * **4.3.3a — normal-mode candidate generators** ([`candidate`]):
 //!   `get_update_type`, `make_candidate_hopping`,
-//!   `make_candidate_exchange`; SFMT draw-order parity is covered by
-//!   `tests/candidate_vs_julia.rs`. FSZ / local-spin-flip candidates
+//!   `make_candidate_exchange`. FSZ / local-spin-flip candidates
 //!   and Metropolis accept/reject remain pending.
 //! * 4.3.4 — Sherman-Morrison Pfaffian updates and the `vmc_make_sample!`
 //!   driver. Pending.

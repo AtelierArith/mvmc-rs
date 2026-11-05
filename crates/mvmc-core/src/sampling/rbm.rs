@@ -448,8 +448,7 @@ pub fn update_rbm_cnt_hopping(
     }
 }
 
-/// `log(cosh(z))` of the RBM weights: C's `clog(ccosh(z))` (glibc port, issue #470); Julia's
-/// stable sign-flipped `log1p` form only under `use_julia_libm()`.
+/// `log(cosh(z))` of the RBM weights: C's `clog(ccosh(z))` (glibc port, issue #470).
 #[inline]
 pub fn log_cosh_stable(z: Complex64) -> Complex64 {
     rbm_math::log_cosh(z)

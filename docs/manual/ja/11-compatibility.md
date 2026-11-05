@@ -36,7 +36,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 高水準ランナー | `run_para_opt_from_namelist(...; nsteps, mode, nsmp, output_dir, seed, initial_def)` | `RunConfig` を伴う `run::run_para_opt_from_namelist`(同じ引数)。CLIはこれをラップします |
 | `1e-14` のスレーター振幅カットオフ | 従来のJuliaのテーブル構築で適用 | 適用**しません**(Cは宣言された値を読み込みます、`slater_update.rs:46`) |
 | 最適化中の出力名 | `zvo_out.dat`, `zvo_var.dat` | 同じ(Cとは異なります、[9.1](09-output-files.md#91-ステップごとのエネルギー-zvo_outdat-opt-と-zvo_out_nnndat-phys)) |
-| Juliaの `exp`、`log`、`hypot`、`sin/cos`、複素数の除算 | Juliaのカーネルで使用 | Juliaの演算順序が保たれる箇所では移植されています(`julia_exp`、`julia_log`、`julia_hypot`、`julia_trig`、`julia_complex`)。Cの演算順序が必要な箇所ではC方式の変種(`c_complex`、`*_c_compat`) |
+| Juliaの複素数の除算 | Juliaのカーネルで使用 | Juliaの演算順序が保たれる箇所では移植されています(`julia_complex`)。Cの演算順序が必要な箇所ではC方式の変種(`c_complex`、`*_c_compat`)。実数の `exp`、`log`、`hypot`、`sin/cos` は C と同じくプラットフォームの libm を使います |
 
 ## 11.3 Cリファレンスとの既知の相違
 

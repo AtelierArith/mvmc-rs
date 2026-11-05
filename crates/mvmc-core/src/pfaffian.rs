@@ -371,31 +371,8 @@ pub(crate) fn calc_m_all_complex_c_compat(
     )
 }
 
-thread_local! {
-    static JULIA_COMPLEX_KERNEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// Guard of [`use_julia_complex_kernel`]: restores the previous setting on drop.
-#[derive(Debug)]
-pub struct JuliaComplexKernelGuard(bool);
-
-impl Drop for JuliaComplexKernelGuard {
-    fn drop(&mut self) {
-        JULIA_COMPLEX_KERNEL.with(|flag| flag.set(self.0));
-    }
-}
-
-/// Historical opt-in (this thread only): evaluate the sampler's periodic complex
-/// `CalculateMAll` recalculation and the PhysCal refresh with Julia's `@turbo` kernel
-/// (`zsktf2_turbo`: FMA rank-2 update, reciprocal pivot) instead of C's `ZSKTRF` operation
-/// order. The default is the C order (issue #449; AGENTS.md: C is authoritative for operation
-/// order). Only tests of archived Julia 1.11 trajectories select this.
-pub fn use_julia_complex_kernel() -> JuliaComplexKernelGuard {
-    JuliaComplexKernelGuard(JULIA_COMPLEX_KERNEL.with(|flag| flag.replace(true)))
-}
-
-/// Complex `CalculateMAll` of the production sampler and PhysCal refresh: the C operation order
-/// unless [`use_julia_complex_kernel`] is active on this thread.
+/// Complex `CalculateMAll` of the production sampler and PhysCal refresh, in the C operation
+/// order (issue #449).
 pub(crate) fn calc_m_all_complex_production(
     ele_idx: &[i64],
     slater_elm: &SlaterElmFlat<Complex64>,
@@ -407,15 +384,9 @@ pub(crate) fn calc_m_all_complex_production(
     n_elec: usize,
     pool: &ThreadedPfaPackWorkspace,
 ) -> Result<(), CalcMAllError> {
-    if JULIA_COMPLEX_KERNEL.with(std::cell::Cell::get) {
-        calc_m_all_complex(
-            ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
-        )
-    } else {
-        calc_m_all_complex_c_compat(
-            ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
-        )
-    }
+    calc_m_all_complex_c_compat(
+        ele_idx, slater_elm, inv_m, pf_m, qp_start, qp_end, n_site, n_elec, pool,
+    )
 }
 
 /// Native normal-complex validation status, without a Julia-only norm cutoff.

@@ -19,18 +19,10 @@ pub mod read_input_parameters;
 /// Quantum-projection weight init + `gauss_legendre` (port of `utils/qp_weight.jl`).
 pub mod qp_weight;
 
-/// Scalar libm functions as C calls them, with the Julia emulation as an explicit opt-in.
+/// Scalar libm functions as C calls them.
 pub mod c_math;
 /// glibc complex elementary functions (cexp, clog, ccosh, ctanh) as the C RBM code calls them.
 pub mod glibc_complex;
-pub mod julia_hypot;
-/// Julia Float64 logarithmic operations for deterministic kernels.
-pub mod julia_log;
-/// Julia Float64 trigonometric and hyperbolic operations for deterministic kernels.
-pub mod julia_trig;
-
-/// Julia's Float64 exponential operation for deterministic projection ratios.
-pub mod julia_exp;
 
 /// `OptFlag` accessors (port of `utils/opt_flag_utils.jl`).
 pub mod opt_flag;

@@ -36,7 +36,7 @@ Chapters 2-6 give the line-level map for every equation.
 | High-level runner | `run_para_opt_from_namelist(...; nsteps, mode, nsmp, output_dir, seed, initial_def)` | `run::run_para_opt_from_namelist` with `RunConfig` (same arguments); CLI wraps it |
 | `1e-14` Slater amplitude cutoff | applied in the historical Julia table build | **not** applied (C reads the declared value, `slater_update.rs:46`) |
 | Output names during optimization | `zvo_out.dat`, `zvo_var.dat` | same (differs from C, [9.1](09-output-files.md#91-energy-per-step-zvo_outdat-opt-and-zvo_out_nnndat-phys)) |
-| Julia `exp`, `log`, `hypot`, `sin/cos`, complex division | used by Julia kernels | ported (`julia_exp`, `julia_log`, `julia_hypot`, `julia_trig`, `julia_complex`) where Julia order is kept; C-style variants (`c_complex`, `*_c_compat`) where C order is required |
+| Julia complex division | used by Julia kernels | ported (`julia_complex`) where Julia order is kept; C-style variants (`c_complex`, `*_c_compat`) where C order is required. Real `exp`, `log`, `hypot`, `sin/cos` use the platform libm as C does |
 
 ## 11.3 Known differences from the C reference
 
