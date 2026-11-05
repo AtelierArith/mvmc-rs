@@ -6,8 +6,8 @@ matrix/RHS and calls original LAPACK DPOSV with upper triangle and one RHS.
 It does not reconstruct the system, alter regularization or replace expectations.
 Exit zero means diagnostic completion; positive INFO means factorization failed.
 
-C authority: vendored mVMC 1.3.0,
-`extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c` lines 44–45,
+C authority: vendored mVMC 1.4.0 (byte-identical to 1.3.0),
+`extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c` lines 44–45,
 SHA-256 `2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca`.
 Original source copyright University of Tokyo; GPL-3.0-or-later with the upstream
 BSD-derived history recorded in its header. No upstream source was copied or

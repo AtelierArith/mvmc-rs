@@ -7,7 +7,7 @@ remain unchanged. New stem: `complex6_factorized`.
 
 ## Authority and acquisition
 
-C `extern/mVMC-1.3.0/src/mVMC/matrix.c:165` invokes M_ZSKTRF("U","N") then
+C `extern/mVMC-1.4.0/src/mVMC/matrix.c:165` invokes M_ZSKTRF("U","N") then
 utu2inv_z at173. Source SHA256
 `849488176375102fbc3bab7001e0dc27dfa7c8e049fd90ee1d6248ebfba10764`.
 The probe invokes original ZSKTRF U,N and utu2inv<std::complex<double>> on the

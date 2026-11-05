@@ -1,5 +1,10 @@
 # Durable native acquisition provenance and reproduction
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `vmcmain.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 All commands below are optional developer commands, NOT run while preparing this
 candidate. Ordinary Cargo tests require none of these sources/programs/libraries.
 

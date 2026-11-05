@@ -1,4 +1,4 @@
-# actual C nine-section RBM readers; untouched index=-1 and imaginary=0 sentinels; Apple clang 17 -O0; readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9
+# actual C nine-section RBM readers; untouched index=-1 and imaginary=0 sentinels; Apple clang 17 -O0; readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3
 ChargeRBM_PhysLayer_sites1_hidden1_complex-1_complete 0 1 1 1 5 -1 5 0
 ===|NParameter 5|ComplexType -1|===|===|0 0|99 -2|98 -1|97 0|96 1|95 2|
 0

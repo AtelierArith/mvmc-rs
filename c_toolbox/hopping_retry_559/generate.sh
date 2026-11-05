@@ -9,8 +9,8 @@ src="$root/extern/mVMC-1.4.0/src/mVMC"
 fixture="$root/tests/fixtures/candidate/hopping_retry_cap_559.txt"
 
 check() { echo "$1  $2" | sha256sum --check --quiet; }
-check 8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed "$src/vmcmake.c"
-check 2b43a47a85ec13833d453a010962334147024a6d6aae01b99bb8b2a0b80c15db "$src/vmcmake_fsz.c"
+check a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9 "$src/vmcmake.c"
+check f6322ed48eb186c097074ea9287906fcf58129a44d91b932d0a6750ea9daba66 "$src/vmcmake_fsz.c"
 
 extract() { # file first last
   printf '/* Verbatim: extern/mVMC-1.4.0/src/mVMC/%s lines %s-%s (GPLv3, see that file). */\n' \
@@ -18,11 +18,11 @@ extract() { # file first last
   sed -n "$2,$3p" "$1"
 }
 {
-  extract "$src/vmcmake.c" 515 545
+  extract "$src/vmcmake.c" 620 650
 } > "$dir/hopping_upstream.inc"
 {
-  extract "$src/vmcmake_fsz.c" 594 664
-  extract "$src/vmcmake_fsz.c" 756 788
+  extract "$src/vmcmake_fsz.c" 633 703
+  extract "$src/vmcmake_fsz.c" 866 898
 } > "$dir/fsz_upstream.inc"
 
 work="$(mktemp -d)"

@@ -1,5 +1,10 @@
 # Optional independent C declared-parameter acquisition
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `parameter.c` and `readdef.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 `generate_reviewed_parameter_c_audit.jl` orchestrates the C program
 `reviewed_parameter_c_audit.c`; it imports only Julia standard libraries,
 not Julia-mVMC or Rust. Ordinary Cargo builds/tests must never invoke/read

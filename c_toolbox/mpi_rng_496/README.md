@@ -15,14 +15,15 @@ OpenMP/BLAS thread counts. Do not combine it with another preload that overrides
 
 The C observer is deliberately tied to this Linux x86_64 executable:
 
-* Upstream C commit: `d73d06bd529d3b2573f38eb5817c4a5f52971006`.
+* Upstream C commit: `d73d06bd529d3b2573f38eb5817c4a5f52971006` (mVMC 1.3.0; `SFMT.c` and
+  `SFMT.h` are byte-identical in 1.4.0 `e83aa6cb`).
 * Executable SHA-256: `6ae44625e227ccd6b9c38d2a7731fb445955108772e8741b452f70c6a641ac28`.
 * Build: GCC 13.3, Release `-O3 -DNDEBUG -fopenmp`, MPICH 4.2.0,
   OpenBLAS 0.3.26 LP64; blocked Pfaffian updates disabled, GEMMT enabled.
 * GNU `nm -S`: `idx` at `0x8555c0`, size 4; `sfmt` at `0x8555e0`, size 2496.
 * `dl_iterate_phdr` supplies the PIE image base with ASLR enabled. Both globals
   must fall inside the writable main ELF segment; index must be in `[0,624]`.
-* Origin of the audited state: `extern/mVMC-1.3.0/src/sfmt/SFMT.c`, SHA-256
+* Origin of the audited state: `extern/mVMC-1.4.0/src/sfmt/SFMT.c`, SHA-256
   `b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a`, and
   `SFMT.h`, SHA-256
   `4bea0eab7eb2fcfe197f73e1eca398b45eb316eb5fb77641546bc621893d17ae`.

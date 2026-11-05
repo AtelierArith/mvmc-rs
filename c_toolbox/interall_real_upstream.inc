@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: projection.c sha256=2c01cc16ec75f6d5f3c9e7927bd68f96d1db329c124702b06b771ccd314522c1; pfupdate_real.c sha256=61b5977b31be7d1f3301a473b434ac47016472c42b63286577519f297145c111; pfupdate_two_real.c sha256=e30feeb3d1710be4db69a792fbd73408bbb0e95438af0268745acf49556c1efe; qp_real.c sha256=eec104362f5540c368aed7e42403a79eeefc21a509da6c57c668b5c4fe887b71; locgrn_real.c sha256=4fb1e9104ffe5961ab632365b042154134728c8ccc6b5ba51231930930f0de8e.
+/* Generated verbatim from authoritative mVMC-1.4.0: projection.c sha256=9459b9819d08bd67dc40bc9a2103a43851667af3775e4a32752f1f7f559e5794; pfupdate_real.c sha256=c1a735d7b54fbf86d586a5570b1c7052c241a4c7de8a98e622657437a2d2aa7e; pfupdate_two_real.c sha256=79c98d367003d1f2acb304dcddad6e7c2bfa7e3f0b0a4706099ebd84856b6513; qp_real.c sha256=eec104362f5540c368aed7e42403a79eeefc21a509da6c57c668b5c4fe887b71; locgrn_real.c sha256=ffa43ee61b75f92b73e43af94d7064555bb5133173486720597a83898184a66c.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -86,13 +86,37 @@ void UpdateProjCnt(const int ri, const int rj, const int s,
     }
   }
 
+  /* Spin Jastrow: eleNum is already updated (ri emptied, rj filled) */
+  if(NSpinJastrowIdx>0){
+    offset = NGutzwillerIdx + NJastrowIdx;
+    int ds = 2*s - 1; /* magnetization change at departure: s=0->-1, s=1->+1 */
+    /* update [ri][rj] */
+    if(ri<rj) idx = offset + SpinJastrowIdx[ri][rj];
+    else  idx = offset + SpinJastrowIdx[rj][ri];
+    projCntNew[idx] += ds*((n0[rj]-n1[rj])-(n0[ri]-n1[ri])) + 1;
+    /* update [ri][rk] (rk != ri, rj) */
+    for(rk=0;rk<nSite;rk++) {
+      if(rk==rj || rk==ri) continue;
+      if(rk>ri) idx = offset + SpinJastrowIdx[ri][rk];
+      else idx = offset + SpinJastrowIdx[rk][ri];
+      projCntNew[idx] += ds*(n0[rk]-n1[rk]);
+    }
+    /* update [rj][rk] (rk != ri, rj) */
+    for(rk=0;rk<nSite;rk++) {
+      if(rk==ri || rk==rj) continue;
+      if(rk>rj) idx = offset + SpinJastrowIdx[rj][rk];
+      else idx = offset + SpinJastrowIdx[rk][rj];
+      projCntNew[idx] -= ds*(n0[rk]-n1[rk]);
+    }
+  }
+
   if(NDoublonHolon2siteIdx==0 && NDoublonHolon4siteIdx==0) return;
 
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   for(idx=offset;idx<nProj;idx++) projCntNew[idx] = 0;
 
   /* 2-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,xm,idx)
   for(xn=0;xn<NDoublonHolon2siteIdx;xn++) {
     dh=DoublonHolon2siteIdx[xn];
@@ -117,7 +141,7 @@ void UpdateProjCnt(const int ri, const int rj, const int s,
   }
 
   /* 4-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx + 6*NDoublonHolon2siteIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx + 6*NDoublonHolon2siteIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,r2,r3,xm,idx)
   for(xn=0;xn<NDoublonHolon4siteIdx;xn++) {
     dh=DoublonHolon4siteIdx[xn];
@@ -171,10 +195,12 @@ void CalculateNewPfM_real(const int ma, const int s, double *pfMNew_real, const 
     invM_a = InvM_real + qpidx*Nsize*Nsize + msa*Nsize;
 
     ratio = 0.0;
+    #pragma omp simd private(rsj) reduction(+:ratio)
     for(msj=0;msj<ne;msj++) {
       rsj = eleIdx[msj];
       ratio += invM_a[msj] * sltE_a[rsj];
     }
+    #pragma omp simd private(rsj) reduction(+:ratio)
     for(msj=ne;msj<nsize;msj++) {
       rsj = eleIdx[msj] + Nsite;
       ratio += invM_a[msj] * sltE_a[rsj];
@@ -241,6 +267,7 @@ void calculateNewPfMTwo_child_real(const int ma, const int s, const int mb, cons
   sltE_b = sltE + rsb*Nsite2;
 
   #pragma loop noalias
+  #pragma omp simd private(rsi)
   for(msi=0;msi<nsize;msi++) {
     rsi = eleIdx[msi] + (msi/Ne)*Nsite;
     vec_a[msi] = sltE_a[rsi];
@@ -256,6 +283,7 @@ void calculateNewPfMTwo_child_real(const int ma, const int s, const int mb, cons
   p_a = p_b = q_a = q_b = bMa = 0.0;
 
   #pragma loop noalias
+  #pragma omp simd private(vec_ai,vec_bi,invM_ai,invM_bi) reduction(+:p_a,p_b,q_a,q_b)
   for(msi=0;msi<nsize;msi++) {
     vec_ai = vec_a[msi];
     vec_bi = vec_b[msi];
@@ -272,6 +300,7 @@ void calculateNewPfMTwo_child_real(const int ma, const int s, const int mb, cons
   for(msi=0;msi<nsize;msi++) {
     invM_i = invM + msi*Nsize;
     tmp = 0.0;
+    #pragma omp simd reduction(+:tmp)
     for(msj=0;msj<nsize;msj++) {
       tmp += invM_i[msj] * vec_a[msj];
     }
@@ -313,6 +342,12 @@ double  GreenFunc1_real(const int ri, const int rj, const int s, const double ip
 
   if(ri==rj) return eleNum[ri+s*Nsite];
   if(eleNum[ri+s*Nsite]==1 || eleNum[rj+s*Nsite]==0) return 0.0;
+  if(NExUpdatePath==4 || NExUpdatePath==5){ //For t-J
+    if(eleNum[ri+(1-s)*Nsite]==1) return 0.0;
+  }
+  if(NExUpdatePath==6) { /* doublon-only: hopping would break doublon at source site */
+    if(eleNum[rj+(1-s)*Nsite]==1) return 0.0;
+  }
 
   mj = eleCfg[rj+s*Nsite];
   msj = mj + s*Ne;
@@ -405,6 +440,28 @@ double GreenFunc2_real(const int ri, const int rj, const int rk, const int rl,
   eleNum[rsj] = 0;
   eleNum[rsi] = 1;
   UpdateProjCnt(rj, ri, s, projCntNew, projCntNew, eleNum);
+
+  int invalidUpdate = 0;
+  if(NExUpdatePath==4 || NExUpdatePath==5){ //For t-J
+    int doublon_i = eleNum[ri + s*Nsite] * eleNum[ri + (1-s)*Nsite];
+    int doublon_k = eleNum[rk + t*Nsite] * eleNum[rk + (1-t)*Nsite];
+    invalidUpdate = (doublon_i==1 || doublon_k==1);
+  }else if(NExUpdatePath==6){ /* For doublon-only: final state must remain empty/doublon-only */
+    invalidUpdate = (eleNum[ri] != eleNum[ri+Nsite] ||
+                     eleNum[rj] != eleNum[rj+Nsite] ||
+                     eleNum[rk] != eleNum[rk+Nsite] ||
+                     eleNum[rl] != eleNum[rl+Nsite]);
+  }
+  if(invalidUpdate) {
+    /* revert hopping */
+    eleIdx[mtl] = rl;
+    eleNum[rtl] = 1;
+    eleNum[rtk] = 0;
+    eleIdx[msj] = rj;
+    eleNum[rsj] = 1;
+    eleNum[rsi] = 0;
+    return 0.0;
+  }
 
   z = ProjRatio(projCntNew,eleProjCnt);
 

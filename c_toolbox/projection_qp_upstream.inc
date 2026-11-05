@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: qp.c sha256=ab53f8d929130bee4dbc88ba1b834d182eb65a6d70a3e5d2c51894020faf8e6f.
+/* Generated verbatim from authoritative mVMC-1.4.0: qp.c sha256=ab53f8d929130bee4dbc88ba1b834d182eb65a6d70a3e5d2c51894020faf8e6f.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

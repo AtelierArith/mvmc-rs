@@ -1,5 +1,10 @@
 # Optional #179 grouped stored-derivative call-chain probe
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `vmccal.c` (`calculateOO_Store_real` gained the 1.4.0 `reweight` branch) and `setmemory.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 Sources: `mpi_issue179_store.c` and `mpi_issue179_store_upstream.inc`.
 This explicit developer command is not invoked by Cargo. It is not a full C
 sampling run or an independent CG solve. It probes absolute sample-column
@@ -20,6 +25,11 @@ SHA-256 at this checkpoint:
 - Upstream `vmccal.c`: `c2db5fd32c5c83be189ffd9fbb89684f0696bab7fff5f7d36abaa370274d9d2f`.
 - Upstream `splitloop.c`: `3734f9deadd12f1c5af0fbf4927dabc3e77c80bdb512c3d0160a809ff0117ff8`.
 - Upstream `setmemory.c`: `573d1fb995de33386e7452f5e2fa34aeb05efe14b5bf4a904eb54d2ac7cf1b9e`.
+
+Since #682 the include is re-extracted from mVMC 1.4.0 (`vmccal.c` lines 669-717,
+SHA-256 `c06d5eef360ee3e442d1843ec218f0beb34fc7813e5c6de46768b4d6999055d6`); the
+driver sets `reweight = 0`, which selects the unchanged non-reweight loop. The
+retained run and hashes above used the 1.3.0 helper.
 
 The extracted helper is bounded by `calculateOO_Store_real` and the following
 complex helper in `extern/mVMC-1.4.0/src/mVMC/vmccal.c`. See the include's origin

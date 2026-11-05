@@ -1,7 +1,12 @@
 # Standalone original-C real-FSZ direct SR audit
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.4.0` (`d73d06bd`). `parameter.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 Developer-only `real_fsz_direct_sr_audit.c` includes complete, unchanged
-`extern/mVMC-1.3.0/src/mVMC/stcopt.c` (SHA256
+`extern/mVMC-1.4.0/src/mVMC/stcopt.c` (SHA256
 `43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2`)
 and `stcopt_dposv.c` (SHA256
 `2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca`).

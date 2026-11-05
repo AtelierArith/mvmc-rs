@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: average.c sha256=6fdabcfd13a85b50ad54dc75b79eeb77191608d859d090f442b40d85bcb222cb.
+/* Generated verbatim from authoritative mVMC-1.4.0: average.c sha256=ccdaaa27bd0393e9bd73341459227555da798928fd1ee25b3e1151b6aecc54be.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

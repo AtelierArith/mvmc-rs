@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: parameter.c sha256=46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0.
+/* Generated verbatim from authoritative mVMC-1.4.0: parameter.c sha256=801273e47a6f7b3390244a6bdcb74fa09825791e8b8283d2d6d7e36d25470cad.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -54,7 +54,10 @@ void SetFlagShift() {
       }
     }
   }
-  
+
+  /* Skip SpinJastrow (no shift needed) */
+  end += NSpinJastrowIdx;
+
   /* 2-site Doublon-Holon */
   if(NDoublonHolon2siteIdx>0) {
     start = end;

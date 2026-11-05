@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; initfile.c sha256=8a7b20d54ab495cfac4df42646a30102aebaa228311ca3b17c1e29af5d0581f8; stcopt_dposv.c sha256=2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca; global.h sha256=a8834e9457e5b8345496087222e5f724c26896928f86fe1bf4ac7e8190b409e1.
+/* Generated verbatim from authoritative mVMC-1.4.0: readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3; initfile.c sha256=def6d4aa57f1ccdb238df0ea64b93ea7037681bc50da445c303b4b9c2b13f87e; stcopt_dposv.c sha256=2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca; global.h sha256=247e935bceed9e13e4585daabd91575b34fb1b54697772ad2a70e16b7072f821.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -38,12 +38,28 @@ static void NormalizeStepDt(int rank) {
   } else {
     SRFlag = 0;
   }
+
+  if (SRFlag != 0 && NSRCG != 0) {
+    if (rank == 0) {
+      fprintf(stderr,
+              "error: SR-CG (NSRCG=%d) cannot be combined with diagonalization mode "
+              "(DSROptStepDt < 0). Use either DSROptStepDt > 0 with SR-CG, "
+              "or DSROptStepDt < 0 with NSRCG=0.\n",
+              NSRCG);
+    }
+    MPI_Abort(comm, EXIT_FAILURE);
+  }
 }
 /* Verbatim initfile.c SRinfo header selection (printed by the toolbox probe). */
 #if 0
 if(SRFlag == 0){
-      fprintf(FileSRinfo,
-            "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n");
+      if (NSRCG != 0) {
+        fprintf(FileSRinfo,
+              "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax info\n");
+      } else {
+        fprintf(FileSRinfo,
+              "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n");
+      }
     }else{
       fprintf(FileSRinfo,
             "#Npara Msize optCut diagCut sEigenMax  sEigenMin    absRmax       imax\n");

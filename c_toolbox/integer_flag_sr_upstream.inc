@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: stcopt.c sha256=43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2.
+/* Generated verbatim from authoritative mVMC-1.4.0: stcopt.c sha256=43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

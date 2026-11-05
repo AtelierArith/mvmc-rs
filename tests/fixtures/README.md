@@ -1,7 +1,12 @@
 # Golden fixtures
 
 This directory holds deterministic goldens consumed by the Rust port's
-regression tests. **Fixtures are regenerated, not hand-edited.** The
+regression tests. **Fixtures are regenerated, not hand-edited.**
+
+The C reference is mVMC 1.4.0 (#682). Fixtures generated from the former
+mVMC 1.3.0 reference (`d73d06bd`) keep their 1.3.0 provenance;
+[C_REFERENCE_PROVENANCE.md](C_REFERENCE_PROVENANCE.md) labels every file that
+records C source hashes as 1.4.0 or historical 1.3.0. The
 upstream Julia dumpers that produce them live under
 `extern/Julia-mVMC/tools/`:
 

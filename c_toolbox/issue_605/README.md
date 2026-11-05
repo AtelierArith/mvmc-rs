@@ -1,5 +1,10 @@
 # Issue #605: native C counter and SR diagnostics
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `vmcmain.c`, `vmccal_fsz.c` and `stcopt_cg_impl.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 This optional probe instruments a copy of the pinned mVMC C source; it is not a Rust build or test dependency. `probe.patch` adds state, SFMT, direct-SR matrix, CG iterate and post-sync parameter dumps. It preserves the sampler, its RNG state and solver arithmetic. The trace file contains potentially large records and is for these one-rank diagnostic inputs, not production use.
 
 The recorded run used Linux x86_64, GCC 13.3.0 (`-O3 -DNDEBUG`), MPICH 4.2.0, OpenBLAS one thread, mVMC `d73d06bd529d3b2573f38eb5817c4a5f52971006`, and Julia reference `22bc829d3607e4aff860d5b0d1244932fac585fe`. The instrumented executable SHA-256 was `b99690af1a8d6afa57cc6e561f2059554f4035a11f7870bcc75cdf676b94c45c`; builds can differ by compiler and paths. The probe patch SHA-256 is `2231b1b73e425feb4439f5c946d28d7fed041dd117c904020c0e05da53137ba3`.

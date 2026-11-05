@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: projection.c sha256=2c01cc16ec75f6d5f3c9e7927bd68f96d1db329c124702b06b771ccd314522c1; pfupdate.c sha256=78013065bbadfd6cfc6f6bc8995c14984b173bdc97df4a9db0cc8ebeccc68f79; pfupdate_two_fcmp.c sha256=2fdcb8227bcd4ff52ce6bdc103a028397cddbd1eca592f5373bb3998f4091a4e; qp.c sha256=ab53f8d929130bee4dbc88ba1b834d182eb65a6d70a3e5d2c51894020faf8e6f; locgrn.c sha256=14cdec8555efda3d1132969dc31696fcda6021b03dc91fd8b83b1c1d91eeb8b6.
+/* Generated verbatim from authoritative mVMC-1.4.0: projection.c sha256=9459b9819d08bd67dc40bc9a2103a43851667af3775e4a32752f1f7f559e5794; pfupdate.c sha256=f1b7cc2eb9d921eab86d1fd049ad8093df421256dd6513cf145f9c2c57e639f6; pfupdate_two_fcmp.c sha256=7ddb785047fa1a999b1c2462aaaad7e69e3a8bb0b306b6bb2bdb158e2489ab2b; qp.c sha256=ab53f8d929130bee4dbc88ba1b834d182eb65a6d70a3e5d2c51894020faf8e6f; locgrn.c sha256=be754992d459933dceca7e3071a8f7f80eee898180148eb3b27065e53db388a4.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -86,13 +86,37 @@ void UpdateProjCnt(const int ri, const int rj, const int s,
     }
   }
 
+  /* Spin Jastrow: eleNum is already updated (ri emptied, rj filled) */
+  if(NSpinJastrowIdx>0){
+    offset = NGutzwillerIdx + NJastrowIdx;
+    int ds = 2*s - 1; /* magnetization change at departure: s=0->-1, s=1->+1 */
+    /* update [ri][rj] */
+    if(ri<rj) idx = offset + SpinJastrowIdx[ri][rj];
+    else  idx = offset + SpinJastrowIdx[rj][ri];
+    projCntNew[idx] += ds*((n0[rj]-n1[rj])-(n0[ri]-n1[ri])) + 1;
+    /* update [ri][rk] (rk != ri, rj) */
+    for(rk=0;rk<nSite;rk++) {
+      if(rk==rj || rk==ri) continue;
+      if(rk>ri) idx = offset + SpinJastrowIdx[ri][rk];
+      else idx = offset + SpinJastrowIdx[rk][ri];
+      projCntNew[idx] += ds*(n0[rk]-n1[rk]);
+    }
+    /* update [rj][rk] (rk != ri, rj) */
+    for(rk=0;rk<nSite;rk++) {
+      if(rk==ri || rk==rj) continue;
+      if(rk>rj) idx = offset + SpinJastrowIdx[rj][rk];
+      else idx = offset + SpinJastrowIdx[rk][rj];
+      projCntNew[idx] -= ds*(n0[rk]-n1[rk]);
+    }
+  }
+
   if(NDoublonHolon2siteIdx==0 && NDoublonHolon4siteIdx==0) return;
 
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   for(idx=offset;idx<nProj;idx++) projCntNew[idx] = 0;
 
   /* 2-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,xm,idx)
   for(xn=0;xn<NDoublonHolon2siteIdx;xn++) {
     dh=DoublonHolon2siteIdx[xn];
@@ -117,7 +141,7 @@ void UpdateProjCnt(const int ri, const int rj, const int s,
   }
 
   /* 4-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx + 6*NDoublonHolon2siteIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx + 6*NDoublonHolon2siteIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,r2,r3,xm,idx)
   for(xn=0;xn<NDoublonHolon4siteIdx;xn++) {
     dh=DoublonHolon4siteIdx[xn];
@@ -171,10 +195,12 @@ void CalculateNewPfM(const int ma, const int s, double complex *pfMNew, const in
     invM_a = InvM + qpidx*Nsize*Nsize + msa*Nsize;
 
     ratio = 0.0;
+    #pragma omp simd private(rsj) reduction(+:ratio)
     for(msj=0;msj<ne;msj++) {
       rsj = eleIdx[msj];
       ratio += invM_a[msj] * sltE_a[rsj];
     }
+    #pragma omp simd private(rsj) reduction(+:ratio)
     for(msj=ne;msj<nsize;msj++) {
       rsj = eleIdx[msj] + Nsite;
       ratio += invM_a[msj] * sltE_a[rsj];
@@ -241,6 +267,7 @@ void calculateNewPfMTwo_child_fcmp(const int ma, const int s, const int mb, cons
   sltE_b = sltE + rsb*Nsite2;
 
   #pragma loop noalias
+  #pragma omp simd private(rsi)
   for(msi=0;msi<nsize;msi++) {
     rsi = eleIdx[msi] + (msi/Ne)*Nsite;
     vec_a[msi] = sltE_a[rsi];
@@ -256,6 +283,7 @@ void calculateNewPfMTwo_child_fcmp(const int ma, const int s, const int mb, cons
   p_a = p_b = q_a = q_b = bMa = 0.0;
 
   #pragma loop noalias
+  #pragma omp simd private(vec_ai,vec_bi,invM_ai,invM_bi) reduction(+:p_a,p_b,q_a,q_b)
   for(msi=0;msi<nsize;msi++) {
     vec_ai = vec_a[msi];
     vec_bi = vec_b[msi];
@@ -272,6 +300,7 @@ void calculateNewPfMTwo_child_fcmp(const int ma, const int s, const int mb, cons
   for(msi=0;msi<nsize;msi++) {
     invM_i = invM + msi*Nsize;
     tmp = 0.0;
+    #pragma omp simd reduction(+:tmp)
     for(msj=0;msj<nsize;msj++) {
       tmp += invM_i[msj] * vec_a[msj];
     }
@@ -313,6 +342,12 @@ double complex GreenFunc1(const int ri, const int rj, const int s, const double 
 
   if(ri==rj) return eleNum[ri+s*Nsite];
   if(eleNum[ri+s*Nsite]==1 || eleNum[rj+s*Nsite]==0) return 0.0;
+  if(NExUpdatePath==4 || NExUpdatePath==5){ //For t-J
+    if(eleNum[ri+(1-s)*Nsite]==1) return 0.0;
+  }
+  if(NExUpdatePath==6) { /* doublon-only: hopping would break doublon at source site */
+    if(eleNum[rj+(1-s)*Nsite]==1) return 0.0;
+  }
 
   mj = eleCfg[rj+s*Nsite];
   msj = mj + s*Ne;
@@ -419,6 +454,28 @@ double complex GreenFunc2(const int ri, const int rj, const int rk, const int rl
   UpdateProjCnt(rj, ri, s, projCntNew, projCntNew, eleNum);
   if (FlagRBM) {
     UpdateRBMCnt(rj, ri, s, rbmCntNew, rbmCntNew, eleNum);
+  }
+
+  int invalidUpdate = 0;
+  if(NExUpdatePath==4 || NExUpdatePath==5){ //For t-J
+    int doublon_i = eleNum[ri + s*Nsite] * eleNum[ri + (1-s)*Nsite];
+    int doublon_k = eleNum[rk + t*Nsite] * eleNum[rk + (1-t)*Nsite];
+    invalidUpdate = (doublon_i==1 || doublon_k==1);
+  }else if(NExUpdatePath==6){ /* For doublon-only: final state must remain empty/doublon-only */
+    invalidUpdate = (eleNum[ri] != eleNum[ri+Nsite] ||
+                     eleNum[rj] != eleNum[rj+Nsite] ||
+                     eleNum[rk] != eleNum[rk+Nsite] ||
+                     eleNum[rl] != eleNum[rl+Nsite]);
+  }
+  if(invalidUpdate) {
+    /* revert hopping */
+    eleIdx[mtl] = rl;
+    eleNum[rtl] = 1;
+    eleNum[rtk] = 0;
+    eleIdx[msj] = rj;
+    eleNum[rsj] = 1;
+    eleNum[rsi] = 0;
+    return 0.0;
   }
 
   z = ProjRatio(projCntNew,eleProjCnt);

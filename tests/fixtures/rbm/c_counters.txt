@@ -1,4 +1,4 @@
-# actual C MakeRBMCnt/UpdateRBMCnt and readers; Nneuron=sum of family dimensions; complete assigned mappings; Apple clang 17 -O0 -ffp-contract=off; readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; rbm.c sha256=e35af053ce06e127309b1636dd2776650b4f1b2abd1ea0eaca10cd5257c3d742
+# actual C MakeRBMCnt/UpdateRBMCnt and readers; Nneuron=sum of family dimensions; complete assigned mappings; Apple clang 17 -O0 -ffp-contract=off; readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3; rbm.c sha256=bbe4a1ab7d6f3ab0cbaa41d6ffabe10f729ce5bc560a22802a6939e287fbd870
 MODEL sites1_hidden1_section0_pattern0 1 1 8 5 0 0 0 0 0 0 0 0
 ===|NParameter 5|ComplexType 1|===|===|0 0|-7 1|-7 1|-7 1|-7 1|-7 1|~-~-~-~-~-~-~-~-
 3f90000000000000 bf80000000000000 3fa0000000000000 bf90000000000000 3fa8000000000000 bf98000000000000 3fb0000000000000 bfa0000000000000 3fb4000000000000 bfa4000000000000

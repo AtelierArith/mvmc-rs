@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: slater_fsz.c sha256=2bb20af97f47c30cf2c81a856ee7235df5f45316546c2ae98b43785d99b90eec.
+/* Generated verbatim from authoritative mVMC-1.4.0: slater_fsz.c sha256=2bb20af97f47c30cf2c81a856ee7235df5f45316546c2ae98b43785d99b90eec.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

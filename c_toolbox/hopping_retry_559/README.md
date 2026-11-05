@@ -1,15 +1,17 @@
 # Candidate retry-cap probe (#559)
 
-Standalone C-authority check of the candidate retry loops in mVMC 1.3.0
-(`extern/mVMC-1.3.0`, revision `d73d06bd`). `generate.sh` verifies the SHA-256
+Standalone C-authority check of the candidate retry loops in mVMC 1.4.0
+(`extern/mVMC-1.4.0`, revision `e83aa6cb`). The four functions are byte-identical
+to mVMC 1.3.0 (`d73d06bd`, lines 515–545, 594–664 and 756–788), and the probe
+output is unchanged (#682). `generate.sh` verifies the SHA-256
 of the upstream sources, then copies these functions verbatim (no substitutions):
 
 | `.inc` | Source | Lines | Function |
 | --- | --- | --- | --- |
-| `hopping_upstream.inc` | `src/mVMC/vmcmake.c` | 515–545 | `makeCandidate_hopping` |
-| `fsz_upstream.inc` | `src/mVMC/vmcmake_fsz.c` | 594–628 | `makeCandidate_hopping_fsz` |
-| | | 630–664 | `makeCandidate_hopping_csz` |
-| | | 756–788 | `makeCandidate_LocalSpinFlip_conduction` |
+| `hopping_upstream.inc` | `src/mVMC/vmcmake.c` | 620–650 | `makeCandidate_hopping` |
+| `fsz_upstream.inc` | `src/mVMC/vmcmake_fsz.c` | 633–667 | `makeCandidate_hopping_fsz` |
+| | | 669–703 | `makeCandidate_hopping_csz` |
+| | | 866–898 | `makeCandidate_LocalSpinFlip_conduction` |
 
 `probe.c` supplies only the globals those functions read (`Nsite`, `Ne`,
 `Nsize`, `LocSpn`) and replaces SFMT with a fixed raw-word tape:
@@ -53,10 +55,10 @@ c_toolbox/hopping_retry_559/generate.sh --write  # regenerate it
 SHA-256 at generation:
 
 ```text
-8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed  extern/mVMC-1.3.0/src/mVMC/vmcmake.c
-2b43a47a85ec13833d453a010962334147024a6d6aae01b99bb8b2a0b80c15db  extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c
-29d7b83e7c5707aa071025ee4b7ae886bf2de8c7b95b2a2b6cc915a8ebc25b7e  c_toolbox/hopping_retry_559/hopping_upstream.inc
-8d8c96ab0b0a22b8d569ff248d57ff258986df94cc95cc53ccc54573fbdec6db  c_toolbox/hopping_retry_559/fsz_upstream.inc
+a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9  extern/mVMC-1.4.0/src/mVMC/vmcmake.c
+f6322ed48eb186c097074ea9287906fcf58129a44d91b932d0a6750ea9daba66  extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c
+30b1542c905dcd8bee68f1e3b601308bee04f3d020d214474bfe8128952a203a  c_toolbox/hopping_retry_559/hopping_upstream.inc
+94b0431c870045895fbe24e05d817c3e4fdfafca8531d8f6aec7e01d1c365630  c_toolbox/hopping_retry_559/fsz_upstream.inc
 8b175389b16ef651cf38c4782e4c118915505f7c4443b9741fc4f4637aa32446  c_toolbox/hopping_retry_559/probe.c
 1b3354bafaf3567b4777994b28d117cd7e528d4f8f541a74e9f060dbd236330c  tests/fixtures/candidate/hopping_retry_cap_559.txt
 ```

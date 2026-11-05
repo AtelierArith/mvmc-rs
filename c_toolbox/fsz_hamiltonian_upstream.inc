@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: calham_fsz.c sha256=8a4727664731adb0811b798ca288850bd2b372e4b4a00d9a65911c9210c6841f.
+/* Generated verbatim from authoritative mVMC-1.4.0: calham_fsz.c sha256=8a4727664731adb0811b798ca288850bd2b372e4b4a00d9a65911c9210c6841f.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

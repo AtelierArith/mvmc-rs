@@ -24,10 +24,10 @@ expressions of those functions, wrapped in `noinline` helpers with runtime opera
 
 | File | SHA-256 |
 | --- | --- |
-| `extern/mVMC-1.3.0/src/StdFace/src/StdFace_ModelUtil.c` | `c2040d3adb10726e77a8881f8d3e54643a4ad2aab0b12f3ca0190844de4295b1` |
-| `extern/mVMC-1.3.0/src/StdFace/src/StdFace_main.c` | `9e0dbe5fb2bedb51756f2c565fd30077f6ef38cbe9a5a09e040a87aa7e168c05` |
-| `extern/mVMC-1.3.0/src/StdFace/src/ChainLattice.c` | `6d7376370596833d45ccb00d07c47f818f61515f22a3184f75e1a4081202c8ca` |
-| `extern/mVMC-1.3.0/src/StdFace/src/dry.c` | `4993120b81953cfc155dd1ac6338e8a39af2739991f04ac047bfb17c03809941` |
+| `extern/mVMC-1.4.0/src/StdFace/src/StdFace_ModelUtil.c` | `c2040d3adb10726e77a8881f8d3e54643a4ad2aab0b12f3ca0190844de4295b1` |
+| `extern/mVMC-1.4.0/src/StdFace/src/StdFace_main.c` | `9e0dbe5fb2bedb51756f2c565fd30077f6ef38cbe9a5a09e040a87aa7e168c05` |
+| `extern/mVMC-1.4.0/src/StdFace/src/ChainLattice.c` | `6d7376370596833d45ccb00d07c47f818f61515f22a3184f75e1a4081202c8ca` |
+| `extern/mVMC-1.4.0/src/StdFace/src/dry.c` | `4993120b81953cfc155dd1ac6338e8a39af2739991f04ac047bfb17c03809941` |
 | `c_toolbox/stdface/complex_expr.c` | `ebf16d3146b0113bae304d2367014a0263f4c8e3b3a66a853f1bfefcdae0095c` |
 
 (The complete per-source list is in `tests/fixtures/stdface/PROVENANCE.md`.)

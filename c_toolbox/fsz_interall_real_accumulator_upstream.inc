@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: locgrn_fsz_real.c sha256=be6a1028502e1b6b37806a2442f5e77f160b63306e7b3132e1c62697b4bb88a0; calham_fsz_real.c sha256=8e0d24a4a4b9f431dec235871923fb853876c52dcf27489b8f6c258fe3358684.
+/* Generated verbatim from authoritative mVMC-1.4.0: locgrn_fsz_real.c sha256=9d726eaeb11356263e8334a5b6f2f6b93795ef2f05196938de11d91de675113e; calham_fsz_real.c sha256=8e0d24a4a4b9f431dec235871923fb853876c52dcf27489b8f6c258fe3358684.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

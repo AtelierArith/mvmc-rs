@@ -8,6 +8,8 @@
 typedef int MPI_Comm;
 #define D_FileNameMax 256
 #include "readdef.h"
+/* mVMC 1.4.0 readdef.h declares this extern; readdef.c defines it. */
+char (*cFileNameListFile)[D_CharTmpReadDef] = NULL;
 
 #include "orbital_readdef_upstream.inc"
 

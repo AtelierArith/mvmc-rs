@@ -72,7 +72,7 @@ def main():
             rows.append(f"{name} {' '.join(map(str, dims))}\n{payload}\n" + output)
     checksums = "; ".join(f"{name} sha256={hashlib.sha256((src / name).read_bytes()).hexdigest()}"
                           for name in ("mVMC/parameter.c", "sfmt/SFMT.c", "sfmt/SFMT.h", "sfmt/SFMT-params19937.h"))
-    result = f"# actual mVMC-1.3.0 ReadInitParameter and native SFMT; Apple clang 17; -O0 -ffp-contract=off -DMEXP=19937; {checksums}\n"
+    result = f"# actual mVMC-1.4.0 ReadInitParameter and native SFMT; Apple clang 17; -O0 -ffp-contract=off -DMEXP=19937; {checksums}\n"
     result += "\n".join(line.rstrip() for line in "".join(rows).splitlines()) + "\n"
     target = root / "tests/fixtures/initial_records/c_records.txt"
     if args.write:

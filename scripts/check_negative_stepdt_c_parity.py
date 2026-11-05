@@ -54,7 +54,7 @@ def main():
                 sources, args.write)
     cc_version = subprocess.check_output(["cc", "--version"], text=True).splitlines()[0]
     lines = [
-        "# C mVMC 1.3.0 negative DSROptStepDt oracle (#367): readdef.c:959-965 normalization,",
+        "# C mVMC 1.4.0 negative DSROptStepDt oracle (#367): readdef.c:959-965 normalization,",
         "# initfile.c:47-59 SRinfo header and stcOptInit + dposv on fixed operands (3 parameters).",
         *(f"# {p.name} sha256={hashlib.sha256(p.read_bytes()).hexdigest()}" for p in sources),
         f"# compiler: {cc_version}; options: cc -O0 -ffp-contract=off -I extern/mVMC-1.4.0/src/mVMC/include -I c_toolbox ... -llapack",

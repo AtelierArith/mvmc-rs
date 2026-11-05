@@ -24,6 +24,7 @@ int main(int argc,char **argv) {
   if(!ReadBuffIntCmpFlg(ap,&ap_width,&ap_complex)) return 2;
   if(p && !ReadBuffIntCmpFlg(p,&p_width,&p_complex)) return 2;
   int rank=0,iComplexFlgGutzwiller=0,iComplexFlgJastrow=0,iComplexFlgDH2=0,iComplexFlgDH4=0;
+  int iComplexFlgSpinJastrow=0,info=0; /* mVMC 1.4.0: no spin Jastrow; RBM check below needs info */
   int iComplexFlgOrbital=ap_complex+p_complex;
 #include "integer_flag_complex_upstream.inc"
   NSlater=ap_width+2*p_width;

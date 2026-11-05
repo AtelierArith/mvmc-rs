@@ -1,6 +1,7 @@
 /* GPL-3.0-or-later; optional C reference, never used by Cargo.
- * Verbatim vmccal.c calculateOO lines 769-794.
- * Upstream SHA-256 c2db5fd32c5c83be189ffd9fbb89684f0696bab7fff5f7d36abaa370274d9d2f.
+ * Verbatim mVMC 1.4.0 vmccal.c calculateOO lines 814-839 (the body is identical to
+ * 1.3.0 lines 769-794).
+ * Upstream SHA-256 c06d5eef360ee3e442d1843ec218f0beb34fc7813e5c6de46768b4d6999055d6.
  * clang -O0 -ffp-contract=off -Wno-unknown-pragmas c_toolbox/weighted_oo.c -o /tmp/weighted-oo
  */
 #include <complex.h>

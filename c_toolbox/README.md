@@ -251,10 +251,53 @@ compiled bridge hashes and independent oracle output hashes are retained in
 [Apple Silicon parity](../docs/APPLE_SILICON_PARITY.md) for exact reproduction
 commands and the separate archived-reduction and native FSZ contracts.
 
+## mVMC 1.4.0 re-extraction (#682)
+
+Every `.inc` excerpt that a checker script materializes was re-extracted from
+`extern/mVMC-1.4.0` (`v1.4.0`, `e83aa6cb`) with the scripts' own `--write`
+extraction, so each header now records the 1.4.0 source SHA-256. Hand-maintained
+excerpts (`ctest_opt_window_upstream.inc`, `mpi_issue179_store_upstream.inc`,
+`physcal_181_parameters_upstream.inc`, `hopping_retry_559/*.inc`) were
+re-extracted with their documented boundaries. Where 1.4.0 added globals to the
+extracted bodies, the drivers define them with values that leave the new code
+inactive: `NSpinJastrowIdx = 0` (spin Jastrow), `NExUpdatePath = 0` (t-J and
+pair-hopping guards), `NTwist = 0` (twist operators), the SR-CG flags
+(`NSRCG = 0`, `useDiagScale = 0`, `NSRCGFallback = 0`, `NSRCGAbortOnFail = 1`,
+`RescaleSmat = 0`), `reweight = 0`, and the `cFileNameListFile` definition that
+1.4.0 moved from `readdef.h` into `readdef.c`.
+
+All checkers were rerun on Linux x86_64 with GCC 13.3.0 against both 1.3.0 and
+1.4.0. Except for the contract changes below, every fixture's data lines are
+identical between the two releases; their headers were regenerated with the
+1.4.0 hashes. Three Apple-generated fixtures differ from any Linux run at the
+platform level (`interall/c_reader.txt` NaN payloads,
+`orbital_general/c_general_kernels.txt` and `orbital_general/c_rbm_prefix.txt`
+last-bit products): their data lines are kept and only their header hashes were
+replaced, after the Linux 1.3.0 and 1.4.0 outputs were shown identical. Some
+headers keep the scripts' fixed `Apple clang 17` label; the 1.4.0 reruns used
+GCC on Linux. The Jastrow reader, ModPara reader and `zqp_SRinfo.dat` probes
+change under 1.4.0 and are regenerated together with the Rust contract changes.
+
+Tools that pin 1.3.0 source hashes for a recorded investigation
+(`check_threaded_182_real_*.jl`, `generate_threaded_182_real_fsz.jl`,
+`native13_initialization/`, `scripts/reference_c_kernel_order.jl`,
+`scripts/compare_mpi_issue179.py`, `scripts/issue179_p02/`) check 1.3.0 source or record
+hashes by design and do not accept 1.4.0 inputs; use a `d73d06bd` checkout to reproduce the
+historical records. `tests/fixtures/C_REFERENCE_PROVENANCE.md` lists every file
+that records C source hashes and labels it 1.4.0 or historical 1.3.0
+(`scripts/c_reference_provenance.py`).
+
+mVMC 1.4.0 adds `#pragma omp simd` reductions to `pfupdate*.c` (#96). An OpenMP
+build honours them and may reorder those sums. Full C references for 1.4.0 must
+be built without OpenMP (`-DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON`) or record the
+OpenMP/SIMD flags with the result. The standalone probes here compile without
+`-fopenmp`, so the pragmas are ignored and C keeps its sequential order.
+
 ## Weighted complex SR accumulation (#200)
 
 `weighted_oo.c` embeds `calculateOO` verbatim from
-`extern/mVMC-1.3.0/src/mVMC/vmccal.c`, lines 769–794. Its header records the
+`extern/mVMC-1.4.0/src/mVMC/vmccal.c`, lines 814–839 (identical to 1.3.0 lines
+769–794). Its header records the
 upstream SHA-256 and compiler command. The only harness additions supply
 weighted large, tiny and ordinary operands and print their binary values.
 Compile and generate independently:

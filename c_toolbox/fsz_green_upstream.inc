@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: projection.c sha256=2c01cc16ec75f6d5f3c9e7927bd68f96d1db329c124702b06b771ccd314522c1; pfupdate_fsz.c sha256=66b615ea6a79b1ed8eb180c945f3c244270a435c586e863531f04f5055a87a91; pfupdate_two_fsz.c sha256=a5bc91a5478789f9c460203bddf699e9a99fd1fad8d9587c311d2b8449fc9872; qp.c sha256=ab53f8d929130bee4dbc88ba1b834d182eb65a6d70a3e5d2c51894020faf8e6f; locgrn_fsz.c sha256=01766dc6aefe5228ab6d01c9f6d882f228e3e2537873ad25a2dae1e4e370249c.
+/* Generated verbatim from authoritative mVMC-1.4.0: projection.c sha256=9459b9819d08bd67dc40bc9a2103a43851667af3775e4a32752f1f7f559e5794; pfupdate_fsz.c sha256=7520c0475ea5fb943e1433bb1200405610d64216aa3e35c59d62eac184562dc6; pfupdate_two_fsz.c sha256=93988a471314f29599c1c9a5069bb563e14d362efc8ed83429fe8bc1f7d069a1; qp.c sha256=ab53f8d929130bee4dbc88ba1b834d182eb65a6d70a3e5d2c51894020faf8e6f; locgrn_fsz.c sha256=6466b272775b99ae84add7b3f7c622779d61c6697efe7953dd038d6309424d64.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -86,13 +86,37 @@ void UpdateProjCnt(const int ri, const int rj, const int s,
     }
   }
 
+  /* Spin Jastrow: eleNum is already updated (ri emptied, rj filled) */
+  if(NSpinJastrowIdx>0){
+    offset = NGutzwillerIdx + NJastrowIdx;
+    int ds = 2*s - 1; /* magnetization change at departure: s=0->-1, s=1->+1 */
+    /* update [ri][rj] */
+    if(ri<rj) idx = offset + SpinJastrowIdx[ri][rj];
+    else  idx = offset + SpinJastrowIdx[rj][ri];
+    projCntNew[idx] += ds*((n0[rj]-n1[rj])-(n0[ri]-n1[ri])) + 1;
+    /* update [ri][rk] (rk != ri, rj) */
+    for(rk=0;rk<nSite;rk++) {
+      if(rk==rj || rk==ri) continue;
+      if(rk>ri) idx = offset + SpinJastrowIdx[ri][rk];
+      else idx = offset + SpinJastrowIdx[rk][ri];
+      projCntNew[idx] += ds*(n0[rk]-n1[rk]);
+    }
+    /* update [rj][rk] (rk != ri, rj) */
+    for(rk=0;rk<nSite;rk++) {
+      if(rk==ri || rk==rj) continue;
+      if(rk>rj) idx = offset + SpinJastrowIdx[rj][rk];
+      else idx = offset + SpinJastrowIdx[rk][rj];
+      projCntNew[idx] -= ds*(n0[rk]-n1[rk]);
+    }
+  }
+
   if(NDoublonHolon2siteIdx==0 && NDoublonHolon4siteIdx==0) return;
 
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   for(idx=offset;idx<nProj;idx++) projCntNew[idx] = 0;
 
   /* 2-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,xm,idx)
   for(xn=0;xn<NDoublonHolon2siteIdx;xn++) {
     dh=DoublonHolon2siteIdx[xn];
@@ -117,7 +141,7 @@ void UpdateProjCnt(const int ri, const int rj, const int s,
   }
 
   /* 4-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx + 6*NDoublonHolon2siteIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx + 6*NDoublonHolon2siteIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,r2,r3,xm,idx)
   for(xn=0;xn<NDoublonHolon4siteIdx;xn++) {
     dh=DoublonHolon4siteIdx[xn];
@@ -166,7 +190,42 @@ void UpdateProjCnt_fsz(const int ri, const int rj, const int s,const int t,
     for(idx=0;idx<nProj;idx++) projCntNew[idx] = projCntOld[idx];
   }
 
-  if(ri==rj) return; // this part will be changed if we consider spin jastrow
+  /* Spin Jastrow for fsz: handle ri==rj case (on-site spin flip changes magnetization) */
+  if(NSpinJastrowIdx>0){
+    offset = NGutzwillerIdx + NJastrowIdx;
+    int dm_i = 2*s - 1;  /* magnetization change at ri */
+    int dm_j = 1 - 2*t;  /* magnetization change at rj */
+    if(ri==rj) {
+      int dm = dm_i + dm_j; /* total magnetization change at this site */
+      for(rk=0;rk<nSite;rk++) {
+        if(rk==ri) continue;
+        if(rk>ri) idx = offset + SpinJastrowIdx[ri][rk];
+        else idx = offset + SpinJastrowIdx[rk][ri];
+        projCntNew[idx] += dm*(n0[rk]-n1[rk]);
+      }
+    } else {
+      /* pair (ri,rj): delta(m_ri*m_rj) = dm_i*m_rj_new + dm_j*m_ri_new - dm_i*dm_j */
+      if(ri<rj) idx = offset + SpinJastrowIdx[ri][rj];
+      else idx = offset + SpinJastrowIdx[rj][ri];
+      projCntNew[idx] += dm_i*(n0[rj]-n1[rj]) + dm_j*(n0[ri]-n1[ri]) - dm_i*dm_j;
+      /* pair (ri,rk) */
+      for(rk=0;rk<nSite;rk++) {
+        if(rk==rj || rk==ri) continue;
+        if(rk>ri) idx = offset + SpinJastrowIdx[ri][rk];
+        else idx = offset + SpinJastrowIdx[rk][ri];
+        projCntNew[idx] += dm_i*(n0[rk]-n1[rk]);
+      }
+      /* pair (rj,rk) */
+      for(rk=0;rk<nSite;rk++) {
+        if(rk==ri || rk==rj) continue;
+        if(rk>rj) idx = offset + SpinJastrowIdx[rj][rk];
+        else idx = offset + SpinJastrowIdx[rk][rj];
+        projCntNew[idx] += dm_j*(n0[rk]-n1[rk]);
+      }
+    }
+  }
+
+  if(ri==rj) return; /* Gutzwiller, charge Jastrow, DH unchanged for on-site spin flip */
 
   if(NGutzwillerIdx>0){
     idx = GutzwillerIdx[ri];
@@ -201,11 +260,11 @@ void UpdateProjCnt_fsz(const int ri, const int rj, const int s,const int t,
 
   if(NDoublonHolon2siteIdx==0 && NDoublonHolon4siteIdx==0) return;
 
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   for(idx=offset;idx<nProj;idx++) projCntNew[idx] = 0;
 
   /* 2-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,xm,idx)
   for(xn=0;xn<NDoublonHolon2siteIdx;xn++) {
     dh=DoublonHolon2siteIdx[xn];
@@ -230,7 +289,7 @@ void UpdateProjCnt_fsz(const int ri, const int rj, const int s,const int t,
   }
 
   /* 4-site doublon-holon correlation factor */
-  offset = NGutzwillerIdx + NJastrowIdx + 6*NDoublonHolon2siteIdx;
+  offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx + 6*NDoublonHolon2siteIdx;
   #pragma omp parallel for default(shared) private(xn,dh,rk,xi,r0,r1,r2,r3,xm,idx)
   for(xn=0;xn<NDoublonHolon4siteIdx;xn++) {
     dh=DoublonHolon4siteIdx[xn];
@@ -283,6 +342,7 @@ void CalculateNewPfM_fsz(const int ma, const int s, double complex *pfMNew, cons
     invM_a = InvM + qpidx*Nsize*Nsize + msa*Nsize;
 
     ratio = 0.0;
+    #pragma omp simd private(rsj) reduction(+:ratio)
     for(msj=0;msj<nsize;msj++) { //fsz
       rsj = eleIdx[msj]+eleSpn[msj]*Nsite;//fsz
       ratio += invM_a[msj] * sltE_a[rsj];
@@ -353,6 +413,7 @@ void calculateNewPfMTwo_child_fsz(const int ma, const int s, const int mb, const
   sltE_b = sltE + rsb*Nsite2;
 
   #pragma loop noalias
+  #pragma omp simd private(rsi)
   for(msi=0;msi<nsize;msi++) {
     rsi = eleIdx[msi] + eleSpn[msi]*Nsite;// fsz(msi/Ne)*Nsite;
     vec_a[msi] = sltE_a[rsi];
@@ -368,6 +429,7 @@ void calculateNewPfMTwo_child_fsz(const int ma, const int s, const int mb, const
   p_a = p_b = q_a = q_b = bMa = 0.0;
 
   #pragma loop noalias
+  #pragma omp simd private(vec_ai,vec_bi,invM_ai,invM_bi) reduction(+:p_a,p_b,q_a,q_b)
   for(msi=0;msi<nsize;msi++) {
     vec_ai = vec_a[msi];
     vec_bi = vec_b[msi];
@@ -384,6 +446,7 @@ void calculateNewPfMTwo_child_fsz(const int ma, const int s, const int mb, const
   for(msi=0;msi<nsize;msi++) {
     invM_i = invM + msi*Nsize;
     tmp = 0.0;
+    #pragma omp simd reduction(+:tmp)
     for(msj=0;msj<nsize;msj++) {
       tmp += invM_i[msj] * vec_a[msj];
     }
@@ -425,6 +488,9 @@ double complex GreenFunc1_fsz(const int ri, const int rj, const int s, const dou
 
   if(ri==rj) return eleNum[ri+s*Nsite];
   if(eleNum[ri+s*Nsite]==1 || eleNum[rj+s*Nsite]==0) return 0.0;
+  if(NExUpdatePath==4 || NExUpdatePath==5){ //For t-J
+    if(eleNum[ri+(1-s)*Nsite]==1) return 0.0;
+  }
 
   mj  = eleCfg[rj+s*Nsite];
   msj = mj;// + s*Ne;
@@ -460,6 +526,9 @@ double complex GreenFunc1_fsz2(const int ri, const int rj, const int s,const int
 
   //if(ri==rj) return eleNum[ri+s*Nsite]; //fsz
   if(eleNum[ri+s*Nsite]==1 || eleNum[rj+t*Nsite]==0) return 0.0;
+  if(NExUpdatePath==4 || NExUpdatePath==5){ //For t-J
+    if(ri!=rj && eleNum[ri+(1-s)*Nsite]==1) return 0.0;
+  }
 
   mj  = eleCfg[rj+t*Nsite];
   //mtj = mj;// + s*Ne;
@@ -557,6 +626,23 @@ double complex GreenFunc2_fsz(const int ri, const int rj, const int rk, const in
   eleNum[rsj] = 0;
   eleNum[rsi] = 1;
   UpdateProjCnt(rj, ri, s, projCntNew, projCntNew, eleNum);
+
+  if(NExUpdatePath==4 || NExUpdatePath==5){ //For t-J
+    int doublon_i = eleNum[ri + s*Nsite] *eleNum[ri + (1-s)*Nsite];
+    int doublon_k = eleNum[rk + t*Nsite] *eleNum[rk + (1-t)*Nsite];
+    if(doublon_i == 1 || doublon_k ==1 ){
+      /* revert hopping */
+      eleIdx[mtl] = rl;
+      eleSpn[mtl] = t;
+      eleNum[rtl] = 1;
+      eleNum[rtk] = 0;
+      eleIdx[msj] = rj;
+      eleSpn[msj] = s;
+      eleNum[rsj] = 1;
+      eleNum[rsi] = 0;
+      return 0.0;
+    }
+  }
 
   z = ProjRatio(projCntNew,eleProjCnt);
 
@@ -680,6 +766,23 @@ double complex GreenFunc2_fsz2(const int ri, const int rj, const int rk, const i
   eleNum[XJ] = 0;
   eleNum[XI] = 1;
   UpdateProjCnt_fsz(rj,ri, t,s, projCntNew, projCntNew, eleNum); // (rj,t) -> (ri,s) t!=s
+
+  if(NExUpdatePath==4 || NExUpdatePath==5){
+    int doublon_i = eleNum[ri + s*Nsite] *eleNum[ri + (1-s)*Nsite];
+    int doublon_k = eleNum[rk + u*Nsite] *eleNum[rk + (1-u)*Nsite];
+    if(doublon_i == 1 || doublon_k ==1 ){
+      /* revert hopping */
+      eleIdx[ml]  = rl;  // ml : (rl,v)
+      eleSpn[ml]  = v;
+      eleNum[XL] = 1;
+      eleNum[XK] = 0;
+      eleIdx[mj]  = rj;  // mj : (rj,t)
+      eleSpn[mj]  = t;
+      eleNum[XJ] = 1;
+      eleNum[XI] = 0;
+      return 0.0;
+    }
+  }
 
   z = ProjRatio(projCntNew,eleProjCnt);
 

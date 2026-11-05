@@ -1,5 +1,10 @@
 # Optional ctest orbital input audit (#180)
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `readdef.c` and `vmcmain.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 `ctest_orbital_contracts.c` supplies storage to the actual C AP/P readers in
 `orbital_contracts_upstream.inc`. It expands the older probe's storage to cover
 the ten-site GeneralRBM input and both spin blocks. This is an input-section

@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9.
+/* Generated verbatim from authoritative mVMC-1.4.0: readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -35,6 +35,38 @@ along with this program. If not, see http://www.gnu.org/licenses/.
     NMPTrans *= -1;
   } else {
     APFlag = 0;
+  }
+
+  if (NSRCG == 2){
+    useDiagScale = 1;
+    NSRCG = 1;
+  //  if (rank == 0) printf("remark: use preconditioned CG (Diag Scale)\n");
+  } //else {
+  //  useDiagScale = 0;
+  //}
+  NSRCGFallback = (NSRCGFallback != 0);
+  NSRCGAbortOnFail = (NSRCGAbortOnFail != 0);
+
+  if (useDiagScale){
+    if(NSRCG == 1){
+      if (rank == 0) printf("remark: use preconditioned CG (Diag Scale)\n");
+    }else{
+      if (rank == 0) printf("remark: not use preconditioned CG (Diag Scale) because NSRCG=%d != 1. Use direct method instead.\n",NSRCG);
+      useDiagScale = 0;
+    }
+  }
+
+  if (RescaleSmat){
+    if (NSRCG != 1) {
+      if (rank == 0) {
+        fprintf(stderr,
+                "error: invalid RescaleSmat configuration. "
+                "RescaleSmat=1 requires NSRCG==1, but got NSRCG=%d.\n",
+                NSRCG);
+      }
+      MPI_Abort(comm, EXIT_FAILURE);
+    }
+    if (rank == 0) printf("remark: rescale S matrix \n");
   }
 
   NQPFix = NSPGaussLeg * NMPTrans;
