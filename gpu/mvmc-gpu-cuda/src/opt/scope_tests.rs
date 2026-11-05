@@ -6,6 +6,9 @@
 //! same input, so the rejection is GPU-specific rather than a generic error.
 //! See `docs/design/gpu-resident-model-support.md`.
 use super::*;
+use crate::opt::model::flag_contract;
+use crate::opt::rbm_tests::assert_theta_close;
+use mvmc_core::ExpertModeData;
 use mvmc_expert_parsers::types::Spin;
 use std::fs;
 use std::path::PathBuf;
@@ -28,7 +31,7 @@ fn baseline() -> PathBuf {
 
 /// Copy the baseline and apply `(file, from, to)` textual edits. An empty
 /// `from` appends `to` (creating the file if it does not exist).
-fn edited(tag: &str, edits: &[Edit]) -> PathBuf {
+pub(crate) fn edited(tag: &str, edits: &[(&str, &str, &str)]) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("mvmc-scope-572-{tag}-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     for entry in fs::read_dir(baseline().parent().unwrap()).unwrap() {
@@ -50,7 +53,7 @@ fn edited(tag: &str, edits: &[Edit]) -> PathBuf {
     dir.join("namelist.def")
 }
 
-fn cfg() -> OptConfig {
+pub(crate) fn cfg() -> OptConfig {
     OptConfig {
         seed: Some(79),
         initial_def: InitialDef::None,
@@ -388,7 +391,8 @@ fn table_theta(model: &Model, num: &[i64]) -> Vec<f64> {
 }
 
 /// #667: RBM factors keep the C parameter layout (projection, RBM, Slater).
-/// The device tables reproduce C MakeRBMCnt exactly on random occupations,
+/// The device tables reproduce C MakeRBMCnt on random occupations within the
+/// `rbm_tests::theta_bound` rounding bound (#699),
 /// and the In*RBM overlays reach the uploaded coefficients.
 #[test]
 fn resident_scope_accepts_rbm_factors() {
@@ -456,17 +460,16 @@ fn resident_scope_accepts_rbm_factors() {
                     *x = (state >> 63) as i64;
                 }
                 let cnt = mvmc_core::sampling::rbm::make_rbm_cnt(&num, &config);
-                let expected: Vec<u64> = cnt[cnt.len() - nneuron..]
-                    .iter()
-                    .map(|z| z.re.to_bits())
-                    .collect();
-                let actual: Vec<u64> = table_theta(&model, &num)
-                    .iter()
-                    .map(|x| x.to_bits())
-                    .collect();
-                assert_eq!(
-                    actual, expected,
-                    "{input:?}: MakeRBMCnt from the device tables"
+                let expected: Vec<f64> = cnt[cnt.len() - nneuron..].iter().map(|z| z.re).collect();
+                // A fresh MakeRBMCnt on both sides: the rounding bound of
+                // `rbm_tests::theta_bound` with no incremental updates (#699).
+                assert_theta_close(
+                    &format!("{input:?}: MakeRBMCnt from the device tables"),
+                    &model,
+                    &rbm,
+                    &table_theta(&model, &num),
+                    &expected,
+                    &[0],
                 );
             }
         }
@@ -582,14 +585,19 @@ fn resident_scope_accepts_opttrans() {
             // Normalized to maximum amplitude one; the definition flags
             // optimize every real component.
             let opt = &model.parameters[tail..];
-            assert_eq!(opt.iter().fold(0f64, |a, x| a.max(x.abs())), 1.0);
+            // C normalization multiplies by 1/max: the largest amplitude is
+            // 1 within the two roundings of the reciprocal and the product.
+            let largest = opt.iter().fold(0f64, |a, x| a.max(x.abs()));
+            assert!((largest - 1.0).abs() <= 2.0 * f64::EPSILON, "{largest}");
             assert!(model.flags[tail..].iter().all(|&f| f == 1));
             for (i, &o) in opt.iter().enumerate() {
                 for (j, &f) in model.fix.iter().enumerate() {
-                    assert_eq!(
-                        model.weights[i * nfix + j].to_bits(),
-                        (o * f).to_bits(),
-                        "C UpdateQPWeight"
+                    // One rounded product on each side (C UpdateQPWeight):
+                    // at most one ulp of relative difference.
+                    let (a, b) = (model.weights[i * nfix + j], o * f);
+                    assert!(
+                        a.is_finite() && (a - b).abs() <= f64::EPSILON * a.abs().max(b.abs()),
+                        "C UpdateQPWeight: {a} vs {b}"
                     );
                 }
             }
@@ -798,4 +806,236 @@ fn resident_scope_rejects_complex_mode_families_before_cuda() {
         assert!(error.contains("complex or nonfinite"), "{error}");
     }
     fs::remove_dir_all(weight.parent().unwrap()).unwrap();
+}
+
+/// CPU shift decisions observed from the C-order sync itself: with nonzero
+/// bin means, `sync_modified_parameter_local` moves DH2/DH4 only when it
+/// applies the DH gauge, and Jastrow only when it applies the GJ shift.
+fn cpu_shifts(data: &ExpertModeData) -> (bool, bool, bool) {
+    let mut seeded = data.clone();
+    for (k, p) in seeded.doublon_holon_2site_params.iter_mut().enumerate() {
+        p.re = 0.003 + 0.01 * k as f64;
+    }
+    for (k, p) in seeded.doublon_holon_4site_params.iter_mut().enumerate() {
+        p.re = -0.002 + 0.007 * k as f64;
+    }
+    for (k, t) in seeded.jastrow_terms.iter_mut().enumerate() {
+        t.value.re = 0.05 + 0.01 * k as f64;
+    }
+    let mut synced = seeded.clone();
+    mvmc_core::sync::sync_modified_parameter_local(&mut synced, true);
+    let jastrow = |d: &ExpertModeData| d.jastrow_terms.iter().map(|t| t.value).collect::<Vec<_>>();
+    // Exact comparisons of copied values: an unshifted parameter is untouched.
+    (
+        !seeded.jastrow_terms.is_empty() && jastrow(&seeded) != jastrow(&synced),
+        seeded.doublon_holon_2site_params != synced.doublon_holon_2site_params,
+        seeded.doublon_holon_4site_params != synced.doublon_holon_4site_params,
+    )
+}
+
+/// #700: resident SR activity and the GJ/DH2/DH4 gauge predicates follow the
+/// raw exact-one C OptFlag contract (stcopt.c:112, parameter.c:255-313), as the
+/// CPU `component_is_optimized` and `sync_modified_parameter` do. Signed flags
+/// `2` and `-1` stay parsed and mean "fixed", like `0`.
+#[test]
+fn resident_flags_follow_cpu_exact_one_semantics() {
+    let input =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/dh/hubbard_dh_L16/namelist.def");
+    let base = Model::prepare(&input, &cfg()).unwrap();
+    let (ng, nj, n2, n4) = (base.ng, base.nj, base.n2, base.n4);
+    assert!(ng > 0 && nj > 0 && n2 > 0 && n4 > 0);
+    let (dh2, dh4) = (ng + nj, ng + nj + 6 * n2);
+    // (label, real-component parameter indices, raw flag)
+    let mut cases: Vec<(String, Vec<usize>, i64)> = vec![("all one".into(), vec![], 1)];
+    for flag in [0, 1, 2, -1] {
+        cases.push((format!("gutzwiller 0 = {flag}"), vec![0], flag));
+        cases.push((format!("jastrow 0 = {flag}"), vec![ng], flag));
+        cases.push((format!("dh2 first = {flag}"), vec![dh2], flag));
+        cases.push((format!("dh2 last = {flag}"), vec![dh4 - 1], flag));
+        cases.push((format!("dh4 middle = {flag}"), vec![dh4 + 5], flag));
+        // Mixed active/fixed: one DH block fixed, the other still active.
+        cases.push((format!("dh2 block = {flag}"), (dh2..dh4).collect(), flag));
+        cases.push((
+            format!("dh4 block = {flag}"),
+            (dh4..base.nproj).collect(),
+            flag,
+        ));
+    }
+    for (label, params, flag) in cases {
+        let mut data = base.data.clone();
+        for &p in &params {
+            data.optimization_flags[2 * p] = flag;
+        }
+        let model = Model::from_data(data.clone(), base.seed).unwrap();
+        assert_eq!(model.flags.len(), model.np, "{label}");
+        for p in 0..model.np {
+            let cpu = mvmc_core::sr::component_is_optimized(&data, 2 * p);
+            assert!(matches!(model.flags[p], 0 | 1), "{label}");
+            assert_eq!(model.flags[p] == 1, cpu, "{label}: SR activity of {p}");
+        }
+        assert_eq!(
+            (model.shift, model.shift_dh2, model.shift_dh4),
+            cpu_shifts(&data),
+            "{label}: GJ/DH2/DH4 shift"
+        );
+        // Independent statement of the expected decisions.
+        let fixed = flag != 1 && !params.is_empty();
+        let gutz = fixed && params.contains(&0);
+        let jast = fixed && params.contains(&ng);
+        let dh2_fixed = fixed && params.iter().any(|p| (dh2..dh4).contains(p));
+        let dh4_fixed = fixed && params.iter().any(|&p| p >= dh4);
+        assert_eq!(model.shift, !gutz && !jast, "{label}");
+        assert_eq!(model.shift_dh2, !gutz && !dh2_fixed, "{label}");
+        assert_eq!(model.shift_dh4, !gutz && !dh4_fixed, "{label}");
+    }
+}
+
+/// #700: the complex flag path keeps every real/imaginary component's raw
+/// exact-one flag (C stcopt_cg_impl.c:161, `OptFlag[pi] != 1`); a missing flag
+/// is fixed, as in the CPU `component_is_optimized`.
+#[test]
+fn resident_complex_flags_follow_cpu_exact_one_semantics() {
+    let raw = [1, 1, 2, 1, -1, 0, 1, 2, 0, 1, 1];
+    let complex = flag_contract(&raw, 6, true, 2, 2, 0, 0);
+    assert_eq!(complex.flags, [1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0]);
+    assert!(!complex.shift, "Gutzwiller 1 has real flag 2");
+    let real = flag_contract(&raw, 6, false, 2, 2, 0, 0);
+    assert_eq!(real.flags, [1, 0, 0, 1, 0, 1]);
+    let gj = flag_contract(&[1, 0, 1, 0, 1, 0, 1, 0], 4, false, 2, 2, 0, 0);
+    assert!(gj.shift && !gj.shift_dh2 && !gj.shift_dh4);
+    let missing = flag_contract(&[1, 0, 1, 0, 1, 0], 4, false, 2, 2, 0, 0);
+    assert_eq!(missing.flags, [1, 1, 1, 0]);
+    assert!(!missing.shift, "a missing Jastrow flag is fixed");
+}
+
+/// #701 minimal real RBM inputs on the six-site baseline: hidden-layer-only
+/// sections with one neuron per family coefficient, so the family tag (1 spin,
+/// 2 general) is not below the coefficient count. `(label, input, nrbm,
+/// nneuron, family)`; `prefix` keeps concurrent tests' directories apart.
+pub(crate) fn minimal_rbm_inputs(prefix: &str) -> Vec<(&'static str, PathBuf, usize, usize, i32)> {
+    let hidden = |key: &str, count: usize, rows: &str| {
+        format!("===\n{key} {count}\nComplexType 0\n===\n===\n{rows}")
+    };
+    let cases: [(&'static str, &str, &str, usize, &str, usize, i32); 4] = [
+        (
+            "charge1",
+            "ChargeRBM_HiddenLayer",
+            "NneuronCharge",
+            1,
+            "0 0\n0 1\n",
+            1,
+            0,
+        ),
+        (
+            "spin1",
+            "SpinRBM_HiddenLayer",
+            "NneuronSpin",
+            1,
+            "0 0\n0 1\n",
+            1,
+            1,
+        ),
+        (
+            "general1",
+            "GeneralRBM_HiddenLayer",
+            "NneuronGeneral",
+            1,
+            "0 0\n0 1\n",
+            1,
+            2,
+        ),
+        (
+            "general2",
+            "GeneralRBM_HiddenLayer",
+            "NneuronGeneral",
+            2,
+            "0 0\n1 1\n0 1\n1 1\n",
+            2,
+            2,
+        ),
+    ];
+    cases
+        .into_iter()
+        .map(|(label, key, neurons, nneuron, rows, nrbm, family)| {
+            let file = hidden(key, nrbm, rows);
+            let path = edited(
+                &format!("{prefix}-{label}"),
+                &[
+                    ("namelist.def", "", &format!("{key} rbmhidden.def\n")),
+                    ("rbmhidden.def", "", &file),
+                    ("modpara.def", "", &format!("\n{neurons}  {nneuron}\n")),
+                ],
+            );
+            (label, path, nrbm, nneuron, family)
+        })
+        .collect()
+}
+
+/// #701: the resident RBM validator checks the family-tag segment against
+/// 0..=2 and the coefficient segments against [-1, nrbm) separately, so the
+/// minimal Spin/General tables are accepted for Opt and PhysCal, and malformed
+/// tables are rejected with deterministic errors (before any allocation).
+#[test]
+fn resident_rbm_validator_separates_family_tags_from_coefficients() {
+    use crate::interval::resident::validate_rbm_tables;
+    for (label, input, nrbm, nneuron, family) in minimal_rbm_inputs("rbm-validate") {
+        for model in [
+            Model::prepare(&input, &cfg()).unwrap(),
+            Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+        ] {
+            assert_eq!((model.nrbm, model.nneuron), (nrbm, nneuron), "{label}");
+            let ns = model.ns;
+            let t = &model.rbm;
+            let w = &model.parameters[model.nproj..model.nproj + model.nrbm];
+            assert!(w.iter().all(|x| x.is_finite()), "{label}");
+            assert!(t[4 * ns..4 * ns + nneuron].iter().all(|&f| f == family));
+            // The hidden-layer coefficient h maps neuron h; all others absent.
+            for (k, &x) in t.iter().enumerate() {
+                let bias = k.checked_sub(4 * ns + nneuron).filter(|&h| h < nneuron);
+                if let Some(h) = bias {
+                    assert_eq!(x, h as i32, "{label}: hidden index of neuron {h}");
+                } else if !(4 * ns..4 * ns + nneuron).contains(&k) {
+                    assert_eq!(x, -1, "{label}: entry {k}");
+                }
+            }
+            validate_rbm_tables(ns, t, w, nneuron).unwrap();
+            let reject = |tables: &[i32], weights: &[f64]| {
+                validate_rbm_tables(ns, tables, weights, nneuron).unwrap_err()
+            };
+            let tag = 4 * ns;
+            for bad in [-1, 3] {
+                let mut x = t.clone();
+                x[tag] = bad;
+                assert_eq!(
+                    reject(&x, w),
+                    format!("invalid resident RBM tables: family tag {bad} of neuron 0")
+                );
+            }
+            for (entry, bad) in [(0, nrbm as i32), (ns, -2), (t.len() - 1, nrbm as i32)] {
+                let mut x = t.clone();
+                x[entry] = bad;
+                assert_eq!(
+                    reject(&x, w),
+                    format!(
+                        "invalid resident RBM tables: coefficient index {bad} at entry \
+                         {entry} for {nrbm} coefficients"
+                    )
+                );
+            }
+            assert_eq!(
+                reject(&t[..t.len() - 1], w),
+                format!(
+                    "invalid resident RBM tables: length {} for nsite {ns} and {nneuron} neurons",
+                    t.len() - 1
+                )
+            );
+            for weights in [vec![], vec![f64::NAN; nrbm], vec![f64::INFINITY; nrbm]] {
+                assert_eq!(
+                    reject(t, &weights),
+                    "invalid resident RBM tables: coefficients must be nonempty and finite"
+                );
+            }
+        }
+        fs::remove_dir_all(input.parent().unwrap()).unwrap();
+    }
 }

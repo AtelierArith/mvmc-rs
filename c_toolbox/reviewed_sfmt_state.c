@@ -1,5 +1,5 @@
 /* Optional SFMT diagnostics, compiled against the actual reference package's
- * unchanged SFMT.c. See reviewed_parameter_c_audit.md. No Cargo dependency. */
+ * unchanged SFMT.c. No Cargo dependency. */
 #include <stdint.h>
 #include <string.h>
 #ifndef REVIEWED_SFMT_BASELINE

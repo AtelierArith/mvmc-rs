@@ -24,7 +24,7 @@ sub write_new {
     close $o or die "IO output close: $!";
 }
 my @jobs = (
-    [ $complex_in, '8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed',
+    [ $complex_in, 'a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9',
       'int makeInitialSample(int *eleIdx, int *eleCfg, int *eleNum, int *eleProjCnt,',
       'void copyFromBurnSample(int *eleIdx, int *eleCfg, int *eleNum, int *eleProjCnt)',
       'initializer-complex.inc', 'vmcmake.c' ],

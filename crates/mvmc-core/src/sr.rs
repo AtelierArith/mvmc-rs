@@ -22,7 +22,7 @@ use crate::state::VmcOptimizationState;
 
 /// Select the actual component flag, as C's stcOptInit does. OptTrans weights
 /// carry their own real-component flags (#676); no remapping happens here.
-pub(crate) fn component_is_optimized(data: &ExpertModeData, component: usize) -> bool {
+pub fn component_is_optimized(data: &ExpertModeData, component: usize) -> bool {
     data.optimization_flags.get(component).copied() == Some(1)
 }
 

@@ -14,18 +14,20 @@ The step-1 energy is read from zvo_out_001.dat. Cargo never runs this script.
 """
 import argparse, os, re, shutil, struct, subprocess, sys, tempfile
 
+# Inputs: tests/fixtures/c_order_sr_operands/inputs/<case>/ (copied unchanged from
+# the sources listed in inputs/SOURCES.txt; the Rust test reads the same files).
+INPUTS = "tests/fixtures/c_order_sr_operands/inputs"
 CASES = [
-    # name, namelist (relative to repo root), cg, store, extra vmc.out args
-    ("real", "extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def", 1, 0, []),
-    ("real", "extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def", 0, 0, []),
-    ("real", "extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def", 0, 1, []),
-    ("hubbard", "extern/Julia-mVMC/examples/inputs/hubbard_chain_real/namelist.def", 1, 0, []),
-    ("dh2_real", "tests/fixtures/dh2/production_real/namelist.def", 1, 0, []),
-    ("dh4_real", "tests/fixtures/dh4/production_dh4_real/namelist.def", 1, 0, []),
-    ("dh24_real", "tests/fixtures/dh4/production_dh24_real/namelist.def", 1, 0, []),
-    ("pairhop_real",
-     "extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_real/inputs/namelist.def", 1, 0, []),
-    ("opt_real", "tests/fixtures/opttrans/run_opt_real/namelist.def", 1, 0, ["-o"]),
+    # name, cg, store, extra vmc.out args
+    ("real", 1, 0, []),
+    ("real", 0, 0, []),
+    ("real", 0, 1, []),
+    ("hubbard", 1, 0, []),
+    ("dh2_real", 1, 0, []),
+    ("dh4_real", 1, 0, []),
+    ("dh24_real", 1, 0, []),
+    ("pairhop_real", 1, 0, []),
+    ("opt_real", 1, 0, ["-o"]),
 ]
 
 
@@ -40,8 +42,11 @@ def prepare(rundir, namelist, cg, store):
         tokens = line.split()
         if len(tokens) >= 2 and tokens[0] == "ModPara":
             text = open(os.path.join(src, tokens[1])).read()
+            # The operands are printed before the SR solve. NSRCGAbortOnFail 0 (a
+            # C 1.4.0 option) lets the run finish where the step-1 CG solve meets a
+            # 1.4.0 breakdown guard, so that zvo_out_001.dat (the energy) is written.
             for key, value in (("NSROptItrStep", 1), ("NSROptItrSmp", 1), ("NSRCG", cg),
-                               ("NStore", store), ("RndSeed", 1)):
+                               ("NStore", store), ("RndSeed", 1), ("NSRCGAbortOnFail", 0)):
                 if re.search(rf"^\s*{key}\b", text, re.M):
                     text = re.sub(rf"^\s*{key}\b.*$", f"{key} {value}", text, flags=re.M)
                 else:
@@ -63,7 +68,8 @@ def main():
     root = os.getcwd()
     os.makedirs(args.out, exist_ok=True)
     env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1")
-    for name, namelist, cg, store, extra in CASES:
+    for name, cg, store, extra in CASES:
+        namelist = f"{INPUTS}/{name}/namelist.def"
         mode = "cg" if cg else "direct"
         with tempfile.TemporaryDirectory() as rundir:
             prepare(rundir, os.path.join(root, namelist), cg, store)

@@ -48,3 +48,16 @@ sources; `patch_hashes.txt` identifies the applied instrumentation patches.
 from a neighboring benchmark run in the same container. Its benchmark binary
 arguments describe that run; the full-probe binary hash is the one in
 `full_probe_provenance.json`, not the benchmark binary in `environment.json`.
+
+## Regeneration under mVMC 1.4.0 (#695)
+
+`opttrans_derivative.txt` was rerun from `extern/mVMC-1.4.0` (`calculateOptTransDiff`
+is byte-identical, `vmccal.c:652`) and is byte-identical. `rbm_sr_system.json`,
+`rbm_state.txt` and `full_probe_provenance.json` were regenerated with
+`build_probe.sh` and `capture_c_reference.py` (C only) in the dev container image
+`503e36a6615e`: the state dump (configurations, counters, RNG draw count and next 624
+words) and the 57 active indices are identical to the 1.3.0 capture; the S matrix and
+RHS move in the last bits (max absolute 3.3e-16 and 1.5e-17), from the `#pragma omp
+simd` reductions 1.4.0 added (upstream does not link without OpenMP; one thread). The
+existing `1e-13` operand bound is unchanged. `environment.json` is the original 1.3.0
+neighboring benchmark record.

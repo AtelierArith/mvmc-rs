@@ -80,15 +80,22 @@ Exact:
   replay uses C `UpdateRBMCnt` (twice for an exchange) and `LogRBMRatio` with
   full CPU Pfaffians. It asserts that the physical counters equal a full
   recount and that the RBM factor changes some decisions.
-- Hidden fields, bit for bit: initially against a fresh `make_rbm_cnt`; after
-  the tape against the replayed `UpdateRBMCnt` chain; after one SR update
-  against `make_rbm_cnt` with the new coefficients. Both sides use the same
-  IEEE operations in the same order (separate coupling sum, subtract-then-add
-  updates; no FMA on the device). The host test also checks the device tables
-  against `make_rbm_cnt` on random occupations.
 
 FP64:
 
+- Hidden fields (#699): `|gpu - cpu| <= 2 gamma_k S_h` with
+  `S_h = |w_b| + 2 sum_rs |w_c[rs]|`, `gamma_k = k eps / (1 - k eps)` and
+  `k = width + 2 + 4 a` (`width` = Nsite, or 2 Nsite for general neurons; `a` the
+  walker's accepted moves since the compared fresh `MakeRBMCnt`). C `MakeRBMCnt` and
+  `UpdateRBMCnt` multiply coefficients only by -1, 0, 1 or 2, which is exact, so only
+  the additions round. `S_h` bounds every partial sum, including the general family's
+  `2w` and a hop's intermediate value. The bound is absolute in `S_h`, so a field
+  near zero after cancellation needs no relative floor. Compared initially against a
+  fresh `make_rbm_cnt` (`a = 0`); after the tape against the replayed `UpdateRBMCnt`
+  chain (`a` = accepted moves); after one SR update against `make_rbm_cnt` with the new,
+  non-binary-fraction coefficients, with the bound evaluated on them. The host test
+  checks the device tables against `make_rbm_cnt` on random occupations with the same
+  bound (`a = 0`). Every value must be finite.
 - RBM hidden/coupling derivatives against `set_rbm_diff` on the GPU fields:
   `(m^2 + 3m) eps` for a slot with `m` contributions `x tanh(theta)`
   (`|x tanh| <= 1`; CUDA `tanh` is within 2 ulp and the host within 1; the
@@ -116,9 +123,14 @@ Observed (RTX 3060, CUDA 12.9.2 devcontainer image):
 | `hubbard_rbm_L16` | 9.7e2 / 2.5e2 | 0.002 / 0.009 / 0.037 | 4.4e-16 (0.125) | 54 | 2.0e-4 | 3.8e-17 | 0 |
 | `hubbard_rbm_L128` | 9.6e4 / 9.0e5 | 0.000 / 0.000 / 0.000 | 8.9e-16 (0.375) | 151 | 8.4e-4 | 1.1e-16 | 0 |
 
-The binary-fraction overlays make every field exactly representable, so the
-incremental fields equal a fresh `MakeRBMCnt` here (`dtheta = 0`); after an SR
-update they do not, and the exact checks still compare with the C-order chain.
+Hidden fields (2026-11-05, RTX 3060, `b129bd583bbe`): the measured difference is 0 in every
+stage (initial, final, after SR) for L16 and L128, Opt and PhysCal, and in the host table check.
+Both sides currently perform the same IEEE operations in the same order (a separate coupling
+sum, subtract-then-add updates, no FMA on the device). The bound does not depend on that
+equality. For L16 with coefficients up to 0.25 it is about `2 x 18 eps x 8.25 = 6.6e-14` before
+any move. The binary-fraction overlays make every field exactly representable, so the
+incremental fields equal a fresh `MakeRBMCnt` here (`dtheta = 0`). After an SR update they no
+longer do, and the bound uses the updated coefficients.
 Zeroing the RBM coefficients changes the reference local energy by up to 18
 (L16) and 80 (L128). The smallest `|log u - log ratio|` is 2.0e-4, far above
 the ~1e-12 log-ratio error.
