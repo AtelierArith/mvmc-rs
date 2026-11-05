@@ -117,6 +117,38 @@ forward regression comparisons therefore accompany residual checks instead
 of using a broad `condition * epsilon` allowance. The Rust direct test checks
 `||S*x-g||inf / (||S||inf*||x||inf + ||g||inf) <= 128*n*epsilon`.
 
+## Complex FSZ accepted exchange: C rank-two update (#679)
+
+C applies an accepted complex FSZ exchange with the rank-two update
+`UpdateMAllTwo_fsz` (`vmcmake_fsz.c:295`, `pfupdate_two_fsz.c`). Rust used
+Julia's full recalculation (`update_m_all_two_fsz!`) instead. Rust now ports
+the C update (`sampling::updates::update_m_all_two_fsz_complex_flat`) with
+C's operation order. It shares the rank-two kernel `update_two_complex` with
+the normal complex path. `rsbOld` follows mVMC 1.4.0 (`rbOld + t*Nsite`,
+upstream #100), the C target for new work and the choice of the normal
+complex path. The 1.3.0 `raOld` agrees to roundoff
+(`complex_fsz_rank_two_update_is_independent_of_the_old_ab_element`). The
+proposal, ratio and Metropolis draws are unchanged, so RNG draw order and
+count are identical. The rank-two update cannot fail, which removes the
+discarded `CalcMAllError` of the rebuild. The periodic `nAccept > Nsite`
+refresh now keeps the updated matrices and log-IP when `CalculateMAll_fsz`
+fails, as the normal complex driver does.
+
+- `crates/mvmc-core/tests/two_electron_fsz_complex.rs` compares 80 consecutive
+  rank-two updates (n_size 4-8, 20 exchanges per case without a refresh)
+  against a fresh first-row Pfaffian and Gauss-Jordan inverse. The bound is
+  `16 * (k+1) * n_size * eps * kappa` relative after k updates, with `kappa`
+  the max-norm condition estimate of the current matrix. The largest observed
+  error is 0.09 of that bound.
+- The historical Julia fixture `tests/fixtures/complex_fsz` (full
+  recalculation) still matches all discrete rows exactly. Its matrices differ
+  by at most `4.7e-14` absolute, inside the unchanged `512 * eps` bound. The
+  README labels it as a Julia-order reference.
+- The native C FSZ PhysCal references (`issue181_native_c_physcal` FSZ cases)
+  and the Julia FSZ CG/direct-SR prefix tests (`run::callback_tests`) pass at
+  their existing bounds. `complex_fsz_twenty_step_optimization_is_repeatable`
+  checks 20-step same-seed repeatability.
+
 ## Output, fixture storage and optional oracles
 
 Computed output fields are parsed and compared numerically. Row/column

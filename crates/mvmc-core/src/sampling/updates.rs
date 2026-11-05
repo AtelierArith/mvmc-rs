@@ -887,6 +887,77 @@ pub fn update_m_all_two_fsz_real_flat(
     );
 }
 
+/// Complex FSZ `UpdateMAllTwo_fsz` (`pfupdate_two_fsz.c:194-345`).
+///
+/// The ma-th electron (spin `s`) has hopped from `ra_old` to `ele_idx[ma]`
+/// and then the mb-th electron (spin `t`) from `rb_old` to `ele_idx[mb]`.
+/// Each QP plane gets C's rank-two Pfaffian/inverse update
+/// (`updateMAllTwo_child_fsz`) in the same operation order; FSZ uses the
+/// electron index directly as the row (`msa = ma`, `msb = mb`) and the
+/// electron's own spin for the column orbital.
+///
+/// `rsbOld` follows mVMC 1.4.0 (upstream #100): `rbOld + t*Nsite`, the C
+/// reference target for new work (docs/PROJECT_DECISIONS.md) and the choice
+/// of [`update_m_all_two_complex_flat`]. mVMC 1.3.0 uses `raOld + t*Nsite`.
+/// The old `(a,b)` element only enters through `vec_s[msb]` and cancels
+/// algebraically, so both choices agree to roundoff
+/// (`tests/two_electron_rsbold.rs`, `tests/two_electron_fsz_complex.rs`).
+/// Julia replaces this update with a full recalculation
+/// (`update_m_all_two_fsz!`), which is not C parity (#679).
+pub fn update_m_all_two_fsz_complex_flat(
+    ma: usize,
+    spin: u8,
+    mb: usize,
+    spin_other: u8,
+    ra_old: usize,
+    rb_old: usize,
+    ele_idx: &[i64],
+    ele_spn: &[i64],
+    slater_elm: &SlaterElmFlat<Complex64>,
+    inv_m_flat: &mut [Complex64],
+    inv_stride: usize,
+    pf_m: &mut [Complex64],
+    qp_start: usize,
+    qp_end: usize,
+    n_site: usize,
+    n_elec: usize,
+) {
+    let n_size = 2 * n_elec;
+    let msa = ma;
+    let msb = mb;
+    let rsa = ele_idx[msa] as usize + (spin as usize) * n_site;
+    let rsb = ele_idx[msb] as usize + (spin_other as usize) * n_site;
+    let rsa_old = ra_old + (spin as usize) * n_site;
+    let rsb_old = rb_old + (spin_other as usize) * n_site;
+    crate::threading::qp_update(
+        pf_m,
+        inv_m_flat,
+        inv_stride,
+        n_size * n_size,
+        qp_start,
+        qp_end,
+        crate::threading::scaled_cost_ns(n_size, 4 * (n_size * n_size + 16 * n_size)),
+        || TwoUpdateWorkComplex::new(n_size),
+        |work, qp, pf, window| {
+            let base = 0;
+            let m_old_ab = slater_elm.get(qp, rsa_old, rsb_old);
+            fill_vecs_fsz_complex(
+                qp,
+                rsa,
+                rsb,
+                ele_idx,
+                ele_spn,
+                slater_elm,
+                &mut work.vec_s,
+                &mut work.vec_t,
+                n_site,
+            );
+            work.vec_s[msb] = m_old_ab;
+            update_two_complex(base, msa, msb, window, n_size, work, pf);
+        },
+    );
+}
+
 fn fill_vecs_normal_complex(
     qp: usize,
     rsa: usize,

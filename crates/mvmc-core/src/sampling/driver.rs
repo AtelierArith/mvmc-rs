@@ -1286,17 +1286,26 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                         metropolis_decision(log_proj_delta, rbm_delta, log_ip_new, log_ip_old, rng);
                     if decision.accepted {
                         timer.start(68);
-                        let _ = crate::pfaffian::calc_m_all_fsz_complex(
+                        // C `UpdateMAllTwo_fsz(mi, s, mj, t, ri, rj, ...)`
+                        // (vmcmake_fsz.c:295): rank-two update, which cannot
+                        // fail. Julia's full recalculation is not C parity (#679).
+                        crate::sampling::updates::update_m_all_two_fsz_complex_flat(
+                            mi,
+                            s,
+                            mj,
+                            t,
+                            ri,
+                            rj,
                             &tmp_ele_idx,
                             &tmp_ele_spn,
                             &state.slater_matrix.slater_elm,
-                            &mut state.slater_matrix.inv_m,
+                            state.slater_matrix.inv_m.as_mut_slice(),
+                            inv_stride,
                             &mut state.slater_matrix.pf_m,
                             qp_start,
                             qp_end,
                             n_site,
                             n_elec,
-                            &pool,
                         );
                         timer.stop(68);
                         tmp_ele_proj_cnt.copy_from_slice(&proj_cnt_new);
@@ -1575,21 +1584,28 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
             }
             if n_accept_window > n_site {
                 timer.start(34);
-                let _ = crate::pfaffian::calc_m_all_fsz_complex(
-                    &tmp_ele_idx,
-                    &tmp_ele_spn,
-                    &state.slater_matrix.slater_elm,
-                    &mut state.slater_matrix.inv_m,
-                    &mut state.slater_matrix.pf_m,
-                    qp_start,
-                    qp_end,
-                    n_site,
-                    n_elec,
-                    &pool,
-                );
-                log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
-                if use_rbm {
-                    rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+                // C `CalculateMAll_fsz` (vmcmake_fsz.c:394). A failed refresh
+                // publishes nothing, so keep the updated matrices and their
+                // log-IP, as the normal complex driver does.
+                if !reducer.sampling_any_failure(
+                    crate::pfaffian::calc_m_all_fsz_complex(
+                        &tmp_ele_idx,
+                        &tmp_ele_spn,
+                        &state.slater_matrix.slater_elm,
+                        &mut state.slater_matrix.inv_m,
+                        &mut state.slater_matrix.pf_m,
+                        qp_start,
+                        qp_end,
+                        n_site,
+                        n_elec,
+                        &pool,
+                    )
+                    .is_err(),
+                ) {
+                    log_ip_old = sampling_log_ip_complex(&state.slater_matrix.pf_m, data, reducer);
+                    if use_rbm {
+                        rbm_cnt_old = crate::sampling::rbm::make_rbm_cnt(&tmp_ele_num, &rbm_cfg);
+                    }
                 }
                 n_accept_window = 0;
                 timer.stop(34);

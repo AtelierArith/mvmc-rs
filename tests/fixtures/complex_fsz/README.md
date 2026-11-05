@@ -25,9 +25,21 @@ both on the first call and after restoring a burn configuration.
 These gates exposed three production differences: the complex driver's
 conditional conduction-spin proposal (including its fixed-TwoSz behavior),
 accepted one-electron updates that must use the source's incremental inverse
-update, and Julia's robust complex division arithmetic. Two-electron Exchange
-continues to use the original full recomputation. Complex log-IP now takes
+update, and Julia's robust complex division arithmetic. Complex log-IP now takes
 `log(ip)` directly, preserving the source's nonfinite result at zero overlap.
+
+**Historical Julia exchange update.** This fixture records Julia's accepted
+two-electron Exchange, which recomputes the whole inverse and Pfaffian
+(`update_m_all_two_fsz!`, a full recalculation). Since #679 Rust applies C's
+rank-two `UpdateMAllTwo_fsz` (`pfupdate_two_fsz.c`) instead, so the matrix
+rows of this fixture are a Julia-order reference, not C parity. The discrete
+rows (configurations, counters, burn state and the next 624 SFMT words) still
+agree exactly: the RNG draw order and count are unchanged. On Linux x86_64 the
+matrices differ from the fixture only in the `local` case after two calls
+(inverse `4.7e-14`, Pfaffian `1.6e-14` absolute), within the unchanged
+`512 * eps` bound of `complex_fsz_sampling.rs`. In every other prefix a
+refresh or the absence of an accepted exchange leaves them identical. The
+fixture is not regenerated.
 
 ```sh
 julia +1.13.1 --project=extern/Julia-mVMC scripts/check_complex_fsz_sampling_parity.jl
