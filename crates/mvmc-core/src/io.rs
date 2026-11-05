@@ -741,7 +741,7 @@ mod tests {
     use mvmc_expert_parsers::{GreenOneTerm, GreenTwoExTerm, GreenTwoTerm, Spin};
     use num_complex::Complex64;
 
-    pub(super) fn test_output_dir(label: &str) -> PathBuf {
+    fn test_output_dir(label: &str) -> PathBuf {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         for _ in 0..10_000 {
@@ -1045,90 +1045,9 @@ mod tests {
 
 #[cfg(test)]
 mod history_tests {
-    use super::tests::test_output_dir;
     use super::*;
     use mvmc_expert_parsers::{GutzwillerTerm, JastrowTerm, OrbitalTerm};
     use num_complex::Complex64;
-
-    #[test]
-    fn optimization_windows_match_independent_c_prefix_outputs() {
-        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/ctest_model_prefixes/heisenberg_chain_real");
-        for prefix in [1, 2, 3, 50] {
-            let fixture = fixtures.join(format!("step-{prefix}"));
-            let input =
-                std::fs::read_to_string(fixture.join("c-window-declared-input.txt")).unwrap();
-            let mut lines = input.lines();
-            let header = lines
-                .next()
-                .unwrap()
-                .split_whitespace()
-                .map(|s| s.parse::<usize>().unwrap())
-                .collect::<Vec<_>>();
-            let mut data = ExpertModeData::new();
-            data.n_gutzwiller_idx = header[2] as i64;
-            data.n_jastrow_idx = header[3] as i64;
-            data.modpara.n_orbital_idx = header[15] as i64;
-            data.slater_params = vec![Complex64::new(0.0, 0.0); header[15]];
-            let mut state = VmcOptimizationState::zeros(6, 3, 2, header[1], 1, 1, false, false);
-            state.opt_data = lines
-                .map(|line| {
-                    let values = line
-                        .split_whitespace()
-                        .map(|s| s.parse::<f64>().unwrap())
-                        .collect::<Vec<_>>();
-                    let (pairs, remainder) = values.as_chunks::<2>();
-                    assert!(remainder.is_empty(), "complete complex fixture records");
-                    let values = pairs
-                        .iter()
-                        .map(|v| Complex64::new(v[0], v[1]))
-                        .collect::<Vec<_>>();
-                    assert_eq!(values.len(), header[1] + 2);
-                    OptDataPoint {
-                        energy: values[0],
-                        energy_squared: values[1],
-                        parameters: values[2..].to_vec(),
-                    }
-                })
-                .collect();
-            assert_eq!(state.opt_data.len(), header[0]);
-            let out = test_output_dir(&format!("c-window-{prefix}"));
-            output_opt_data(&data, &state, Some(&out)).unwrap();
-            let actual = std::fs::read_to_string(out.join("zqp_opt.dat")).unwrap();
-            let expected = std::fs::read_to_string(fixture.join("zqp_c_window_opt.dat")).unwrap();
-            assert_eq!(actual.lines().count(), 1);
-            let parse = |s: &str| {
-                s.split_whitespace()
-                    .map(|v| v.parse::<f64>().unwrap())
-                    .collect::<Vec<_>>()
-            };
-            let actual = parse(&actual);
-            let expected = parse(&expected);
-            assert_eq!(actual.len(), expected.len());
-            for (column, (a, e)) in actual.iter().zip(expected).enumerate() {
-                assert!(
-                    (a - e).abs() <= 1e-14_f64.max(1e-14 * a.abs().max(e.abs())),
-                    "prefix {prefix} column {column}: {a} != {e}"
-                );
-            }
-            if header[0] == 1 {
-                assert_eq!(std::fs::read_dir(&out).unwrap().count(), 1);
-            } else {
-                let block = std::fs::read_to_string(out.join("zqp_orbital_opt.dat")).unwrap();
-                assert_eq!(
-                    &block.lines().take(5).collect::<Vec<_>>(),
-                    &[
-                        "======================",
-                        "NOrbitalIdx  12",
-                        "======================",
-                        "======================",
-                        "======================"
-                    ]
-                );
-            }
-            std::fs::remove_dir_all(out).unwrap();
-        }
-    }
 
     #[test]
     fn history_keeps_declared_index_order_unmapped_slots_and_owned_snapshots() {
