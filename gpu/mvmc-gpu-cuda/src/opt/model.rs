@@ -67,6 +67,52 @@ pub(super) struct Model {
     pub complex: bool,
 }
 
+/// Device optimization flags (0/1) and the C SetFlagShift predicates.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct FlagContract {
+    pub flags: Vec<i32>,
+    pub shift: bool,
+    pub shift_dh2: bool,
+    pub shift_dh4: bool,
+}
+
+/// C OptFlag semantics for the resident model (#700). A component is
+/// optimized only when its raw signed flag is exactly 1 (C stcopt.c:112,
+/// stcopt_cg_impl.c:156-161; Rust `component_is_optimized`), so `0`, `2` and
+/// `-1` are fixed, and a missing flag is fixed as in the CPU predicates.
+/// OptFlag holds real and imaginary component flags; real mode uses the real
+/// ones, complex mode all `2*np`. The shifts follow C SetFlagShift
+/// (parameter.c:255-313) on the raw real flags, as the CPU
+/// `sync_modified_parameter` applies it: GJ needs every Gutzwiller and
+/// Jastrow flag equal to 1, DH2/DH4 every Gutzwiller and every DH component.
+pub(super) fn flag_contract(
+    raw: &[i64],
+    np: usize,
+    complex: bool,
+    ng: usize,
+    nj: usize,
+    n2: usize,
+    n4: usize,
+) -> FlagContract {
+    let active = |k: usize| raw.get(k).copied() == Some(1);
+    let flag = |k: usize| i32::from(active(k));
+    let flags: Vec<i32> = if complex {
+        (0..2 * np).map(flag).collect()
+    } else {
+        (0..np).map(|p| flag(2 * p)).collect()
+    };
+    let all = |range: std::ops::Range<usize>| range.into_iter().all(|p| active(2 * p));
+    let gutz_free = ng > 0 && all(0..ng);
+    let start2 = ng + nj;
+    let start4 = start2 + 6 * n2;
+    FlagContract {
+        flags,
+        shift: gutz_free && nj > 0 && all(ng..ng + nj),
+        shift_dh2: gutz_free && n2 > 0 && all(start2..start4),
+        shift_dh4: gutz_free && n4 > 0 && all(start4..start4 + 10 * n4),
+    }
+}
+
 impl Model {
     /// FP64 values per device scalar: 2 for complex mode (interleaved re, im).
     pub fn lanes(&self) -> usize {
@@ -273,22 +319,12 @@ impl Model {
         {
             return Err("resident GPU OptTrans requires one weight per NQPOptTrans sector".into());
         }
-        // C OptFlag holds real and imaginary component flags; real mode uses
-        // the real ones, complex mode all 2*np (stcopt.c).
-        let flag = |k: usize| i32::from(data.optimization_flags.get(k).copied().unwrap_or(1) != 0);
-        let real_flags: Vec<i32> = (0..np).map(|p| flag(2 * p)).collect();
-        let flags: Vec<i32> = if complex {
-            (0..2 * np).map(flag).collect()
-        } else {
-            real_flags.clone()
-        };
-        let shift = ng > 0 && nj > 0 && real_flags[..ng + nj].iter().all(|&f| f != 0);
-        // C SetFlagShift (parameter.c:255-313), as the C-order sync applies it:
-        // DH shifts need every Gutzwiller and every DH component optimized.
-        let all = |range: std::ops::Range<usize>| real_flags[range].iter().all(|&f| f != 0);
-        let gutz_free = ng > 0 && all(0..ng);
-        let shift_dh2 = gutz_free && n2 > 0 && all(ng + nj..ng + nj + 6 * n2);
-        let shift_dh4 = gutz_free && n4 > 0 && all(ng + nj + 6 * n2..nproj);
+        let FlagContract {
+            flags,
+            shift,
+            shift_dh2,
+            shift_dh4,
+        } = flag_contract(&data.optimization_flags, np, complex, ng, nj, n2, n4);
         let mut dh = Vec::with_capacity((2 * n2 + 4 * n4) * ns);
         let site = |r: i64| {
             i32::try_from(r)

@@ -634,3 +634,83 @@ fn resident_opt_rbm_repeats_twenty_steps() {
         );
     }
 }
+
+/// #701: the minimal hidden-layer-only Charge/Spin/General inputs, whose family
+/// tags are not below the coefficient count, set up on CUDA for resident Opt
+/// and PhysCal. Each hidden field is its bias coefficient (C MakeRBMCnt with
+/// no coupling section: `0 + w[h]`, one exact addition), checked against the
+/// CPU MakeRBMCnt; both complete runners then finish with finite results.
+#[test]
+#[ignore = "requires CUDA; minimal Charge/Spin/General RBM tables for Opt and PhysCal"]
+fn resident_rbm_minimal_family_tables_run_on_cuda() {
+    use super::physcal::{run_gpu_phys_cal_from_namelist, PhysCalConfig};
+    use super::scope_tests::minimal_rbm_inputs;
+    for (label, input, nrbm, nneuron, _) in minimal_rbm_inputs("rbm-cuda") {
+        let config = OptConfig {
+            nsteps: 2,
+            walkers: Some(8),
+            warmup: Some(4),
+            interval: Some(12),
+            seed: Some(79),
+            initial_def: InitialDef::None,
+            ..Default::default()
+        };
+        for physcal in [false, true] {
+            let model = if physcal {
+                Model::prepare_physcal(&input, &config, None).unwrap()
+            } else {
+                Model::prepare(&input, &config).unwrap()
+            };
+            assert_eq!((model.nrbm, model.nneuron), (nrbm, nneuron), "{label}");
+            let cfg = with_runtime(0, |backend| {
+                let mut state = State::prepare_with_derivatives(backend, model, &config, !physcal)?;
+                state.initialize(backend)?;
+                let theta = device_theta(backend, &state);
+                let m = &state.model;
+                let ele = state.resident.snapshot(backend)?.ele;
+                let rbm = RbmConfig::from(&m.data);
+                let n = 2 * m.ne;
+                let expected: Vec<f64> = (0..8)
+                    .flat_map(|w| {
+                        let (_, _, num) = arrays(&ele[w * n..(w + 1) * n], m.ns, m.ne);
+                        make_rbm_cnt(&num, &rbm)[nphys(m)..]
+                            .iter()
+                            .map(|z| z.re)
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+                Ok((theta, expected))
+            })
+            .unwrap();
+            // One exact IEEE addition on both sides: a 1-ulp relative bound.
+            let (ratio, diff) = worst(&cfg.0, &cfg.1, 0.0, f64::EPSILON);
+            assert!(
+                ratio <= 1.0,
+                "{label} physcal={physcal}: theta diff {diff:e}"
+            );
+        }
+        let opt = run_gpu_para_opt_from_namelist(&input, config.clone()).unwrap();
+        assert_eq!(opt.energies.len(), 2, "{label}");
+        assert!(opt.energies.iter().all(|e| e.is_finite()), "{label}");
+        assert!(opt.parameters.iter().all(|p| p.is_finite()), "{label}");
+        let phys = run_gpu_phys_cal_from_namelist(
+            &input,
+            PhysCalConfig {
+                walkers: Some(8),
+                nsamples: Some(2),
+                warmup: Some(4),
+                interval: Some(12),
+                seed: Some(79),
+                initial_def: InitialDef::None,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(phys.energy.is_finite(), "{label}");
+        println!(
+            "{label}: Opt energies {:?}, PhysCal energy {}",
+            opt.energies, phys.energy
+        );
+        std::fs::remove_dir_all(input.parent().unwrap()).unwrap();
+    }
+}
