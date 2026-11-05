@@ -15,9 +15,18 @@
 //!   `fclose(NULL)` and crashes);
 //! * a namelist keyword that is not in the keyword list is ignored with a
 //!   warning (C writes `cFileNameList[-1]` or the previous keyword's slot);
-//! * records beyond the declared counts are dropped (C writes past the end of
-//!   its heap arrays); a record count mismatch is only reported, because the C
-//!   `ReadDefFileError` returns 0 and therefore never fails;
+//! * a file with fewer records than its declared count is an error (#680).
+//!   mVMC 1.3.0 `ReadDefFileError` prints `Error: <file> (Broken file or Not
+//!   exist)` but returns 0, so the run continued with zero-filled terms;
+//!   upstream issp-center-dev/mVMC#81 (v1.4.0) returns 1 and aborts. Rust
+//!   prints the same C line and then fails before any output;
+//! * records beyond the declared counts are dropped with a warning (C 1.3.0
+//!   writes past the end of its heap arrays; C 1.4.0 drops them only for
+//!   `Initial` and aborts for the other files);
+//! * trailing whitespace-only lines are not records in any file. C counts
+//!   every `fgets` line, so in C 1.4.0 a trailing blank line is fatal in
+//!   `Trans`/`CoulombIntra`/... but harmless in `Initial` (which stops at
+//!   `NInitial`) and in the `fscanf` readers; Rust uses one rule for all;
 //! * out-of-range site/spin/orbital indices are errors (C reads or writes out
 //!   of bounds);
 //! * `Nsize` outside `1..2*Nsite-1` is an error (C reads
@@ -183,8 +192,40 @@ struct Counts {
 }
 
 fn broken(name: &str) {
-    // C `ReadDefFileError` prints this and returns 0 (so it never fails).
+    // C `ReadDefFileError` prints this. 1.3.0 returns 0 (never fails); the
+    // record-count callers below fail as upstream mVMC#81 (v1.4.0) does.
     println!("Error: {name} (Broken file or Not exist)");
+}
+
+/// Record-count contract of the definition readers (#680, upstream mVMC#81).
+///
+/// Fewer records than declared is fatal (C 1.4.0 `ReadDefFileError` returns
+/// 1); the C message is printed first. Extra records are dropped by the
+/// callers and only warned about here.
+fn check_record_count(name: &str, found: usize, declared: usize) -> Result<(), UhfError> {
+    if found < declared {
+        broken(name);
+        return Err(definition_error(format!(
+            "{name}: {found} records, fewer than the declared {declared}. \
+             Indices and Parameters of Definition files(*.def) are incomplete."
+        )));
+    }
+    if found > declared {
+        println!(
+            "Warning: {name}: {found} records, more than the declared {declared}; \
+             the extra records are ignored."
+        );
+    }
+    Ok(())
+}
+
+/// Drop trailing whitespace-only lines: they are not records (#680).
+fn without_trailing_blank_lines<'a, 'b>(body_lines: &'b [&'a str]) -> &'b [&'a str] {
+    let end = body_lines
+        .iter()
+        .rposition(|line| !line.trim().is_empty())
+        .map_or(0, |last| last + 1);
+    &body_lines[..end]
 }
 
 fn read_text(path: &Path, shown: &str) -> Result<String, UhfError> {
@@ -688,7 +729,7 @@ fn read_idx_para(
                 "{name}: fewer than {IGNORE_LINES_IN_DEF} header lines."
             )));
         }
-        let body_lines = &text_lines[IGNORE_LINES_IN_DEF..];
+        let body_lines = without_trailing_blank_lines(&text_lines[IGNORE_LINES_IN_DEF..]);
         let body: String = body_lines.concat();
         match kw {
             KW_LOCSPIN => {
@@ -707,9 +748,7 @@ fn read_idx_para(
                     eprintln!("Error: 2*Ne must be (2*Ne >= NLocalSpin).");
                     return Err(definition_error("2*Ne must be (2*Ne >= NLocalSpin)."));
                 }
-                if idx != nsite as i64 {
-                    broken(name);
-                }
+                check_record_count(name, idx as usize, nsite)?;
             }
             KW_TRANS | KW_INITIAL => {
                 let declared = if kw == KW_TRANS {
@@ -754,9 +793,7 @@ fn read_idx_para(
                     }
                     idx += 1;
                 }
-                if idx != i64::from(declared) {
-                    broken(name);
-                }
+                check_record_count(name, idx as usize, declared as usize)?;
                 if kw == KW_TRANS {
                     def.transfer = terms;
                 } else {
@@ -776,9 +813,7 @@ fn read_idx_para(
                         }
                         idx += 1;
                     }
-                    if idx != i64::from(counts.n_coulomb_intra) {
-                        broken(name);
-                    }
+                    check_record_count(name, idx as usize, counts.n_coulomb_intra as usize)?;
                     def.coulomb_intra = items;
                 }
             }
@@ -796,9 +831,7 @@ fn read_idx_para(
                         }
                         idx += 1;
                     }
-                    if idx != i64::from(counts.n_coulomb_inter) {
-                        broken(name);
-                    }
+                    check_record_count(name, idx as usize, counts.n_coulomb_inter as usize)?;
                     def.coulomb_inter = items;
                 }
             }
@@ -820,14 +853,10 @@ fn read_idx_para(
                             items.push((a, b, v));
                             items.push((b, a, v));
                         }
-                        if stored.len() as i64 != i64::from(declared) / 2 {
-                            broken(name);
-                        }
+                        check_record_count(name, stored.len(), (declared / 2) as usize)?;
                         def.pair_hopping = items;
                     } else {
-                        if stored.len() as i64 != i64::from(declared) {
-                            broken(name);
-                        }
+                        check_record_count(name, stored.len(), declared as usize)?;
                         let items: Vec<_> = stored.into_iter().take(declared as usize).collect();
                         if kw == KW_HUND {
                             def.hund = items;
@@ -840,9 +869,7 @@ fn read_idx_para(
             KW_INTER_ALL => {
                 if counts.n_inter_all > 0 {
                     let records = scan_records(name, &body, 8, 2)?;
-                    if records.len() as i64 != i64::from(counts.n_inter_all) {
-                        broken(name);
-                    }
+                    check_record_count(name, records.len(), counts.n_inter_all as usize)?;
                     def.inter_all = records
                         .into_iter()
                         .take(counts.n_inter_all as usize)
@@ -935,8 +962,9 @@ fn read_orbital_ap(
             break;
         }
     }
-    if !general && idx != nsite * nsite {
-        broken(name);
+    if !general {
+        // The loop stops at Nsite^2 records, so only a short file is reported.
+        check_record_count(name, idx, nsite * nsite)?;
     }
     Ok(())
 }
@@ -1007,8 +1035,7 @@ fn read_orbital_general(
             break;
         }
     }
-    if idx != nsite * (2 * nsite - 1) {
-        broken(name);
-    }
+    // The loop stops at Nsite*(2*Nsite-1) records: only a short file fails.
+    check_record_count(name, idx, nsite * (2 * nsite - 1))?;
     Ok(())
 }
