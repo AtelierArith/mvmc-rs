@@ -17,7 +17,7 @@ and are not listed. Benchmark results under `benchmark/**/results/` and other
 dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historical
 1.3.0 records as well.
 
-39 C sources under `src/` changed between the releases. 172 files are historical 1.3.0 and 110 files cite only 1.4.0 hashes.
+39 C sources under `src/` changed between the releases. 170 files are historical 1.3.0 and 110 files cite only 1.4.0 hashes.
 
 ## Historical 1.3.0
 
@@ -193,8 +193,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/physcal_181/native-c-weighted-green/provenance.txt` | `average.c` |
 | `tests/fixtures/physcal_181/native-macos-measurement-diagnostic/README.md` | `locgrn_fsz.c`, `pfupdate_two_fsz.c` |
 | `tests/fixtures/physcal_181/unnormalized-reserved-slater/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
-| `tests/fixtures/physcal_callbacks_175/CONTRACT.txt` | `average.c`, `global.h`, `readdef.c`, `vmcmain.c` |
-| `tests/fixtures/real_fsz/c_setup.txt` | `projection.c`, `vmcmake_fsz_real.c` |
 
 ## 1.4.0
 

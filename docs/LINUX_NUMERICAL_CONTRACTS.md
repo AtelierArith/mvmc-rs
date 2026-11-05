@@ -122,6 +122,5 @@ restore exact setup, sampling, history and SR runner comparisons, including
 CG iteration/status/residual outputs and full RNG/configuration controls.
 No historical tolerance was introduced during #187. The subsequent #190
 policy changes computed-value comparisons, while retaining exact RNG and
-configuration controls. See
-[`linux_gnu_julia/README.md`](../tests/fixtures/linux_gnu_julia/README.md) for
-the source/BLAS manifest and preserved macOS fixture selection.
+configuration controls. The Linux Julia overlays (`tests/fixtures/linux_gnu_julia/`) were removed
+with the other Julia CPU references in #695.
