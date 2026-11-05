@@ -17,6 +17,10 @@
 // complex Pfaffians, and such an accept, or an accept whose candidate plane
 // Pfaffian is zero or nonfinite, refactors the walker in this kernel.
 // Local spins, DH and RBM are rejected on the host in complex mode.
+//
+// Complex FSZ walkers (#714 (c), C vmcmake_fsz.c, pfupdate_fsz.c) hold rs
+// per slot and use the FSZ proposals of resident_propose (interval_kernels.cu);
+// a slot then needs no spin offset (split = n).
 
 // Complex C UpdateMAll_child_fcmp for one QP plane, by the whole block:
 // vec1 = -invM^T sltE_a, PfM *= -vec1[a], vec2 = invM_a / -vec1[a],
@@ -61,7 +65,8 @@ extern "C" __global__ void interval_complex_hop(
     const rcx* weights, const int* gutz, const int* jast, const double* params,
     const unsigned int* tape, int total_hops, int* hop_off, int n, int ne, int nsite, int nqp,
     int ngutz, int nproj, int* hops_done, int* rebuild, int* accepts, int* total_accepts,
-    int* error, int* valid, rcx* fac, rcx* work, double exchange_fraction) {
+    int* error, int* valid, rcx* fac, rcx* work, double exchange_fraction, int fsz,
+    int spin_free, double flip_fraction) {
   if (*error) return;  // block-uniform; previous launch owns the error flag
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
@@ -82,7 +87,8 @@ extern "C" __global__ void interval_complex_hop(
   rcx* work_w = work + (size_t)w * nqp * n * n;
   const unsigned int* tape_w = tape + (size_t)w * 5;
   const size_t tape_stride = 5 * (size_t)gridDim.x;
-  __shared__ int s_rank, s_exchange, s_partner;
+  const int split = fsz ? n : ne;
+  __shared__ int s_rank, s_exchange, s_partner, s_from, s_to, s_pfrom, s_pto;
   __shared__ double s_log;
   if (tid == 0) {
     int all = 1;
@@ -97,61 +103,41 @@ extern "C" __global__ void interval_complex_hop(
   for (int hop = start; hop < total_hops; ++hop) {
     const unsigned int* t = tape_w + (size_t)hop * tape_stride;
     if (tid == 0) {
-      const int mi = (int)(t[0] % (unsigned)ne);
-      const int spin = (int)(t[1] >> 31);
-      const int ri = ele_w[mi + spin * ne];
-      const int exchange = (double)t[3] / 4294967296.0 < exchange_fraction;
-      int rj = 0, ok, partner = -1;
-      if (exchange) {
-        partner = (int)(t[2] % (unsigned)ne) + (1 - spin) * ne;
-        rj = ele_w[partner];
-        ok = ri != rj && occ_w[rj + spin * nsite] == 0 && occ_w[ri + (1 - spin) * nsite] == 0;
-      } else {
-        int count = 0;
-        for (int r = 0; r < nsite; ++r) count += occ_w[r + spin * nsite] == 0;
-        ok = count > 0;
-        if (count > 0) {
-          int rank = (int)(t[2] % (unsigned)count);
-          for (int r = 0; r < nsite; ++r) {
-            if (occ_w[r + spin * nsite] == 0) {
-              if (rank == 0) {
-                rj = r;
-                break;
-              }
-              --rank;
-            }
-          }
-        }
-      }
-      s_exchange = exchange;
-      s_partner = partner;
-      mvw[0] = ok;
-      mvw[1] = mi;
-      mvw[2] = spin;
-      mvw[3] = ri;
-      mvw[4] = rj;
+      // No local spins in complex mode (rejected on the host), so a local
+      // spin flip proposal is always invalid.
+      const ResidentMove m = resident_propose(t, ele_w, occ_w, nullptr, n, ne, nsite,
+                                              exchange_fraction, flip_fraction, fsz, spin_free);
+      s_exchange = m.exchange;
+      s_partner = m.partner;
+      s_from = m.from;
+      s_to = m.to;
+      s_pfrom = m.pfrom;
+      s_pto = m.pto;
+      mvw[0] = m.valid;
+      mvw[1] = m.msa;
     }
     __syncthreads();
-    const int mi = mvw[1], spin = mvw[2], ri = mvw[3], rj = mvw[4];
+    const int msa = mvw[1];
     const int exchange = s_exchange, partner = s_partner;
+    const int from = s_from, to = s_to, pfrom = s_pfrom, pto = s_pto;
+    const int ri = from % nsite, rj = to % nsite;
     if (!mvw[0]) {
       __syncthreads();
       ++advanced;
       continue;
     }
     if (tid == 0) {
-      ele_w[mi + spin * ne] = rj;
-      occ_w[ri + spin * nsite] = 0;
-      occ_w[rj + spin * nsite] = 1;
+      ele_w[msa] = fsz ? to : rj;
+      occ_w[from] = 0;
+      occ_w[to] = 1;
       if (exchange) {
-        ele_w[partner] = ri;
-        occ_w[rj + (1 - spin) * nsite] = 0;
-        occ_w[ri + (1 - spin) * nsite] = 1;
+        ele_w[partner] = fsz ? pto : ri;
+        occ_w[pfrom] = 0;
+        occ_w[pto] = 1;
       }
     }
     __syncthreads();
-    const int msa = mi + spin * ne;
-    for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= ne ? nsite : 0);
+    for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= split ? nsite : 0);
     __syncthreads();
     if (!s_rank || exchange) {
       // Full candidate Pfaffians of every plane (Julia cooperative_overlap!).
@@ -178,9 +164,11 @@ extern "C" __global__ void interval_complex_hop(
       rcx ip_new = rc(0.0, 0.0);
       for (int q = 0; q < nqp; ++q) ip_new = rc_add(ip_new, rc_mul(weights[q], pfnew[q]));
       const double log_new = log(rc_abs(ip_new) + 1e-100);
+      // An exchange or an on-site FSZ spin flip keeps every counter.
       const double proj =
-          exchange ? 0.0
-                   : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
+          exchange || ri == rj
+              ? 0.0
+              : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj);
       const double logratio = 2.0 * (proj + log_new - log_old);
       const double u = (double)t[4] / 4294967296.0;
       const int accept = rc_finite(ip_new) && !rc_zero(ip_new) && log(u) < logratio;
@@ -193,13 +181,13 @@ extern "C" __global__ void interval_complex_hop(
       if (accept) {
         s_log = log_new;
       } else {
-        ele_w[mi + spin * ne] = ri;
-        occ_w[ri + spin * nsite] = 1;
-        occ_w[rj + spin * nsite] = 0;
+        ele_w[msa] = fsz ? from : ri;
+        occ_w[from] = 1;
+        occ_w[to] = 0;
         if (exchange) {
-          ele_w[partner] = rj;
-          occ_w[rj + (1 - spin) * nsite] = 1;
-          occ_w[ri + (1 - spin) * nsite] = 0;
+          ele_w[partner] = fsz ? pfrom : rj;
+          occ_w[pfrom] = 1;
+          occ_w[pto] = 0;
         }
       }
     }

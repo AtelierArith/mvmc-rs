@@ -369,20 +369,20 @@ impl Model {
             return Err("infeasible local-spin filling".into());
         }
         let complex = mvmc_core::get_all_complex_flag(&data)?;
-        // FSZ (#714) supports real Gutzwiller/Jastrow projections. C FSZ has
-        // no RBM (vmccal_fsz.c); DH2/DH4, OptTrans and complex FSZ have no
-        // resident FSZ kernels. Checked before the parameter values.
+        // FSZ (#714) supports Gutzwiller/Jastrow projections, real or complex
+        // (complex FSZ follows the complex-mode families below). C FSZ has no
+        // RBM (vmccal_fsz.c); DH2/DH4 and OptTrans have no resident FSZ
+        // kernels. Checked before the parameter values.
         let layout = data.projection_layout();
         if fsz
-            && (complex
-                || data.has_rbm_terms()
+            && (data.has_rbm_terms()
                 || data.count_rbm_parameters() > 0
                 || data.count_opt_trans_parameters() > 0
                 || layout.n_dh2 + layout.n_dh4 > 0)
         {
             return Err(
-                "resident GPU FSZ supports real Gutzwiller/Jastrow projections only (no complex \
-                 parameters, RBM, OptTrans or DH2/DH4)"
+                "resident GPU FSZ supports Gutzwiller/Jastrow projections only (no RBM, \
+                 OptTrans or DH2/DH4)"
                     .into(),
             );
         }

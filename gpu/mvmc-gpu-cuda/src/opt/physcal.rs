@@ -11,6 +11,8 @@ mod complex_tests;
 #[cfg(test)]
 mod dh_tests;
 #[cfg(test)]
+mod fsz_complex_tests;
+#[cfg(test)]
 mod fsz_tests;
 #[cfg(test)]
 mod localspin_tests;

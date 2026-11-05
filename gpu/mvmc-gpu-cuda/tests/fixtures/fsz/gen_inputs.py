@@ -2,7 +2,7 @@
 
 uv run --no-project gpu/mvmc-gpu-cuda/tests/fixtures/fsz/gen_inputs.py
 
-Writes six deterministic Expert-mode inputs next to this script:
+Writes eight deterministic Expert-mode inputs next to this script:
 
 * hubbard_fsz_L16: 16-site Hubbard chain, Ncond=12 (2Ne=12, doped), 2Sz not
   set (C's default -1, Sz not conserved), NExUpdatePath=1 (hop/exchange
@@ -23,6 +23,12 @@ Writes six deterministic Expert-mode inputs next to this script:
   NExUpdatePath=2 (C: exchange or local spin flip for 2Sz=-1),
   OrbitalGeneral, Heisenberg exchange plus a Hermitian pair of
   spin-changing InterAll terms (S+_i S+_j type) that break Sz conservation.
+* hubbard_fsz_complex_L16 / hubbard_fsz_complex_L128: the Hubbard chains with
+  complex general orbitals (ComplexType 1, so C AllComplexFlag=1, the
+  complex FSZ path of vmcmake_fsz.c), Transfer phases exp(0.25 i) on the
+  spin-conserving hops and exp(0.6 i) on the spin-flip hops (Hermitian
+  pairs), complex InterAll values (0.2 +- 0.1 i) and the TransSym weight
+  0.6+0.8i of ../complex.
 
 C reads 2Sz=-1 only as the default: an explicit "2Sz -1" is an error
 (readdef.c:2215-2218), so the Sz-free inputs omit the 2Sz line.
@@ -40,6 +46,7 @@ fixed 2Sz) but measures spin-flip Green functions. NSPGaussLeg=1: C forces it
 for general orbitals (readdef.c:703-707). Real Gutzwiller/Jastrow factors.
 These are engine-test inputs, not physics benchmarks.
 """
+import cmath
 import hashlib
 from pathlib import Path
 
@@ -119,10 +126,10 @@ def projection(out, ns, files, ring):
     files.append(("InGutzwiller", "ingutzwiller.def"))
 
 
-def transsym(out, ns, files):
+def transsym(out, ns, files, weight=(QP_WEIGHT, 0.0)):
     affine = [(5 * r + 3) % ns for r in range(ns)]
     write(out, "qptransidx.def",
-          header("NQPTrans", 2) + [f"0 {1.0:.5f} {0.0:.5f}", f"1 {QP_WEIGHT:.5f} {0.0:.5f}"]
+          header("NQPTrans", 2) + [f"0 {1.0:.5f} {0.0:.5f}", f"1 {weight[0]:.5f} {weight[1]:.5f}"]
           + [f"{0:5d} {i:6d} {i:6d} {1:6d}" for i in range(ns)]
           + [f"{1:5d} {i:6d} {affine[i]:6d} {1:6d}" for i in range(ns)])
     files.append(("TransSym", "qptransidx.def"))
@@ -135,7 +142,14 @@ def finish(out, files):
           [f"{hashlib.sha256((out / n).read_bytes()).hexdigest()}  {n}" for n in names])
 
 
-def hubbard(name, length, ncond, path):
+def term(*fields, value):
+    """A Transfer/InterAll row: integer fields, then (re, im) of the value."""
+    z = complex(value)
+    # + 0.0 keeps a conjugated zero imaginary part unsigned.
+    return "".join(f"{v:5d} " for v in fields) + f"{z.real + 0.0:25.15f} {z.imag + 0.0:25.15f}"
+
+
+def hubbard(name, length, ncond, path, complex_mode=False):
     out = HERE / name
     out.mkdir(exist_ok=True)
     ns = length
@@ -143,16 +157,18 @@ def hubbard(name, length, ncond, path):
     write(out, "modpara.def", modpara(ns, ncond, path, None))
     write(out, "locspn.def",
           header("NlocalSpin", 0) + [f"{i:5d} {0:6d}" for i in range(ns)])
+    hop = cmath.exp(0.25j) if complex_mode else 1.0
+    flip = LAMBDA * (cmath.exp(0.6j) if complex_mode else 1.0)
     trans = []
     for i in range(ns):
         j = (i + 1) % ns
         for sp in (0, 1):
-            trans.append(f"{j:5d} {sp:5d} {i:5d} {sp:5d} {1.0:25.15f} {0.0:25.15f}")
-            trans.append(f"{i:5d} {sp:5d} {j:5d} {sp:5d} {1.0:25.15f} {0.0:25.15f}")
-        # Real spin-flip hopping and its Hermitian conjugate (C GreenFunc1_fsz2).
-        for (a, sa, b, sb, v) in ((j, 1, i, 0, LAMBDA), (j, 0, i, 1, -LAMBDA)):
-            trans.append(f"{a:5d} {sa:5d} {b:5d} {sb:5d} {v:25.15f} {0.0:25.15f}")
-            trans.append(f"{b:5d} {sb:5d} {a:5d} {sa:5d} {v:25.15f} {0.0:25.15f}")
+            trans.append(term(j, sp, i, sp, value=hop))
+            trans.append(term(i, sp, j, sp, value=complex(hop).conjugate()))
+        # Spin-flip hopping and its Hermitian conjugate (C GreenFunc1_fsz2).
+        for (a, sa, b, sb, v) in ((j, 1, i, 0, flip), (j, 0, i, 1, -flip)):
+            trans.append(term(a, sa, b, sb, value=v))
+            trans.append(term(b, sb, a, sa, value=complex(v).conjugate()))
     write(out, "trans.def", header("NTransfer", len(trans)) + trans)
     write(out, "coulombintra.def",
           header("NCoulombIntra", ns) + [f"{i:5d} {4.0:25.15f}" for i in range(ns)])
@@ -163,11 +179,12 @@ def hubbard(name, length, ncond, path):
           header("NExchange", len(bonds)) + [f"{i:5d} {j:5d} {0.25:25.15f}" for i, j in bonds])
     # c+_{0 up} c_{0 dn} c+_{1 dn} c_{1 up} (S+_0 S-_1) with 0.2 and its
     # Hermitian conjugate, plus a spin-conserving Hermitian pair.
+    v = complex(0.2, 0.1) if complex_mode else complex(0.2)
     inter = [
-        f"{0:5d} {0:5d} {0:5d} {1:5d} {1:5d} {1:5d} {1:5d} {0:5d} {0.2:25.15f} {0.0:25.15f}",
-        f"{1:5d} {0:5d} {1:5d} {1:5d} {0:5d} {1:5d} {0:5d} {0:5d} {0.2:25.15f} {0.0:25.15f}",
-        f"{0:5d} {0:5d} {1:5d} {0:5d} {2:5d} {1:5d} {3:5d} {1:5d} {0.15:25.15f} {0.0:25.15f}",
-        f"{3:5d} {1:5d} {2:5d} {1:5d} {1:5d} {0:5d} {0:5d} {0:5d} {0.15:25.15f} {0.0:25.15f}",
+        term(0, 0, 0, 1, 1, 1, 1, 0, value=v),
+        term(1, 0, 1, 1, 0, 1, 0, 0, value=v.conjugate()),
+        term(0, 0, 1, 0, 2, 1, 3, 1, value=0.15),
+        term(3, 1, 2, 1, 1, 0, 0, 0, value=0.15),
     ]
     write(out, "interall.def", header("NInterAll", len(inter)) + inter)
     files += [("Trans", "trans.def"), ("CoulombIntra", "coulombintra.def"),
@@ -196,12 +213,12 @@ def hubbard(name, length, ncond, path):
     files += [("OneBodyG", "greenone.def"), ("TwoBodyG", "greentwo.def"),
               ("TwoBodyGEx", "greentwoex.def")]
     projection(out, ns, files, length)
-    general_orbitals(out, ns, files)
-    transsym(out, ns, files)
+    general_orbitals(out, ns, files, complex_mode)
+    transsym(out, ns, files, (0.6, 0.8) if complex_mode else (QP_WEIGHT, 0.0))
     finish(out, files)
 
 
-def general_orbitals(out, ns, files):
+def general_orbitals(out, ns, files, complex_mode=False):
     """One Slater class per (spin_i, spin_j, (j - i) mod ns) of the pairs
     rsi < rsj, numbered in order of first appearance."""
     classes = {}
@@ -212,7 +229,7 @@ def general_orbitals(out, ns, files):
             k = classes.setdefault(key, len(classes))
             mapping.append(f"{rsi % ns:5d} {rsi // ns:3d} {rsj % ns:6d} {rsj // ns:3d} {k:6d} {1:3d}")
     write(out, "orbitalidxgen.def",
-          header("NOrbitalIdx", len(classes), ["ComplexType          0"])
+          header("NOrbitalIdx", len(classes), [f"ComplexType          {int(complex_mode)}"])
           + mapping + [f"{k:5d} {1:6d}" for k in range(len(classes))])
     files.append(("OrbitalGeneral", "orbitalidxgen.def"))
 
@@ -320,3 +337,5 @@ kondo("kondo_fsz_2sz2", 8, 6, 1, 2)
 kondo("kondo_fsz_kgc", 8, 6, 3, None, general=True)
 kondo("kondo_fsz_kgc_L128", 64, 64, 3, None, general=True)
 heisenberg("heisenberg_fsz_L16", 16, 2)
+hubbard("hubbard_fsz_complex_L16", 16, 12, 1, complex_mode=True)
+hubbard("hubbard_fsz_complex_L128", 128, 128, 0, complex_mode=True)

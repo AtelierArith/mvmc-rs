@@ -621,6 +621,9 @@ impl ResidentInterval {
                         p(&s.planes)?,
                         p(&s.pfinv_w)?,
                         Arg::D(self.exchange_fraction),
+                        Arg::I(i32::from(self.fsz)),
+                        Arg::I(i32::from(self.spin_free)),
+                        Arg::D(self.flip_fraction),
                     ],
                 )?;
                 self.enqueue_rebuild(exec, module)?;
@@ -666,7 +669,7 @@ impl ResidentInterval {
                     p(&s.pfinv_pf)?,
                     p(&s.pfinv_st)?,
                     i(g.n),
-                    i(g.ne),
+                    i(self.split()),
                     i(g.nsite),
                     i(g.nqp),
                 ],

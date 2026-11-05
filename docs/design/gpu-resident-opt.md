@@ -94,7 +94,9 @@ supported with Gutzwiller/Jastrow factors, complex QP weights and
 coefficients, exchanges and direct SR. Real general orbitals / FSZ (#714) are
 supported with Gutzwiller/Jastrow factors, any `2Sz`, local spins, exchanges,
 local spin flips (`NExUpdatePath=3`, path 2 with `2Sz=-1`), spin-flip
-operators and direct SR. Complex FSZ and grouped execution return errors.
+operators and direct SR. Complex FSZ (#714) is supported with
+Gutzwiller/Jastrow factors, complex QP weights and coefficients, exchanges and
+direct SR, without local spins. Grouped execution returns errors.
 
 ### General orbitals / FSZ (#714)
 
@@ -161,9 +163,20 @@ Rust CPU C-order FSZ path. The physics is C's real FSZ path
   `opt_resolve_rs` searching all `2Ne` slots.
 - **SR and gauge.** Direct SR and C `SyncModifiedParameter` (Slater rescale)
   are unchanged.
-- **Not supported with FSZ** (rejected before allocation): complex
-  parameters, RBM (C FSZ has none), DH2/DH4, OptTrans, `NSPGaussLeg>1` and
-  Opt with `NSRCG≠0`. Normal orbitals with `2Sz≠0` or `NExUpdatePath=3` stay
+- **Complex FSZ** (sub-milestone (c), C `vmcmake_fsz.c`, `pfupdate_fsz.c`,
+  `calham_fsz.c`, `locgrn_fsz.c`): the complex tables of the complex normal
+  path (#678) with `rs`-encoded slots. `opt_slater_f_c` builds the complex
+  table, the complex sampler draws the FSZ proposals through the shared
+  `resident_propose` (with immediate C rank-two updates, as for complex
+  normal orbitals), and the complex energy, Green, derivative and cofactor
+  kernels take the same split index and `rs` operators. C `SlaterElmDiff_fsz`
+  writes `O` and `i O` into the two component slots, as `SlaterElmDiff_fcmp`
+  does, so the complex SR system (`2*NPara` real components) is unchanged.
+  Local spins stay rejected in complex mode (#678), so complex FSZ has no
+  local spin flips.
+- **Not supported with FSZ** (rejected before allocation): RBM (C FSZ has
+  none), DH2/DH4, OptTrans, `NSPGaussLeg>1`, Opt with `NSRCG≠0`, and local
+  spins with complex parameters. Normal orbitals with `2Sz≠0` or `NExUpdatePath=3` stay
   rejected, because C requires general orbitals for them
   (`readdef.c:691-696`; the normal C sampler has no local spin flip).
 

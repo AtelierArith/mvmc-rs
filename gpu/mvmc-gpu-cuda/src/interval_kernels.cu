@@ -154,6 +154,111 @@ __device__ inline double interval_proj_delta(const int* occ, int nsite, int ngut
   return delta;
 }
 
+// One proposal of the five-word tape (see the header): the normal Julia GPU
+// contract, or the FSZ extension (#714). Thread 0 only; reads the walker's
+// configuration and occupancy and changes nothing. `from`/`to` (and the
+// exchange partner's `pfrom`/`pto`) are rs = site + spin*nsite positions.
+struct ResidentMove {
+  int valid, msa, exchange, partner, from, to, pfrom, pto;
+};
+
+__device__ inline ResidentMove resident_propose(const unsigned int* t, const int* ele_w,
+                                                const int* occ_w, const int* loc, int n, int ne,
+                                                int nsite, double exchange_p,
+                                                double flip_fraction, int fsz, int spin_free) {
+  int valid = 0, msa = 0, exchange = 0, partner = -1, from = 0, to = 0, pfrom = 0, pto = 0;
+  if (fsz) {
+    // FSZ contract (#714): the slot is w0 % 2Ne and carries its spin.
+    msa = (int)(t[0] % (unsigned)n);
+    from = ele_w[msa];
+    const int ri = from % nsite, s = from / nsite;
+    const double u3 = (double)t[3] / 4294967296.0;
+    exchange = u3 < exchange_p;
+    // exchange_p + flip_fraction is a dyadic sum (0.5 for paths 2 and 3).
+    const int localflip = !exchange && u3 < exchange_p + flip_fraction;
+    if (localflip) {
+      // C makeCandidate_LocalSpinFlip_localspin: turn a local spin.
+      to = ri + (1 - s) * nsite;
+      valid = loc != nullptr && loc[ri] == 1 && occ_w[to] == 0;
+    } else if (exchange) {
+      // C makeCandidate_exchange_fsz: an opposite-spin partner (w2 % 2Ne),
+      // both sites singly occupied.
+      partner = (int)(t[2] % (unsigned)n);
+      pfrom = ele_w[partner];
+      const int rj = pfrom % nsite;
+      valid = pfrom / nsite == 1 - s && occ_w[ri + (1 - s) * nsite] == 0 &&
+              occ_w[rj + s * nsite] == 0;
+      to = rj + s * nsite;
+      pto = ri + (1 - s) * nsite;
+    } else if (spin_free && (t[1] >> 31)) {
+      // 2Sz=-1, C makeCandidate_LocalSpinFlip_conduction (word 1's top bit
+      // is C's genrand_real2() >= 0.5): flip an itinerant spin in place.
+      to = ri + (1 - s) * nsite;
+      valid = (loc == nullptr || loc[ri] == 0) && occ_w[to] == 0;
+    } else {
+      // Rank w2 among the empty non-local destinations: any (site, spin)
+      // for 2Sz=-1 (C makeCandidate_hopping_fsz), the slot's spin
+      // otherwise (makeCandidate_hopping_csz).
+      const int lo = spin_free ? 0 : s * nsite, hi = spin_free ? 2 * nsite : lo + nsite;
+      int count = 0;
+      for (int r = lo; r < hi; ++r) {
+        if (occ_w[r] == 0 && (loc == nullptr || loc[r % nsite] == 0)) ++count;
+      }
+      valid = count > 0 && (loc == nullptr || loc[ri] == 0);
+      if (count > 0) {
+        int rank = (int)(t[2] % (unsigned)count);
+        for (int r = lo; r < hi; ++r) {
+          if (occ_w[r] == 0 && (loc == nullptr || loc[r % nsite] == 0)) {
+            if (rank == 0) {
+              to = r;
+              break;
+            }
+            --rank;
+          }
+        }
+      }
+    }
+  } else {
+    const int mi = (int)(t[0] % (unsigned)ne);
+    const int spin = (int)(t[1] >> 31);
+    const int ri = ele_w[mi + spin * ne];
+    exchange = (double)t[3] / 4294967296.0 < exchange_p;
+    int rj = 0;
+    if (exchange) {
+      // Julia: partner of the other spin; neither site may hold the moved spin's
+      // counterpart (cuda_sampling_update.jl:269-279).
+      partner = (int)(t[2] % (unsigned)ne) + (1 - spin) * ne;
+      rj = ele_w[partner];
+      valid = ri != rj && occ_w[rj + spin * nsite] == 0 && occ_w[ri + (1 - spin) * nsite] == 0;
+    } else {
+      // empty_hopping_destination: empty sites of this spin without a local spin.
+      int count = 0;
+      for (int r = 0; r < nsite; ++r) {
+        if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) ++count;
+      }
+      valid = count > 0 && (loc == nullptr || loc[ri] == 0);
+      if (count > 0) {
+        int rank = (int)(t[2] % (unsigned)count);
+        for (int r = 0; r < nsite; ++r) {
+          if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) {
+            if (rank == 0) {
+              rj = r;
+              break;
+            }
+            --rank;
+          }
+        }
+      }
+    }
+    msa = mi + spin * ne;
+    from = ri + spin * nsite;
+    to = rj + spin * nsite;
+    pfrom = rj + (1 - spin) * nsite;
+    pto = ri + (1 - spin) * nsite;
+  }
+  return ResidentMove{valid, msa, exchange, partner, from, to, pfrom, pto};
+}
+
 // ---------------------------------------------------------------------------------------------
 // The fused interval kernel. One block per walker; `threads` should be >= n (clamped).
 //
@@ -250,96 +355,10 @@ __device__ __forceinline__ void interval_hop_impl(
   for (int hop = start; hop < total_hops; ++hop) {
     const unsigned int* t = tape_w + (size_t)hop * tape_stride;
     if (tid == 0) {
-      int valid = 0, msa = 0, exchange = 0, partner = -1, from = 0, to = 0, pfrom = 0, pto = 0;
-      if (fsz) {
-        // FSZ contract (#714): the slot is w0 % 2Ne and carries its spin.
-        msa = (int)(t[0] % (unsigned)n);
-        from = ele_w[msa];
-        const int ri = from % nsite, s = from / nsite;
-        const double u3 = (double)t[3] / 4294967296.0;
-        exchange = u3 < exchange_p;
-        // exchange_p + flip_fraction is a dyadic sum (0.5 for paths 2 and 3).
-        const int localflip = !exchange && u3 < exchange_p + flip_fraction;
-        if (localflip) {
-          // C makeCandidate_LocalSpinFlip_localspin: turn a local spin.
-          to = ri + (1 - s) * nsite;
-          valid = loc != nullptr && loc[ri] == 1 && occ_w[to] == 0;
-        } else if (exchange) {
-          // C makeCandidate_exchange_fsz: an opposite-spin partner (w2 % 2Ne),
-          // both sites singly occupied.
-          partner = (int)(t[2] % (unsigned)n);
-          pfrom = ele_w[partner];
-          const int rj = pfrom % nsite;
-          valid = pfrom / nsite == 1 - s && occ_w[ri + (1 - s) * nsite] == 0 &&
-                  occ_w[rj + s * nsite] == 0;
-          to = rj + s * nsite;
-          pto = ri + (1 - s) * nsite;
-        } else if (spin_free && (t[1] >> 31)) {
-          // 2Sz=-1, C makeCandidate_LocalSpinFlip_conduction (word 1's top bit
-          // is C's genrand_real2() >= 0.5): flip an itinerant spin in place.
-          to = ri + (1 - s) * nsite;
-          valid = (loc == nullptr || loc[ri] == 0) && occ_w[to] == 0;
-        } else {
-          // Rank w2 among the empty non-local destinations: any (site, spin)
-          // for 2Sz=-1 (C makeCandidate_hopping_fsz), the slot's spin
-          // otherwise (makeCandidate_hopping_csz).
-          const int lo = spin_free ? 0 : s * nsite, hi = spin_free ? 2 * nsite : lo + nsite;
-          int count = 0;
-          for (int r = lo; r < hi; ++r) {
-            if (occ_w[r] == 0 && (loc == nullptr || loc[r % nsite] == 0)) ++count;
-          }
-          valid = count > 0 && (loc == nullptr || loc[ri] == 0);
-          if (count > 0) {
-            int rank = (int)(t[2] % (unsigned)count);
-            for (int r = lo; r < hi; ++r) {
-              if (occ_w[r] == 0 && (loc == nullptr || loc[r % nsite] == 0)) {
-                if (rank == 0) {
-                  to = r;
-                  break;
-                }
-                --rank;
-              }
-            }
-          }
-        }
-      } else {
-        const int mi = (int)(t[0] % (unsigned)ne);
-        const int spin = (int)(t[1] >> 31);
-        const int ri = ele_w[mi + spin * ne];
-        exchange = (double)t[3] / 4294967296.0 < exchange_p;
-        int rj = 0;
-        if (exchange) {
-          // Julia: partner of the other spin; neither site may hold the moved spin's
-          // counterpart (cuda_sampling_update.jl:269-279).
-          partner = (int)(t[2] % (unsigned)ne) + (1 - spin) * ne;
-          rj = ele_w[partner];
-          valid = ri != rj && occ_w[rj + spin * nsite] == 0 && occ_w[ri + (1 - spin) * nsite] == 0;
-        } else {
-          // empty_hopping_destination: empty sites of this spin without a local spin.
-          int count = 0;
-          for (int r = 0; r < nsite; ++r) {
-            if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) ++count;
-          }
-          valid = count > 0 && (loc == nullptr || loc[ri] == 0);
-          if (count > 0) {
-            int rank = (int)(t[2] % (unsigned)count);
-            for (int r = 0; r < nsite; ++r) {
-              if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) {
-                if (rank == 0) {
-                  rj = r;
-                  break;
-                }
-                --rank;
-              }
-            }
-          }
-        }
-        msa = mi + spin * ne;
-        from = ri + spin * nsite;
-        to = rj + spin * nsite;
-        pfrom = rj + (1 - spin) * nsite;
-        pto = ri + (1 - spin) * nsite;
-      }
+      const ResidentMove m = resident_propose(t, ele_w, occ_w, loc, n, ne, nsite, exchange_p,
+                                              flip_fraction, fsz, spin_free);
+      const int valid = m.valid, msa = m.msa, exchange = m.exchange, partner = m.partner;
+      const int from = m.from, to = m.to, pfrom = m.pfrom, pto = m.pto;
       s_exchange = exchange;
       s_partner = partner;
       s_from = from;

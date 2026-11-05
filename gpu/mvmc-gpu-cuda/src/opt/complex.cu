@@ -33,6 +33,16 @@ extern "C" __global__ void opt_slater_c(rcx* slater, const rcx* params, const in
   s[(r + ns) * n2 + c + ns] = rc_scale(d, cs[q]);
 }
 
+// C UpdateSlaterElm_fsz with complex parameters (#714 (c)): every entry of the
+// 2ns x 2ns plane, S = F[a] s_a - F[b] s_b (opt_slater_f).
+extern "C" __global__ void opt_slater_f_c(rcx* slater, const rcx* params, const int* pa,
+    const int* pb, const int* sa, const int* sb, int ns, int nq) {
+  int k = blockIdx.x * blockDim.x + threadIdx.x;
+  if (k >= 4 * ns * ns * nq) return;
+  slater[k] = rc_sub(rc_scale(params[pa[k]], (double)sa[k]),
+                     rc_scale(params[pb[k]], (double)sb[k]));
+}
+
 // opt_initial_commit with complex tables and weights.
 extern "C" __global__ void opt_initial_commit_c(int* pending, const int* candidate,
     const int* status, const rcx* out, const rcx* newpf, const rcx* weights, const double* logs,
@@ -130,7 +140,7 @@ extern "C" __global__ void opt_energy_terms_c(rcx* values, const int* ops, const
     const int* occ, const int* lookup, const rcx* overlaps, const int* gutz, const int* jast,
     const double* proj, const rcx* slater, const rcx* weights, const rcx* inv, const rcx* pf,
     int ns, int ne, int nq, int ng, int nj, int terms, int batch, const int* error,
-    const int* valid) {
+    const int* valid, int fsz) {
   int lane = threadIdx.x % 32;
   unsigned int index = blockIdx.x * (blockDim.x / 32) + threadIdx.x / 32;
   if (index >= terms * batch || *error) return;
@@ -139,32 +149,35 @@ extern "C" __global__ void opt_energy_terms_c(rcx* values, const int* ops, const
   const int* op = ops + (size_t)7 * t;
   const int* map = lookup + w * n2;
   const int* e = cfg + w * n;
+  // Complex FSZ walkers (#714 (c)) hold rs per slot and rs-encoded operators.
+  const int split = fsz ? n : ne;
   int a, k, da, dk;
-  int resolved = opt_resolve(op, map, e, ne, ns, a, k, da, dk);
+  int resolved = opt_resolve_any(op, map, e, ne, ns, fsz, a, k, da, dk);
   if (resolved) {
     if (!lane) values[index] = rc(resolved > 0 ? 1.0 : 0.0, 0.0);
     return;
   }
-  double delta = opt_delta(occ + w * n2, gutz, jast, proj, op, ns, ng, nj, lane, nullptr, 0, 0,
-                           nullptr, nullptr, nullptr, 0);
+  double delta = fsz ? opt_delta_rs(occ + w * n2, gutz, jast, proj, op, ns, ng, nj, lane)
+                     : opt_delta(occ + w * n2, gutz, jast, proj, op, ns, ng, nj, lane, nullptr,
+                                 0, 0, nullptr, nullptr, nullptr, 0);
   rcx newip = rc(0.0, 0.0);
   for (int q = 0; q < nq; ++q) {
     const rcx* S = slater + (size_t)q * n2 * n2;
     const rcx* M = inv + ((size_t)w * nq + q) * n * n;
-    int ra = da + (a >= ne ? ns : 0), rk = dk + (k >= ne ? ns : 0);
+    int ra = da + (a >= split ? ns : 0), rk = dk + (k >= split ? ns : 0);
     rcx ratio;
     if (k < 0) {
       rcx sum = rc(0.0, 0.0);
       for (int j = lane; j < n; j += 32)
-        sum = rc_add(sum, rc_mul(M[a * n + j], S[ra * n2 + e[j] + (j >= ne ? ns : 0)]));
+        sum = rc_add(sum, rc_mul(M[a * n + j], S[ra * n2 + e[j] + (j >= split ? ns : 0)]));
       ratio = rc_neg(rc_warp_sum(sum));
     } else {
       rcx pa = rc(0, 0), pb = rc(0, 0), qa = rc(0, 0), qb = rc(0, 0), bma = rc(0, 0);
       for (int i = lane; i < n; i += 32) {
-        int ri = opt_site(e, i, a, k, da, dk) + (i >= ne ? ns : 0);
+        int ri = opt_site(e, i, a, k, da, dk) + (i >= split ? ns : 0);
         rcx av = S[ra * n2 + ri], bv = S[rk * n2 + ri], tmp = rc(0, 0);
         for (int j = 0; j < n; ++j) {
-          int rj = opt_site(e, j, a, k, da, dk) + (j >= ne ? ns : 0);
+          int rj = opt_site(e, j, a, k, da, dk) + (j >= split ? ns : 0);
           tmp = rc_add(tmp, rc_mul(M[i * n + j], S[ra * n2 + rj]));
         }
         bma = rc_add(bma, rc_mul(bv, tmp));
@@ -191,8 +204,8 @@ extern "C" __global__ void opt_energy_terms_c(rcx* values, const int* ops, const
 extern "C" __global__ void opt_energy_fallback_c(rcx* values, const int* ops, const int* cfg,
     const int* occ, const int* lookup, const rcx* overlaps, const int* gutz, const int* jast,
     const double* proj, const rcx* slater, const rcx* weights, const int* valid, rcx* fac,
-    int ns, int ne, int nq, int ng, int nj, int terms, int batch, const int* error) {
-  int w = blockIdx.x, tid = threadIdx.x, n = 2 * ne, n2 = 2 * ns;
+    int ns, int ne, int nq, int ng, int nj, int terms, int batch, const int* error, int fsz) {
+  int w = blockIdx.x, tid = threadIdx.x, n = 2 * ne, n2 = 2 * ns, split = fsz ? n : ne;
   if (w >= batch || *error || opt_all_valid(valid, w, nq)) return;
   extern __shared__ char fallback_mem[];
   int* rs = reinterpret_cast<int*>(fallback_mem);
@@ -207,7 +220,7 @@ extern "C" __global__ void opt_energy_fallback_c(rcx* values, const int* ops, co
     const int* op = ops + (size_t)7 * t;
     if (!tid) {
       int a, k, da, dk;
-      s_resolved = opt_resolve(op, map, e, ne, ns, a, k, da, dk);
+      s_resolved = opt_resolve_any(op, map, e, ne, ns, fsz, a, k, da, dk);
       s_a = a;
       s_k = k;
       s_da = da;
@@ -222,12 +235,13 @@ extern "C" __global__ void opt_energy_fallback_c(rcx* values, const int* ops, co
       continue;
     }
     if (tid < 32) {
-      double d = opt_delta(occ + w * n2, gutz, jast, proj, op, ns, ng, nj, tid, nullptr, 0, 0,
-                           nullptr, nullptr, nullptr, 0);
+      double d = fsz ? opt_delta_rs(occ + w * n2, gutz, jast, proj, op, ns, ng, nj, tid)
+                     : opt_delta(occ + w * n2, gutz, jast, proj, op, ns, ng, nj, tid, nullptr,
+                                 0, 0, nullptr, nullptr, nullptr, 0);
       if (!tid) s_delta = d;
     }
     for (int i = tid; i < n; i += blockDim.x)
-      rs[i] = opt_site(e, i, s_a, s_k, s_da, s_dk) + (i >= ne ? ns : 0);
+      rs[i] = opt_site(e, i, s_a, s_k, s_da, s_dk) + (i >= split ? ns : 0);
     __syncthreads();
     for (int q = 0; q < nq; ++q) {
       rc_gather(A, rs, n, -1, -1, slater, q, n2);
