@@ -248,8 +248,8 @@ unmodified and forces one BLAS thread. Cargo never builds or loads it.
 The complete file is the extraction boundary (no upstream numerical body is
 embedded). Compiler flags are `clang -O0 -ffp-contract=off -dynamiclib`, linked
 to the Homebrew system OpenBLAS. Source hashes, compiler/backend versions,
-compiled bridge hashes and independent oracle output hashes are retained in
-`tests/fixtures/macos_arm_julia/`. See
+compiled bridge hashes and independent oracle output hashes were recorded in
+`tests/fixtures/macos_arm_julia/`, removed with the Julia CPU references in #695. See
 [Apple Silicon parity](../docs/APPLE_SILICON_PARITY.md) for exact reproduction
 commands and the separate archived-reduction and native FSZ contracts.
 
@@ -282,9 +282,7 @@ and timer probes changed under 1.4.0; they were regenerated with the Rust
 contract changes (`docs/NUMERICAL_COMPARISONS.md`, "mVMC 1.4.0 contract changes").
 
 Tools that pin 1.3.0 source hashes for a recorded investigation
-(`check_threaded_182_real_*.jl`, `generate_threaded_182_real_fsz.jl`,
-`native13_initialization/`, `scripts/reference_c_kernel_order.jl`,
-`scripts/compare_mpi_issue179.py`, `scripts/issue179_p02/`) check 1.3.0 source or record
+(`native13_initialization/`, `scripts/compare_mpi_issue179.py`, `scripts/issue179_p02/`) check 1.3.0 source or record
 hashes by design and do not accept 1.4.0 inputs; use a `d73d06bd` checkout to reproduce the
 historical records. `tests/fixtures/C_REFERENCE_PROVENANCE.md` lists every file
 that records C source hashes and labels it 1.4.0 or historical 1.3.0

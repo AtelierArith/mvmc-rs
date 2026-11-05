@@ -127,7 +127,7 @@ fn rejected_case(case: &str, phys: bool, width: usize) -> (ExpertModeData, &'sta
     let diagnostic = match case {
         "cg" => {
             data.modpara.nsrcg = 1;
-            data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
+            data.modpara.nsrcg_abort_on_fail = false; // short CG solves may hit their limit (NSRCGAbortOnFail 0)
             "NSRCG != 0 is undefined in mVMC C"
         }
         "zero-trans" => {
@@ -375,7 +375,7 @@ fn public_grouped_matrix_and_paraopt_callback_output_failures() {
                 let mut data = loaded(model, phys);
                 data.modpara.nsplit_size = width as i64;
                 data.modpara.nsrcg = cg;
-                data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
+                data.modpara.nsrcg_abort_on_fail = false; // short CG solves may hit their limit (NSRCGAbortOnFail 0)
                 data.modpara.lanczos_mode = lanczos;
                 let mut state = state(&data);
                 let mut rng = Sfmt19937Rng::new(11272 + group.seed_offset() as u32);

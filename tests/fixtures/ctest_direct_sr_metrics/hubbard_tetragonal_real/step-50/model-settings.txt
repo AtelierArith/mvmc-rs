@@ -1,7 +1,0 @@
-model=hubbard_tetragonal_real mode=real seed=1
-steps=50 window=50 NSRCG=0 NStore=1
-canonical_NSROptItrStep=200 canonical_NSROptItrSmp=20
-effective_NSROptItrStep=50 effective_NSROptItrSmp=50 override=both_no_clamp
-initial_overlay=true initial_order=after_parameter_initialization_before_In_files_and_sync
-initial.def sha256=82979985dafc7e37be9d2b7cea3d1889a36717f603e43396932723dbe32efd0e
-In_overlays=canonical_namelist_entries; full_input_hashes=inputs.sha256

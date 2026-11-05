@@ -160,8 +160,7 @@ def fixture_files(family):
     elif family == "mpi":
         directories = [ROOT / "tests/fixtures/physcal_181/heisenberg_chain_real"]
     else:
-        directories = [ROOT / "tests/fixtures/ctest_model_prefixes",
-                       ROOT / "tests/fixtures/reviewed_cg_62b/canonical_general_rbm"]
+        directories = []
         for model in (*MODELS[:1], "heisenberg_chain_real", "heisenberg_chain_cmp",
                       "heisenberg_chain_fsz", "general_rbm_cmp"):
             directories.append(ROOT / f"extern/Julia-mVMC/test/integration/reference/{model}")

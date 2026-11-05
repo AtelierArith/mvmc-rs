@@ -1,2 +1,0 @@
-# Preserve canonical C/Julia trailing spaces in byte-exact output fixtures.
-*.dat whitespace=-blank-at-eol
