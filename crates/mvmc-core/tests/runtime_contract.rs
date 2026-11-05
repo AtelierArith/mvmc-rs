@@ -19,6 +19,11 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         ("NVMCCalMode 1", "PhysCal"),
         ("NSplitSize 2", "MPI group communicator"),
         ("NVMCSample -1", "NVMCSample must be positive"),
+        // #681: C 1.3.0 getUpdateType has no move for these paths.
+        ("NExUpdatePath 4", "NExUpdatePath = 4 is not supported"),
+        ("NExUpdatePath 5", "NExUpdatePath = 5 is not supported"),
+        ("NExUpdatePath 6", "NExUpdatePath = 6 is not supported"),
+        ("NExUpdatePath -1", "NExUpdatePath = -1 is not supported"),
     ] {
         let mut data = ExpertModeData::new();
         // A valid unrelated projection setting prevents default zero from
@@ -568,5 +573,40 @@ fn grouped_invalid_rank_rejects_before_rng_use() {
     );
     for _ in 0..624 {
         assert_eq!(rng.gen_rand32(), probe.gen_rand32());
+    }
+}
+
+#[test]
+fn ex_update_path_validator_accepts_only_ported_paths() {
+    // #681: 0-3 are the mVMC 1.3.0 update paths; 4/5/6 are mVMC 1.4.0 t-J and
+    // pair-hopping updates that are not ported; anything else has no move.
+    for path in 0..=3 {
+        let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
+        data.modpara.nex_update_path = path;
+        assert_eq!(
+            mvmc_core::validation::validate_supported_modpara(&data.modpara),
+            Ok(())
+        );
+    }
+    for path in [4, 5, 6, -1, 7, i64::MAX] {
+        let mut data = ExpertModeData::new();
+        data.modpara.nmp_trans = 1;
+        data.modpara.nex_update_path = path;
+        for error in [
+            mvmc_core::validation::validate_supported_modpara(&data.modpara).unwrap_err(),
+            mvmc_core::validation::validate_phys_cal(&data).unwrap_err(),
+            mvmc_core::validation::validate_para_opt(&data).unwrap_err(),
+        ] {
+            assert!(
+                error.starts_with(&format!("NExUpdatePath = {path} is not supported")),
+                "{path}: {error}"
+            );
+            assert_eq!(
+                (4..=6).contains(&path),
+                error.contains("mVMC 1.4.0"),
+                "{error}"
+            );
+        }
     }
 }

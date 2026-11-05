@@ -78,6 +78,7 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
     if p.nsplit_size < 1 {
         return Err(format!("NSplitSize must be >= 1; got {}", p.nsplit_size));
     }
+    validate_ex_update_path(p.nex_update_path)?;
     if !(0..=2).contains(&p.lanczos_mode) {
         return Err(format!(
             "NLanczosMode must be 0, 1, or 2; got {}",
@@ -85,6 +86,34 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// Reject `NExUpdatePath` values outside the ported update paths 0-3.
+///
+/// mVMC 1.3.0 `getUpdateType` (`vmcmake.c:606-629`) returns `NONE` for any other value
+/// and `readdef.c:621-631` checks `NExUpdatePath` only when local spins are
+/// present, so C 1.3.0 starts such a run, never proposes a move and saves the
+/// initial configuration as every sample. That is a C defect, not an input
+/// contract (#681). mVMC 1.4.0 assigns 4/5 to the t-J spin-hopping updates
+/// and 6 to doublon-only pair hopping (upstream #94, #97, #98); those update
+/// paths are not ported, so they are rejected with an explicit message.
+pub fn validate_ex_update_path(path: i64) -> Result<(), String> {
+    match path {
+        0..=3 => Ok(()),
+        4..=6 => Err(format!(
+            "NExUpdatePath = {path} is not supported: the mVMC 1.4.0 {} update is not ported; \
+             use 0, 1, 2 or 3 (mVMC 1.3.0 update paths)",
+            if path == 6 {
+                "doublon-only pair-hopping"
+            } else {
+                "t-J spin-hopping"
+            }
+        )),
+        _ => Err(format!(
+            "NExUpdatePath = {path} is not supported; use 0, 1, 2 or 3 (mVMC 1.3.0 \
+             getUpdateType has no move for other values, so the sampler would never move)"
+        )),
+    }
 }
 
 /// Reject the SR-CG storage combination that is undefined in C.
