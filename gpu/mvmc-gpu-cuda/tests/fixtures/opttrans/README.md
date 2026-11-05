@@ -56,10 +56,10 @@ Two C behaviours are not reproduced:
 - C's OptTrans component flags. `GetInfoOptTrans` writes `OptFlag[fidx]` with
   an undoubled index (`readdef.c:2400`), so the flags of the OptTrans
   components are never written. The resident parser activates OptTrans from
-  its definition and optimizes the real components, as Julia does. The Rust
-  C-order CLI (`-o`) keeps them inactive, and its weights stay at their
-  normalized input values. A resident run with those flags cleared keeps them
-  too, bit for bit.
+  its definition and optimizes the real components, as Julia does. Since #676
+  (PR #684) the Rust C-order CLI (`-o`) does the same (upstream report
+  tmisawa/Julia-mVMC#94); timings below predate that change. A resident run
+  with those flags cleared keeps the weights bit for bit.
 
 ## Contract and bounds
 
@@ -127,9 +127,9 @@ call (`resident_opt_opttrans_repeats_twenty_steps`,
 release `mvmc -o` CLI (C-order runner, default threads on a 36-core host, wall
 time including startup and output files), with `NVMCSample 64`,
 `NVMCWarmUp 1`, `NVMCInterval 8` (L16) or `1` (L128), and `NDataQtySmp 20`
-for PhysCal. Following C's flags, the CPU run keeps the OptTrans weights fixed,
-while the GPU run optimizes them. The sampling and measurement cost (24 planes)
-is the same.
+for PhysCal. These CPU timings were taken before #676, when the CPU run still
+followed C's flags and kept the OptTrans weights fixed while the GPU run
+optimized them. The sampling and measurement cost (24 planes) is the same.
 
 | Workload | GPU first / warm (s) | CPU C-order `-o` (s) |
 |---|---|---|
