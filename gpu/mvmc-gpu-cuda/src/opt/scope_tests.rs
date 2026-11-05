@@ -16,7 +16,7 @@ use std::path::PathBuf;
 /// `(file, from, to)` textual edit of a copied baseline input.
 type Edit = (&'static str, &'static str, &'static str);
 
-const SCOPE: &str = "resident GPU requires normal orbitals";
+const SCOPE: &str = "resident GPU requires NExUpdatePath<=2";
 
 fn repo(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -32,9 +32,14 @@ fn baseline() -> PathBuf {
 /// Copy the baseline and apply `(file, from, to)` textual edits. An empty
 /// `from` appends `to` (creating the file if it does not exist).
 pub(crate) fn edited(tag: &str, edits: &[(&str, &str, &str)]) -> PathBuf {
+    edited_from(&baseline(), tag, edits)
+}
+
+/// [`edited`] for another input directory (`input` is its `namelist.def`).
+pub(crate) fn edited_from(input: &Path, tag: &str, edits: &[(&str, &str, &str)]) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("mvmc-scope-572-{tag}-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
-    for entry in fs::read_dir(baseline().parent().unwrap()).unwrap() {
+    for entry in fs::read_dir(input.parent().unwrap()).unwrap() {
         let source = entry.unwrap().path();
         if source.is_file() {
             fs::copy(&source, dir.join(source.file_name().unwrap())).unwrap();
@@ -92,21 +97,14 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
         .map(|(tag, e)| (tag.to_string(), edited(tag, e), true))
         .collect();
     // Fixture inputs whose only resident-unsupported feature is the named
-    // family (real six-site chains), except: the FSZ Hubbard chain
-    // (OrbitalParallel selects general orbitals, complex orbital
-    // coefficients); and the FSZ Kondo chain (NExUpdatePath=3).
-    for (tag, rel) in [
-        (
-            "fsz-general-orbital",
-            "tests/fixtures/native13_initialization/inputs/HubbardChain_fsz/namelist.def",
-        ),
-        (
-            "kondo-local-spin-flip",
-            "tests/fixtures/native13_initialization/inputs/KondoChain_fsz/namelist.def",
-        ),
-    ] {
-        cases.push((tag.into(), repo(rel), false));
-    }
+    // family: the FSZ Kondo chain (NExUpdatePath=3, general orbitals). The
+    // normal "two-sz" edit keeps normal orbitals with 2Sz=2, which C rejects
+    // (readdef.c:691-696) and the resident scope rejects with it.
+    cases.push((
+        "kondo-local-spin-flip".into(),
+        repo("tests/fixtures/native13_initialization/inputs/KondoChain_fsz/namelist.def"),
+        false,
+    ));
     for (tag, input, temporary) in cases {
         let data = parse(&input);
         // The ordinary C-order validators accept every case.
@@ -1038,4 +1036,234 @@ fn resident_rbm_validator_separates_family_tags_from_coefficients() {
         }
         fs::remove_dir_all(input.parent().unwrap()).unwrap();
     }
+}
+
+pub(crate) fn fsz_input(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/fsz")
+        .join(name)
+        .join("namelist.def")
+}
+
+/// General orbitals / FSZ (#714). The model follows C's FSZ path: walker slots
+/// hold `rs`, the Slater tables cover the full `2ns x 2ns` orbital matrix of C
+/// `UpdateSlaterElm_fsz`, the derivative basis is `dS/dF` of the same tables,
+/// operators are encoded on `rs` (spin flips allowed), and the initial spins
+/// follow C `makeInitialSample_fsz` (`Ne + 2Sz/2` up).
+#[test]
+fn resident_scope_accepts_fsz_general_orbitals() {
+    for (name, spin_free, nup, nlocal) in [
+        ("hubbard_fsz_L16", true, 6, 0),
+        ("hubbard_fsz_L128", true, 64, 0),
+        ("kondo_fsz_2sz2", false, 8, 8),
+    ] {
+        let input = fsz_input(name);
+        let data = parse(&input);
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+        mvmc_core::validation::validate_phys_cal(&data).unwrap();
+        assert_eq!(data.i_flg_orbital_general, 1, "{name}");
+        assert!(!mvmc_core::get_all_complex_flag(&data).unwrap());
+        for (route, model) in [
+            ("Opt", Model::prepare(&input, &cfg()).unwrap()),
+            (
+                "PhysCal",
+                Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+            ),
+        ] {
+            let (ns, nq) = (model.ns, model.nq);
+            assert!(model.fsz && !model.complex, "{name} {route}");
+            assert_eq!((model.spin_free, model.nup), (spin_free, nup), "{name}");
+            assert_eq!(model.split(), 2 * model.ne);
+            assert_eq!(nq, 2, "{name}: NSPGaussLeg=1 x NMPTrans=2");
+            assert_eq!(model.localspins.iter().filter(|&&x| x == 1).count(), nlocal);
+            assert_eq!(model.pa.len(), nq * 4 * ns * ns);
+            // The device table (opt_slater_f) against the CPU C-order
+            // update_slater_elm_fsz: one subtraction of +-1 multiples.
+            let mut cpu = model.data.clone();
+            let mut state = mvmc_core::VmcOptimizationState::zeros(
+                ns,
+                model.ne,
+                model.nproj,
+                model.np,
+                nq,
+                1,
+                false,
+                true,
+            );
+            state.validate_declared_mode(&cpu).unwrap();
+            mvmc_core::slater_update::update_slater_elm_fsz(&mut cpu, &mut state);
+            let p = &model.parameters;
+            let n2 = 2 * ns;
+            for k in 0..nq * n2 * n2 {
+                let device = p[model.pa[k] as usize] * model.sa[k] as f64
+                    - p[model.pb[k] as usize] * model.sb[k] as f64;
+                let host = state
+                    .slater_matrix
+                    .slater_elm
+                    .get(k / (n2 * n2), (k / n2) % n2, k % n2);
+                assert_eq!(host.im, 0.0);
+                assert!(
+                    (device - host.re).abs() <= f64::EPSILON * host.re.abs(),
+                    "{name} {route} entry {k}: {device} vs {}",
+                    host.re
+                );
+            }
+            // Operators on rs positions: the Sz-free chains carry spin flips.
+            let ops = model.operators.as_chunks::<7>().0;
+            assert!(ops.iter().all(|op| op[2] == 0 && op[5] == 0));
+            assert!(ops
+                .iter()
+                .all(|op| op[..2].iter().all(|&x| (0..n2 as i32).contains(&x))));
+            let flips = ops
+                .iter()
+                .filter(|op| op[0] / ns as i32 != op[1] / ns as i32);
+            assert_eq!(flips.count() > 0, spin_free, "{name}: spin-flip operators");
+            if route == "Opt" {
+                // The derivative basis reproduces the table: S = sum_p F_p dS/dF_p.
+                let mut rebuilt = vec![0.0; nq * n2 * n2];
+                for (column, value) in p.iter().enumerate() {
+                    let range = model.columns[column] as usize..model.columns[column + 1] as usize;
+                    for e in range {
+                        let [row, col, q] = model.coordinates[3 * e..3 * e + 3] else {
+                            unreachable!()
+                        };
+                        let k = (q as usize * n2 + row as usize) * n2 + col as usize;
+                        rebuilt[k] += value * model.coefficients[e];
+                    }
+                }
+                for (k, &value) in rebuilt.iter().enumerate() {
+                    let host = state
+                        .slater_matrix
+                        .slater_elm
+                        .get(k / (n2 * n2), (k / n2) % n2, k % n2)
+                        .re;
+                    assert!(
+                        (value - host).abs() <= 4.0 * f64::EPSILON * host.abs(),
+                        "{name}: basis entry {k}: {value} vs {host}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// FSZ inputs outside the supported subset fail before CUDA (#714): complex
+/// general orbitals, local spin flips (NExUpdatePath=2 with 2Sz=-1, and
+/// NExUpdatePath=3), NSPGaussLeg>1, SR-CG for Opt, and RBM/DH/OptTrans. The
+/// CPU validators accept each input, so the rejection is GPU-specific.
+#[test]
+fn resident_scope_rejects_fsz_families_before_cuda() {
+    const FAMILIES: &str = "resident GPU FSZ supports real Gutzwiller/Jastrow";
+    let l16 = fsz_input("hubbard_fsz_L16");
+    let ns = 16;
+    let rbm = format!(
+        "===\nNChargeRBM_PhysLayer 1\nComplexType 0\n===\n===\n{}0 1\n",
+        (0..ns).map(|i| format!("{i} 0\n")).collect::<String>()
+    );
+    let opttrans = format!(
+        "===\nNQPOptTrans 2\nComplexType 0\n===\n===\n0 0.75\n1 -0.5\n{}{}",
+        (0..ns)
+            .map(|i| format!("0 {i} {i} 1\n"))
+            .collect::<String>(),
+        (0..ns)
+            .map(|i| format!("1 {i} {} 1\n", ns - 1 - i))
+            .collect::<String>()
+    );
+    let cases: Vec<(&str, PathBuf, &str, bool)> = vec![
+        (
+            "fsz-complex",
+            repo("tests/fixtures/native13_initialization/inputs/HubbardChain_fsz/namelist.def"),
+            FAMILIES,
+            false,
+        ),
+        (
+            "fsz-local-flip",
+            edited_from(
+                &l16,
+                "fsz-local-flip",
+                &[("modpara.def", "NExUpdatePath  1", "NExUpdatePath  2")],
+            ),
+            "local spin flips",
+            true,
+        ),
+        (
+            "fsz-spin-projection",
+            edited_from(
+                &l16,
+                "fsz-spin-projection",
+                &[("modpara.def", "NSPGaussLeg    1", "NSPGaussLeg    4")],
+            ),
+            "NSPGaussLeg=1",
+            true,
+        ),
+        (
+            "fsz-rbm",
+            edited_from(
+                &l16,
+                "fsz-rbm",
+                &[
+                    ("namelist.def", "", "ChargeRBM_PhysLayer chargerbm.def\n"),
+                    ("chargerbm.def", "", &rbm),
+                ],
+            ),
+            FAMILIES,
+            true,
+        ),
+        (
+            "fsz-opttrans",
+            edited_from(
+                &l16,
+                "fsz-opttrans",
+                &[
+                    ("namelist.def", "", "OptTrans opttrans.def\n"),
+                    ("opttrans.def", "", &opttrans),
+                ],
+            ),
+            FAMILIES,
+            true,
+        ),
+    ];
+    for (tag, input, message, temporary) in cases {
+        let data = parse(&input);
+        mvmc_core::validation::validate_para_opt(&data)
+            .unwrap_or_else(|e| panic!("{tag}: CPU Opt rejects: {e}"));
+        mvmc_core::validation::validate_phys_cal(&data)
+            .unwrap_or_else(|e| panic!("{tag}: CPU PhysCal rejects: {e}"));
+        for (route, result) in [
+            ("Opt", Model::prepare(&input, &cfg()).map(|_| ())),
+            (
+                "PhysCal",
+                Model::prepare_physcal(&input, &cfg(), None).map(|_| ()),
+            ),
+        ] {
+            let error = result.expect_err(&format!("{tag}: resident {route} accepted"));
+            assert!(error.contains(message), "{tag}/{route}: {error}");
+        }
+        if temporary {
+            fs::remove_dir_all(input.parent().unwrap()).unwrap();
+        }
+    }
+    // SR-CG: rejected for FSZ Opt, ignored by FSZ PhysCal.
+    let cg = edited_from(
+        &l16,
+        "fsz-cg",
+        &[("modpara.def", "NSRCG          0", "NSRCG          1")],
+    );
+    let error = Model::prepare(&cg, &cfg())
+        .map(|_| ())
+        .expect_err("FSZ CG Opt");
+    assert!(error.contains("FSZ Opt requires direct SR"), "{error}");
+    assert!(Model::prepare_physcal(&cg, &cfg(), None).unwrap().fsz);
+    fs::remove_dir_all(cg.parent().unwrap()).unwrap();
+    // C rejects an odd 2Sz other than -1 (readdef.c:697); so does the model.
+    let odd = edited_from(
+        &fsz_input("kondo_fsz_2sz2"),
+        "fsz-odd",
+        &[("modpara.def", "2Sz            2", "2Sz            3")],
+    );
+    let error = Model::prepare(&odd, &cfg())
+        .map(|_| ())
+        .expect_err("odd 2Sz");
+    assert!(error.contains("even 2Sz"), "{error}");
+    fs::remove_dir_all(odd.parent().unwrap()).unwrap();
 }

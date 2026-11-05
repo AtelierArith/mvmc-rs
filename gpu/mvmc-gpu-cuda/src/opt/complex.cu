@@ -241,13 +241,13 @@ extern "C" __global__ void opt_energy_fallback_c(rcx* values, const int* ops, co
 
 // opt_cofactors with complex minors: dPf(A)/dA(i,j) = (-1)^(i+j+1) Pf(minor).
 extern "C" __global__ void opt_cofactors_c(rcx* inv, const int* valid, const int* cfg,
-    const rcx* slater, rcx* fac, int ns, int ne, int nq, int batch, const int* error) {
+    const rcx* slater, rcx* fac, int ns, int ne, int nq, int batch, const int* error, int split) {
   int plane = blockIdx.x, w = plane / nq, q = plane % nq, n = 2 * ne, n2 = 2 * ns;
   if (w >= batch || *error || valid[plane]) return;
   extern __shared__ char cofactor_mem[];
   int* rs = reinterpret_cast<int*>(cofactor_mem);
   rcx* vec = reinterpret_cast<rcx*>(rs + ((n + 1) & ~1));
-  for (int i = threadIdx.x; i < n; i += blockDim.x) rs[i] = cfg[w * n + i] + (i >= ne ? ns : 0);
+  for (int i = threadIdx.x; i < n; i += blockDim.x) rs[i] = cfg[w * n + i] + (i >= split ? ns : 0);
   __syncthreads();
   rcx* A = fac + (size_t)plane * n * n;
   rcx* C = inv + (size_t)plane * n * n;

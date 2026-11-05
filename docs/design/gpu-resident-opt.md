@@ -84,15 +84,83 @@ inverse residual, supplied-tape and complete Opt numerical checks under #550.
 
 ## Supported scope and checks
 
-The current runner requires normal orbitals, conserved spin in each
-operator pair, Gutzwiller/Jastrow projection, `NExUpdatePath` 0, 1 or 2,
-and serial execution. SR is direct (`NSRCG=0`) or C's conjugate gradient
-(`NSRCG≠0`, #670). Local spins (#660), DH2/DH4
-doublon-holon factors (#665), real RBM factors (#667) and real OptTrans
-weights (#674) are supported with real orbitals. Complex normal orbitals
-(#678) are supported with Gutzwiller/Jastrow factors, complex QP weights
-and coefficients, exchanges and direct SR. General orbitals,
-`NExUpdatePath=3` and grouped execution return errors.
+The current runner requires Gutzwiller/Jastrow projection, `NExUpdatePath`
+0, 1 or 2, and serial execution. Normal orbitals need `2Sz=0` and conserved
+spin in each operator pair. SR is direct (`NSRCG=0`) or C's conjugate
+gradient (`NSRCG≠0`, #670). Local spins (#660), DH2/DH4 doublon-holon
+factors (#665), real RBM factors (#667) and real OptTrans weights (#674) are
+supported with real normal orbitals. Complex normal orbitals (#678) are
+supported with Gutzwiller/Jastrow factors, complex QP weights and
+coefficients, exchanges and direct SR. Real general orbitals / FSZ (#714) are
+supported with Gutzwiller/Jastrow factors, any `2Sz`, local spins, exchanges,
+spin-flip operators and direct SR. `NExUpdatePath=3`, local spin flips,
+complex FSZ and grouped execution return errors.
+
+### General orbitals / FSZ (#714)
+
+Julia GPU rejects FSZ ("CUDA requires sz-conserved orbitals",
+`ext/cuda_state.jl:38`), so this is new functionality validated against the
+Rust CPU C-order FSZ path. The physics is C's real FSZ path
+(`iFlgOrbitalGeneral=1`, `AllComplexFlag=0`): `UpdateSlaterElm_fsz`,
+`CalculateMAll_fsz_real`, `vmcmake_fsz_real.c`, `pfupdate_fsz_real.c`,
+`calham_fsz_real.c`, `locgrn_fsz_real.c`, `SlaterElmDiff_fsz` and
+`calgrn_fsz.c`.
+
+- **Encoding.** An FSZ walker slot stores `rs = site + spin*Nsite` (C
+  `EleIdx + EleSpn*Nsite`), so the spin belongs to the electron and can
+  change. Kernels that map a slot to its Slater row take a split index: `Ne`
+  for normal walkers and `2Ne` for FSZ walkers. The rebuild, the paired
+  factor, the counters, the derivative contraction and the cofactors are
+  otherwise unchanged. The ratio and rank-two update see only `(msa, rs)`;
+  C `CalculateNewPfM2_fsz` and `UpdateMAll_fsz` are the normal formulas on
+  `rs`. The delayed queue and the paired factor (`2Ne >= 128`) are reused
+  unchanged.
+- **Slater tables.** `opt_slater_f` writes every entry of the `2Nsite x
+  2Nsite` plane, `S[q][rsi][rsj] = F[a] s_a - F[b] s_b`, from the model's
+  translated general orbital indices and signs (C `UpdateSlaterElm_fsz`).
+  There is no spin projection: C forces `NSPGaussLeg=1` for general orbitals
+  (`readdef.c:703-707`), and the model rejects a larger value. The sparse
+  derivative basis is `dS/dF` of the same tables, so `opt_derivatives`
+  evaluates C `SlaterElmDiff_fsz` unchanged.
+- **Initialization.** The Julia label-permutation contract with C
+  `makeInitialSample_fsz` spins: labels below `Ne + 2Sz/2` (`Ne` for
+  `2Sz=-1`) are up. For `2Sz ∈ {0,-1}` the draws equal those of the normal
+  contract.
+- **Proposals** (`interval_kernels.cu`). Word 0 picks the slot `w0 % 2Ne`;
+  word 3 decides an exchange with the Julia threshold; word 4 is the
+  acceptance uniform.
+  - `2Sz ≥ 0`: a hop keeps the slot's spin (C `makeCandidate_hopping_csz`),
+    destination rank `w2` among the empty non-local sites of that spin.
+  - `2Sz = -1`: word 1's top bit stands for C's `genrand_real2()<0.5` in
+    `vmcmake_fsz.c`. With 0 the electron hops to any empty non-local
+    `(site, spin)` (`makeCandidate_hopping_fsz`); with 1 a conduction spin
+    flips in place (`makeCandidate_LocalSpinFlip_conduction`).
+  - Exchange: partner slot `w2 % 2Ne`, valid when it has the opposite spin
+    and both sites are singly occupied (`makeCandidate_exchange_fsz`).
+    Overlaps come from full Pfaffians and an accept refactors in the kernel,
+    as for normal exchanges.
+  - An invalid proposal consumes its five words and is skipped. This keeps
+    every proposal symmetric. C redraws until a candidate is valid, which is
+    not symmetric for the conduction flip and the exchange; the GPU contract
+    does not reproduce that.
+- **Projection.** C `UpdateProjCnt_fsz`: an on-site spin flip and an
+  exchange change no Gutzwiller/Jastrow counter (ratio exactly one), and a
+  spin-changing hop changes them as an ordinary hop does.
+- **Operators.** FSZ operators hold `rs` positions, `(dest1, src1, -,
+  dest2, src2, -, pairs)`. Spin-flip Transfer (C `GreenFunc1_fsz2`),
+  spin-changing InterAll (`GreenFunc2_fsz2`), OneBodyG with `s≠t` and
+  general TwoBodyG/TwoBodyGEx use the normal resolve/ratio kernels, with
+  `opt_resolve_rs` searching all `2Ne` slots.
+- **SR and gauge.** Direct SR and C `SyncModifiedParameter` (Slater rescale)
+  are unchanged.
+- **Not supported with FSZ** (rejected before allocation): complex
+  parameters, RBM (C FSZ has none), DH2/DH4, OptTrans, `NSPGaussLeg>1`, Opt
+  with `NSRCG≠0`, and local spin flips (`NExUpdatePath=2` with `2Sz=-1`,
+  `NExUpdatePath=3`). Normal orbitals with `2Sz≠0` stay rejected, because C
+  requires general orbitals for them (`readdef.c:691-696`).
+
+See `gpu/mvmc-gpu-cuda/tests/fixtures/fsz/README.md` for inputs, bounds and
+timings.
 
 ### Complex normal orbitals (#678)
 

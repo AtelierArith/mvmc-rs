@@ -37,7 +37,23 @@
 // opposite-spin partner when both sites are singly occupied. Its overlap is
 // recomputed from full Pfaffians and an accept refactors the walker, as Julia does.
 // The projection counts (doublons, charges) are unchanged by an exchange.
-// Only the real, non-FSZ normal mode is handled; the caller rejects anything else.
+//
+// FSZ walkers (general orbitals, #714) extend the contract. A slot stores its
+// rs = site + spin*nsite and carries its spin (C EleIdx/EleSpn):
+//   w0 -> slot mi = w0 % n (any of the 2Ne electrons)
+//   w1 -> 2Sz=-1 hop kind (top bit, C's genrand_real2() < 0.5 in
+//         vmcmake_fsz.c): 0 hop to any empty non-local (site, spin)
+//         (makeCandidate_hopping_fsz), 1 in-place conduction spin flip
+//         (makeCandidate_LocalSpinFlip_conduction); unused for 2Sz >= 0,
+//         whose hop keeps the slot's spin (makeCandidate_hopping_csz)
+//   w2 -> hop: destination rank among those empty destinations;
+//         exchange: partner slot w2 % n, valid when it has the opposite spin
+//         and both sites are singly occupied (makeCandidate_exchange_fsz)
+//   w3, w4 -> as above.
+// An invalid proposal is skipped, so each proposal stays symmetric; C redraws
+// until a candidate is valid instead. The projection ratio of an on-site flip
+// is exactly one (C UpdateProjCnt_fsz). Only real tables are handled here; the
+// caller rejects complex FSZ.
 
 // ---------------------------------------------------------------------------------------------
 // One-electron rank-one ratio for one QP plane: r = -pf_qp * sum_j inv[msa*n+j] * S[rsa][rs[j]].
@@ -161,7 +177,7 @@ __device__ __forceinline__ void interval_hop_impl(
     int* valid = nullptr, double* fac = nullptr, double* work = nullptr, int* error = nullptr,
     const int* loc = nullptr, const int* dh = nullptr, int n2dh = 0, int n4dh = 0,
     const int* rbm = nullptr, const double* rbmw = nullptr, double* theta = nullptr,
-    int nneuron = 0) {
+    int nneuron = 0, int fsz = 0, int spin_free = 0) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -207,7 +223,11 @@ __device__ __forceinline__ void interval_hop_impl(
   // Exchanges and local spins need the resident full-Pfaffian/refactor path.
   const double exchange_p = recover ? exchange_fraction : 0.0;
   if (!recover) loc = nullptr;
-  __shared__ int s_rank, s_exchange, s_partner;
+  // FSZ walkers (#714) store each slot's rs = site + spin*nsite, so the
+  // Slater row needs no spin offset (split = n); normal walkers keep the
+  // spin-major slot layout (split = ne).
+  const int split = fsz ? n : ne;
+  __shared__ int s_rank, s_exchange, s_partner, s_from, s_to, s_pfrom, s_pto;
   if (tid == 0) {
     int all = 1;
     if (recover) for (int q = 0; q < nqp; ++q) all &= valid_w[q] != 0;
@@ -225,48 +245,104 @@ __device__ __forceinline__ void interval_hop_impl(
   for (int hop = start; hop < total_hops; ++hop) {
     const unsigned int* t = tape_w + (size_t)hop * tape_stride;
     if (tid == 0) {
-      const int mi = (int)(t[0] % (unsigned)ne);
-      const int spin = (int)(t[1] >> 31);
-      const int ri = ele_w[mi + spin * ne];
-      const int exchange = (double)t[3] / 4294967296.0 < exchange_p;
-      int rj = 0, valid, partner = -1;
-      if (exchange) {
-        // Julia: partner of the other spin; neither site may hold the moved spin's
-        // counterpart (cuda_sampling_update.jl:269-279).
-        partner = (int)(t[2] % (unsigned)ne) + (1 - spin) * ne;
-        rj = ele_w[partner];
-        valid = ri != rj && occ_w[rj + spin * nsite] == 0 && occ_w[ri + (1 - spin) * nsite] == 0;
-      } else {
-        // empty_hopping_destination: empty sites of this spin without a local spin.
-        int count = 0;
-        for (int r = 0; r < nsite; ++r) {
-          if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) ++count;
-        }
-        valid = count > 0 && (loc == nullptr || loc[ri] == 0);
-        if (count > 0) {
-          int rank = (int)(t[2] % (unsigned)count);
-          for (int r = 0; r < nsite; ++r) {
-            if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) {
-              if (rank == 0) {
-                rj = r;
-                break;
+      int valid = 0, msa = 0, exchange = 0, partner = -1, from = 0, to = 0, pfrom = 0, pto = 0;
+      if (fsz) {
+        // FSZ contract (#714): the slot is w0 % 2Ne and carries its spin.
+        msa = (int)(t[0] % (unsigned)n);
+        from = ele_w[msa];
+        const int ri = from % nsite, s = from / nsite;
+        exchange = (double)t[3] / 4294967296.0 < exchange_p;
+        if (exchange) {
+          // C makeCandidate_exchange_fsz: an opposite-spin partner (w2 % 2Ne),
+          // both sites singly occupied.
+          partner = (int)(t[2] % (unsigned)n);
+          pfrom = ele_w[partner];
+          const int rj = pfrom % nsite;
+          valid = pfrom / nsite == 1 - s && occ_w[ri + (1 - s) * nsite] == 0 &&
+                  occ_w[rj + s * nsite] == 0;
+          to = rj + s * nsite;
+          pto = ri + (1 - s) * nsite;
+        } else if (spin_free && (t[1] >> 31)) {
+          // 2Sz=-1, C makeCandidate_LocalSpinFlip_conduction (word 1's top bit
+          // is C's genrand_real2() >= 0.5): flip an itinerant spin in place.
+          to = ri + (1 - s) * nsite;
+          valid = (loc == nullptr || loc[ri] == 0) && occ_w[to] == 0;
+        } else {
+          // Rank w2 among the empty non-local destinations: any (site, spin)
+          // for 2Sz=-1 (C makeCandidate_hopping_fsz), the slot's spin
+          // otherwise (makeCandidate_hopping_csz).
+          const int lo = spin_free ? 0 : s * nsite, hi = spin_free ? 2 * nsite : lo + nsite;
+          int count = 0;
+          for (int r = lo; r < hi; ++r) {
+            if (occ_w[r] == 0 && (loc == nullptr || loc[r % nsite] == 0)) ++count;
+          }
+          valid = count > 0 && (loc == nullptr || loc[ri] == 0);
+          if (count > 0) {
+            int rank = (int)(t[2] % (unsigned)count);
+            for (int r = lo; r < hi; ++r) {
+              if (occ_w[r] == 0 && (loc == nullptr || loc[r % nsite] == 0)) {
+                if (rank == 0) {
+                  to = r;
+                  break;
+                }
+                --rank;
               }
-              --rank;
             }
           }
         }
+      } else {
+        const int mi = (int)(t[0] % (unsigned)ne);
+        const int spin = (int)(t[1] >> 31);
+        const int ri = ele_w[mi + spin * ne];
+        exchange = (double)t[3] / 4294967296.0 < exchange_p;
+        int rj = 0;
+        if (exchange) {
+          // Julia: partner of the other spin; neither site may hold the moved spin's
+          // counterpart (cuda_sampling_update.jl:269-279).
+          partner = (int)(t[2] % (unsigned)ne) + (1 - spin) * ne;
+          rj = ele_w[partner];
+          valid = ri != rj && occ_w[rj + spin * nsite] == 0 && occ_w[ri + (1 - spin) * nsite] == 0;
+        } else {
+          // empty_hopping_destination: empty sites of this spin without a local spin.
+          int count = 0;
+          for (int r = 0; r < nsite; ++r) {
+            if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) ++count;
+          }
+          valid = count > 0 && (loc == nullptr || loc[ri] == 0);
+          if (count > 0) {
+            int rank = (int)(t[2] % (unsigned)count);
+            for (int r = 0; r < nsite; ++r) {
+              if (occ_w[r + spin * nsite] == 0 && (loc == nullptr || loc[r] == 0)) {
+                if (rank == 0) {
+                  rj = r;
+                  break;
+                }
+                --rank;
+              }
+            }
+          }
+        }
+        msa = mi + spin * ne;
+        from = ri + spin * nsite;
+        to = rj + spin * nsite;
+        pfrom = rj + (1 - spin) * nsite;
+        pto = ri + (1 - spin) * nsite;
       }
       s_exchange = exchange;
       s_partner = partner;
+      s_from = from;
+      s_to = to;
+      s_pfrom = pfrom;
+      s_pto = pto;
       mvw[0] = valid;
-      mvw[1] = mi;
-      mvw[2] = spin;
-      mvw[3] = ri;
-      mvw[4] = rj;
+      mvw[1] = msa;
     }
     __syncthreads();
-    const int mi = mvw[1], spin = mvw[2], ri = mvw[3], rj = mvw[4];
+    const int msa = mvw[1];
     const int exchange = s_exchange, partner = s_partner;
+    const int from = s_from, to = s_to, pfrom = s_pfrom, pto = s_pto;
+    // Sites and spin of the moved electron (normal walkers: spin is fixed).
+    const int ri = from % nsite, rj = to % nsite, spin = from / nsite;
     if (!mvw[0]) {
       // Invalid proposals are frequent with local spins and exchanges: every
       // thread must read this step's move before thread 0 writes the next one.
@@ -275,18 +351,17 @@ __device__ __forceinline__ void interval_hop_impl(
       continue;
     }
     if (tid == 0) {
-      ele_w[mi + spin * ne] = rj;
-      occ_w[ri + spin * nsite] = 0;
-      occ_w[rj + spin * nsite] = 1;
+      ele_w[msa] = fsz ? to : rj;
+      occ_w[from] = 0;
+      occ_w[to] = 1;
       if (exchange) {
-        ele_w[partner] = ri;
-        occ_w[rj + (1 - spin) * nsite] = 0;
-        occ_w[ri + (1 - spin) * nsite] = 1;
+        ele_w[partner] = fsz ? pto : ri;
+        occ_w[pfrom] = 0;
+        occ_w[pto] = 1;
       }
     }
     __syncthreads();
-    const int msa = mi + spin * ne;
-    for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= ne ? nsite : 0);
+    for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= split ? nsite : 0);
     __syncthreads();
 
     if (resident && (!s_rank || exchange)) {
@@ -363,8 +438,9 @@ __device__ __forceinline__ void interval_hop_impl(
       double ip_new = 0.0;
       for (int q = 0; q < nqp; ++q) ip_new = __dadd_rn(ip_new, __dmul_rn(weights[q], pfnew[q]));
       const double log_new = log(fabs(ip_new) + 1e-100);
-      // An exchange keeps every site's charge and doublon count.
-      const double proj = (exchange ? 0.0
+      // An exchange keeps every site's charge and doublon count, and so does
+      // an on-site FSZ spin flip (C UpdateProjCnt_fsz returns for ri == rj).
+      const double proj = (exchange || ri == rj ? 0.0
           : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj) + dh_delta)
           + rbm_delta;
       const double logratio = 2.0 * (proj + log_new - log_old);
@@ -388,13 +464,13 @@ __device__ __forceinline__ void interval_hop_impl(
       if (accept) {
         out[0] = log_new;
       } else {
-        ele_w[mi + spin * ne] = ri;
-        occ_w[ri + spin * nsite] = 1;
-        occ_w[rj + spin * nsite] = 0;
+        ele_w[msa] = fsz ? from : ri;
+        occ_w[from] = 1;
+        occ_w[to] = 0;
         if (exchange) {
-          ele_w[partner] = rj;
-          occ_w[rj + (1 - spin) * nsite] = 1;
-          occ_w[ri + (1 - spin) * nsite] = 0;
+          ele_w[partner] = fsz ? pfrom : rj;
+          occ_w[pfrom] = 1;
+          occ_w[pto] = 0;
         }
       }
     }

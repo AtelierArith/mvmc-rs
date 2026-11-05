@@ -53,7 +53,10 @@ operators whose individual pairs conserve spin, `NExUpdatePath` 0, 1 or 2 with o
 complex path with Gutzwiller/Jastrow projections, complex QP weights and
 coefficients and exchanges; `PhysCalResult` then reports the imaginary parts
 in its `*_imag` fields (zeros for real inputs), and TwoBodyGEx is C's
-`G1[idx0] conj(G1[idx1])`. `NSRCG` is accepted and ignored, as in Julia GPU
+`G1[idx0] conj(G1[idx1])`. Real general orbitals / FSZ (#714) follow C's FSZ
+path with Gutzwiller/Jastrow projections, any `2Sz`, local spins and
+exchanges; spin-flip OneBodyG, TwoBodyG and TwoBodyGEx pairs are measured
+(C `calgrn_fsz.c`). `NSRCG` is accepted and ignored, as in Julia GPU
 PhysCal (`ext/cuda_runners.jl:27`), because PhysCal never runs SR. Unsupported modes fail explicitly,
 before any device allocation; see the
 [support matrix](gpu-resident-model-support.md) (#572).
