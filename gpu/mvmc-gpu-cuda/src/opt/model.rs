@@ -61,9 +61,31 @@ pub(super) struct Model {
     pub localspins: Vec<i32>,
     /// Julia GPU exchange probability: 0 / 0.5 / 1 for NExUpdatePath 0 / 1 / 2.
     pub exchange: f64,
+    /// C `AllComplexFlag != 0` (#678): `parameters`, `weights` and `energies`
+    /// hold interleaved (re, im) pairs and `flags` the `2*np` real/imaginary
+    /// component flags (C `OptFlag`). Projection factors use the real parts.
+    pub complex: bool,
 }
 
 impl Model {
+    /// FP64 values per device scalar: 2 for complex mode (interleaved re, im).
+    pub fn lanes(&self) -> usize {
+        1 + usize::from(self.complex)
+    }
+
+    /// Real projection parameters, the sampler's table (C `creal(Proj)`).
+    pub fn projection(&self) -> Vec<f64> {
+        let lanes = self.lanes();
+        (0..self.nproj)
+            .map(|p| self.parameters[lanes * p])
+            .collect()
+    }
+
+    /// SR dimension: `np` real parameters, or C's `2*NPara` in complex mode.
+    pub fn sr_dimension(&self) -> usize {
+        self.lanes() * self.np
+    }
+
     pub fn prepare(path: &Path, config: &OptConfig) -> Result<Self, String> {
         Self::prepare_input(path, config, false, None)
     }
@@ -109,16 +131,19 @@ impl Model {
         // Julia GPU supports neither. NSRCG is accepted: PhysCal ignores it as
         // Julia GPU does (`cuda_runners.jl:27`); Opt runs C SR-CG (#670).
         // OptTrans follows C `qp.c`/`vmccal.c` (#674); Julia GPU rejects it.
+        // Complex normal orbitals follow C's complex normal path (#678).
         if data.i_flg_orbital_general != 0
             || m.two_sz != 0
             || !(0..=2).contains(&m.nex_update_path)
             || m.nsplit_size != 1
-            || mvmc_core::get_all_complex_flag(&data)?
         {
             return Err(
-                "resident GPU requires real normal orbitals, NExUpdatePath<=2 and serial execution"
+                "resident GPU requires normal orbitals, NExUpdatePath<=2 and serial execution"
                     .into(),
             );
+        }
+        if !physcal && m.nsrcg != 0 && mvmc_core::get_all_complex_flag(&data)? {
+            return Err("resident GPU complex Opt requires direct SR (NSRCG=0)".into());
         }
         let seed = mvmc_core::resolve_rnd_seed(m.rnd_seed, config.seed, 0, &SingleProcessReducer)?;
         data.modpara.rnd_seed = seed;
@@ -191,12 +216,24 @@ impl Model {
         if nlocal > 2 * ne || 2 * ne > 2 * ns - nlocal {
             return Err("infeasible local-spin filling".into());
         }
+        let complex = mvmc_core::get_all_complex_flag(&data)?;
         let packed = mvmc_core::pack_parameters(&data).map_err(|e| e.to_string())?;
-        if packed.iter().any(|p| p.im != 0.0 || !p.re.is_finite()) {
+        if complex {
+            if packed
+                .iter()
+                .any(|p| !p.re.is_finite() || !p.im.is_finite())
+            {
+                return Err("resident GPU parameters must be finite".into());
+            }
+        } else if packed.iter().any(|p| p.im != 0.0 || !p.re.is_finite()) {
             return Err("resident GPU parameters must be finite and real".into());
         }
-        let parameters: Vec<_> = packed.iter().map(|p| p.re).collect();
-        let np = parameters.len();
+        let parameters: Vec<_> = if complex {
+            packed.iter().flat_map(|p| [p.re, p.im]).collect()
+        } else {
+            packed.iter().map(|p| p.re).collect()
+        };
+        let np = packed.len();
         if np == 0 || np > i32::MAX as usize {
             return Err("invalid parameter count".into());
         }
@@ -226,13 +263,19 @@ impl Model {
         {
             return Err("resident GPU OptTrans requires one weight per NQPOptTrans sector".into());
         }
-        let flags: Vec<i32> = (0..np)
-            .map(|p| i32::from(data.optimization_flags.get(2 * p).copied().unwrap_or(1) != 0))
-            .collect();
-        let shift = ng > 0 && nj > 0 && flags[..ng + nj].iter().all(|&f| f != 0);
+        // C OptFlag holds real and imaginary component flags; real mode uses
+        // the real ones, complex mode all 2*np (stcopt.c).
+        let flag = |k: usize| i32::from(data.optimization_flags.get(k).copied().unwrap_or(1) != 0);
+        let real_flags: Vec<i32> = (0..np).map(|p| flag(2 * p)).collect();
+        let flags: Vec<i32> = if complex {
+            (0..2 * np).map(flag).collect()
+        } else {
+            real_flags.clone()
+        };
+        let shift = ng > 0 && nj > 0 && real_flags[..ng + nj].iter().all(|&f| f != 0);
         // C SetFlagShift (parameter.c:255-310), as the C-order sync applies it:
         // DH shifts need every Gutzwiller and every DH component optimized.
-        let all = |range: std::ops::Range<usize>| flags[range].iter().all(|&f| f != 0);
+        let all = |range: std::ops::Range<usize>| real_flags[range].iter().all(|&f| f != 0);
         let gutz_free = ng > 0 && all(0..ng);
         let shift_dh2 = gutz_free && n2 > 0 && all(ng + nj..ng + nj + 6 * n2);
         let shift_dh4 = gutz_free && n4 > 0 && all(ng + nj + 6 * n2..nproj);
@@ -268,6 +311,14 @@ impl Model {
             }
         }
         let (rbm, nneuron) = rbm_tables(&data)?;
+        // Complex mode supports Gutzwiller/Jastrow projections and normal
+        // orbitals (#678). These families have no complex resident kernels yet.
+        if complex && (nrbm > 0 || nopt > 0 || n2 + n4 > 0 || nlocal > 0) {
+            return Err(
+                "resident GPU complex mode does not support RBM, OptTrans, DH2/DH4 or local spins"
+                    .into(),
+            );
+        }
         data.ensure_orbital_idx_matrix();
         let nsp = data.modpara.nsp_gauss_leg.max(1) as usize;
         let nmp = data.modpara.nmp_trans.unsigned_abs().max(1) as usize;
@@ -284,12 +335,26 @@ impl Model {
                 Err("complex or nonfinite GPU model coefficient".to_string())
             }
         };
-        let qw = weights
-            .qp_full_weight
-            .iter()
-            .copied()
-            .map(real)
-            .collect::<Result<Vec<_>, _>>()?;
+        // Complex mode takes C's complex QPFullWeight (CalculateIP_fcmp); the
+        // real path keeps rejecting complex weights.
+        let finite = |x: num_complex::Complex64| x.re.is_finite() && x.im.is_finite();
+        let qw = if complex {
+            if !weights.qp_full_weight.iter().copied().all(finite) {
+                return Err("nonfinite GPU QP weight".into());
+            }
+            weights
+                .qp_full_weight
+                .iter()
+                .flat_map(|x| [x.re, x.im])
+                .collect()
+        } else {
+            weights
+                .qp_full_weight
+                .iter()
+                .copied()
+                .map(real)
+                .collect::<Result<Vec<_>, _>>()?
+        };
         // C UpdateQPWeight rebuilds the full weights from these after every
         // parameter update (qp.c:130-148).
         let fix = if nopt > 0 {
@@ -426,32 +491,47 @@ impl Model {
         }
         let mut operators = vec![];
         let mut energies = vec![];
-        let mut add = |op: [i64; 7], value: f64| -> Result<(), String> {
+        // Complex mode keeps complex Transfer/InterAll coefficients (C
+        // calham.c); the real path requires real ones.
+        let coefficient = |x: num_complex::Complex64| {
+            if complex {
+                finite(x)
+                    .then_some(x)
+                    .ok_or_else(|| "nonfinite GPU model coefficient".to_string())
+            } else {
+                real(x).map(|re| num_complex::Complex64::new(re, 0.0))
+            }
+        };
+        let mut add = |op: [i64; 7], value: num_complex::Complex64| -> Result<(), String> {
             for i in [0, 1, 3, 4] {
                 if op[i] < 0 || op[i] >= ns as i64 {
                     return Err("Hamiltonian site out of bounds".into());
                 }
             }
-            if !(0..=1).contains(&op[2]) || !(0..=1).contains(&op[5]) || !value.is_finite() {
+            if !(0..=1).contains(&op[2]) || !(0..=1).contains(&op[5]) || !finite(value) {
                 return Err("invalid Hamiltonian coefficient/spin".into());
             }
             operators.extend(op.map(|x| x as i32));
-            energies.push(value);
+            energies.push(value.re);
+            if complex {
+                energies.push(value.im);
+            }
             Ok(())
         };
+        let r = |x: f64| num_complex::Complex64::new(x, 0.0);
         for t in &data.coulomb_intra_terms {
-            add([t.site, t.site, 0, t.site, t.site, 1, 2], t.value)?;
+            add([t.site, t.site, 0, t.site, t.site, 1, 2], r(t.value))?;
         }
         for t in &data.coulomb_inter_terms {
             for s in 0..2 {
                 for u in 0..2 {
-                    add([t.site1, t.site1, s, t.site2, t.site2, u, 2], t.value)?;
+                    add([t.site1, t.site1, s, t.site2, t.site2, u, 2], r(t.value))?;
                 }
             }
         }
         for t in &data.hund_terms {
             for s in 0..2 {
-                add([t.site1, t.site1, s, t.site2, t.site2, s, 2], -t.value)?;
+                add([t.site1, t.site1, s, t.site2, t.site2, s, 2], r(-t.value))?;
             }
         }
         for t in &data.transfer_terms {
@@ -460,15 +540,18 @@ impl Model {
             }
             add(
                 [t.site1, t.site2, t.spin1.as_code() as i64, 0, 0, 0, 1],
-                -real(t.value)?,
+                -coefficient(t.value)?,
             )?;
         }
         for t in &data.pair_hop_terms {
-            add([t.site1, t.site2, 0, t.site1, t.site2, 1, 2], t.value)?;
+            add([t.site1, t.site2, 0, t.site1, t.site2, 1, 2], r(t.value))?;
         }
         for t in &data.exchange_terms {
             for s in 0..2 {
-                add([t.site1, t.site2, s, t.site2, t.site1, 1 - s, 2], t.value)?;
+                add(
+                    [t.site1, t.site2, s, t.site2, t.site1, 1 - s, 2],
+                    r(t.value),
+                )?;
             }
         }
         for t in &data.inter_all_terms {
@@ -477,7 +560,7 @@ impl Model {
             }
             add(
                 [t.site0, t.site1, t.spin0, t.site2, t.site3, t.spin2, 2],
-                real(t.value)?,
+                coefficient(t.value)?,
             )?;
         }
         Ok(Self {
@@ -520,6 +603,7 @@ impl Model {
             energies,
             localspins,
             exchange,
+            complex,
         })
     }
 }

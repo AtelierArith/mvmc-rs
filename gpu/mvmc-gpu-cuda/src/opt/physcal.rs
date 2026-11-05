@@ -7,6 +7,8 @@ use super::*;
 use std::path::PathBuf;
 
 #[cfg(test)]
+mod complex_tests;
+#[cfg(test)]
 mod dh_tests;
 #[cfg(test)]
 mod localspin_tests;
@@ -22,7 +24,7 @@ const PHYS_SOURCE: &str = concat!(
     "\n",
     include_str!("physcal.cu")
 );
-const PHYS_KERNELS: &[&str] = &["physcal_reduce"];
+const PHYS_KERNELS: &[&str] = &["physcal_reduce", "physcal_reduce_c"];
 
 /// Sampling lengths count proposals per walker; omitted lengths follow modpara.
 #[derive(Clone, Debug, Default)]
@@ -39,18 +41,25 @@ pub struct PhysCalConfig {
 
 /// Ensemble means in parsed operator order, averaged over measurement windows.
 /// With TwoBodyGEx, the shared parser supplies C's canonical one-body list.
+/// The `*_imag` fields are the imaginary parts: zeros for real inputs, C's
+/// complex observables for complex normal orbitals (#678).
 #[derive(Debug)]
 pub struct PhysCalResult {
     pub energy: f64,
     pub green_one: Vec<f64>,
     pub green_two: Vec<f64>,
     pub green_two_ex: Vec<f64>,
+    pub energy_imag: f64,
+    pub green_one_imag: Vec<f64>,
+    pub green_two_imag: Vec<f64>,
+    pub green_two_ex_imag: Vec<f64>,
     pub seed: u64,
     pub walkers: usize,
     pub nsamples: usize,
 }
 
-/// Run real normal-orbital Gutzwiller/Jastrow(/DH2/DH4/RBM/OptTrans) PhysCal without Lanczos or SR.
+/// Run normal-orbital Gutzwiller/Jastrow(/DH2/DH4/RBM/OptTrans) PhysCal without Lanczos or SR;
+/// complex orbitals follow C's complex path (#678).
 /// Input parsing, fresh initialization, sampling and final host results belong
 /// to this call. RNG and intermediate configurations/observables stay on CUDA.
 pub fn run_gpu_phys_cal_from_namelist(
@@ -137,7 +146,7 @@ impl Operators {
         }
         Ok(Self {
             ops,
-            n_energy: model.energies.len(),
+            n_energy: model.energies.len() / model.lanes(),
             n_one: data.green_one_terms.len(),
             n_two: data.green_two_terms.len(),
             n_ex: data.green_two_ex_terms.len(),
@@ -169,6 +178,7 @@ impl Measurement {
         let w = state.resident.sampler.geom.walkers;
         let terms = operators.terms();
         let rows = operators.rows();
+        let lanes = state.model.lanes();
         let entries = w
             .checked_mul(terms)
             .filter(|&v| v <= i32::MAX as usize)
@@ -178,11 +188,11 @@ impl Measurement {
         }
         with_raw_exec(backend, "mvmc.physcal.prepare", |exec| {
             let ops = upload(exec, &operators.ops)?;
-            let values = exec.alloc_bytes((entries * 8).max(1))?;
-            let means = exec.alloc_bytes(rows * 8)?;
-            // SAFETY: means owns exactly rows FP64 values.
+            let values = exec.alloc_bytes((entries * 8 * lanes).max(1))?;
+            let means = exec.alloc_bytes(rows * 8 * lanes)?;
+            // SAFETY: means owns exactly rows FP64 values (pairs for complex).
             unsafe {
-                exec.zero_bytes(exec.ptr(&means)?, rows * 8)?;
+                exec.zero_bytes(exec.ptr(&means)?, rows * 8 * lanes)?;
             }
             Ok(Self {
                 operators,
@@ -209,7 +219,11 @@ impl Measurement {
         unsafe {
             let reduce = exec.module(PHYS_SOURCE, PHYS_KERNELS)?;
             exec.launch(
-                reduce.function("physcal_reduce")?,
+                reduce.function(if state.model.complex {
+                    "physcal_reduce_c"
+                } else {
+                    "physcal_reduce"
+                })?,
                 (self.operators.rows() as u32, 1, 1),
                 256,
                 0,
@@ -252,7 +266,8 @@ impl Measurement {
     ) -> Result<PhysCalResult, String> {
         with_raw_exec(backend, "mvmc.physcal.result", |exec| {
             let mut error = [0i32];
-            let mut means = vec![0.0f64; self.operators.rows()];
+            let lanes = state.model.lanes();
+            let mut means = vec![0.0f64; self.operators.rows() * lanes];
             // SAFETY: allocations have these exact lengths, execution has
             // completed before the public API returns host observations. A
             // failed run exposes only the status word.
@@ -271,13 +286,28 @@ impl Measurement {
             for mean in &mut means {
                 *mean /= state.steps as f64;
             }
+            let (re, im): (Vec<f64>, Vec<f64>) = if lanes == 2 {
+                means
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|z| (z[0], z[1]))
+                    .unzip()
+            } else {
+                let zeros = vec![0.0; means.len()];
+                (means, zeros)
+            };
             let one_end = 1 + self.operators.n_one;
             let two_end = one_end + self.operators.n_two;
             Ok(PhysCalResult {
-                energy: means[0],
-                green_one: means[1..one_end].to_vec(),
-                green_two: means[one_end..two_end].to_vec(),
-                green_two_ex: means[two_end..].to_vec(),
+                energy: re[0],
+                green_one: re[1..one_end].to_vec(),
+                green_two: re[one_end..two_end].to_vec(),
+                green_two_ex: re[two_end..].to_vec(),
+                energy_imag: im[0],
+                green_one_imag: im[1..one_end].to_vec(),
+                green_two_imag: im[one_end..two_end].to_vec(),
+                green_two_ex_imag: im[two_end..].to_vec(),
                 seed: state.model.seed,
                 walkers: state.resident.sampler.geom.walkers,
                 nsamples: state.steps,
