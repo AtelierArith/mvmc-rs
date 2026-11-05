@@ -96,7 +96,7 @@ are synchronized ([3.7](03-theory-wavefunction.md#37-initial-values-and-synchron
 > - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:280`
 > - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:377`
 > - Rust: `component_is_optimized` — `crates/mvmc-core/src/sr.rs:25`
-> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:933`
+> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:535`
 > - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:837`
 > - Parity: `S[idx] = OO[(pi+2)*(2*size)+(pj+2)].re - OO[pi+2].re*OO[pj+2].re` and `S[ii] *= 1+DSROptStaDel` (`stcopt_dposv.c:69-74`); `g[si] = -DSROptStepDt*2.0*(HO[pi+2].re - HO[0].re*OO[pi+2].re)` (`stcopt_dposv.c:81`) — Rust `build_s_g_complex` evaluates the same expressions in the same order (real mode uses index offset 1 instead of 2). In real mode C embeds the real matrices into the complex layout with zero imaginary entries, so $S_{\max}$ includes the zero imaginary variances; Rust's `collect_active_real` folds from `0.0` for the same reason. Rust solves with LAPACK `dpotrf_`/`dpotrs_` (Cholesky of the upper triangle, declared in `sr.rs:45-52`), C with `dposv('U')`. A non-positive-definite $S$ rejects the update in Rust (`cholesky_solve` returns `Err`) and C returns the `dposv` `info`. The $\texttt{zvo\_SRinfo.dat}$ line that C writes for the direct solver (`stcopt.c:157`) is **not** written by Rust ([9](09-output-files.md)).
 

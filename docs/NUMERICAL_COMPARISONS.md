@@ -62,9 +62,6 @@ documented translation:
   operands were generated with the same option in C, because their step-1
   solve meets the 1.4.0 breakdown guard. The compared values (sampler state,
   operands, energy) precede the solve.
-- Julia's real two-electron update keeps `raOld`; the synthetic Julia operand
-  test (`pf_update_vs_julia`) passes `ra_old` as `rb_old` to compare its
-  arithmetic, since those operands do not satisfy `invM = M^-1`.
 
 Deliberate deviations from 1.4.0: an SR-CG step with no active parameter is a
 no-op (C reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds);
@@ -315,11 +312,13 @@ longer kept). What remains:
   pins the correct layout via `sum_i w_i O_i = 1`, which C's layout violates.
   Entries before them agree at the bound above. Complex mode was not examined.
 
-**`golden_vs_julia`** is a historical Julia-order comparison. The real LTL
-bound is `2 * n * eps * max|entry|` (observed at most `0.6 * n * eps`, for
-`n = 4..256`); see the test header for the table and the unchanged complex and
-inverse bounds. C-order correctness is covered by the hand-dyadic and analytic
-tests (`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
+The PfaPack.jl goldens (`golden_vs_julia`) were removed in #695.
+`crates/pfapack/tests/fixed_matrix_identities.rs` checks the same fixed inputs
+without a reference: Parlett-Reid and `utu2pfa` agree within `4 n eps`,
+`Pf(A)^2 = det(A)` within `n * 1e-13` on the logarithm, and
+`max |A X - I| / (|A|_max |X|_max n) <= 64 eps` (observed bounds in the test
+header). C-order correctness is covered by the hand-dyadic and analytic tests
+(`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
 
 ## OptTrans optimization flags (#676)
 
@@ -482,11 +481,11 @@ cases, so the contract is "default C build". The archived Julia values
 | site | C counterpart | Julia style | action |
 |---|---|---|---|
 | `sampling/updates.rs` `two_hop_bilinear_real` | `pfupdate_two_real.c:169-180` | lane-split, FMA | fixed (above) |
-| complex `CalculateMAll` of the sampler's periodic recalculation and the PhysCal refresh (`pfapack` `zsktf2_turbo`: FMA rank-2 update, reciprocal pivot) | `ZSKTRF` order (`zsktf2_c_compat`) | FMA, Julia pivot inverse | default is now the C order (`calc_m_all_complex_production`); Julia's kernel is the opt-in `pfaffian::use_julia_complex_kernel()` (thread-local guard) used only by the archived Julia 1.11 SR prefix tests |
+| complex `CalculateMAll` of the sampler's periodic recalculation and the PhysCal refresh (`pfapack` `zsktf2_turbo`: FMA rank-2 update, reciprocal pivot) | `ZSKTRF` order (`zsktf2_c_compat`) | FMA, Julia pivot inverse | C order (`calc_m_all_complex_production`); the Julia-kernel opt-in was removed with the Julia prefix tests (#695) |
 | `sr_backend.rs` real Gram `O O^T` | `calculateOO_Store_real`: `DGEMM('N','T')` for every size (`vmccal.c:714-718`) | `DSYRK` for `max(n, samples) >= 4`, `muladd` loop below (Julia `mul!` dispatch) | now `DGEMM('N','T')`, full matrix; the Julia small-case `mul_add` is gone |
 | `c_complex.rs` `divide` (`mul_add` on macOS aarch64) | native ARM compiler-rt contraction | C behaviour on that target | kept (it is the C-faithful emulation) |
 | `mvmc-stdface/ccomplex.rs` `x2y2m1` | glibc `__x2y2m1` exact error-free sum | none (C emulation) | kept |
-| `mvmc-expert-parsers/utils/julia_{trig,log,exp,hypot}.rs` polynomial `mul_add` | glibc libm | emulation of Julia's libm | replaced by the platform libm in #457 (below); Julia's implementations are an explicit opt-in |
+| `mvmc-expert-parsers/utils/julia_{trig,log,exp,hypot}.rs` polynomial `mul_add` | glibc libm | emulation of Julia's libm | replaced by the platform libm in #457 (below); the Julia implementations were removed in #695 |
 | `pfapack` `simd-backend` (`mul_add_c64s`) | none (SIMD) | opt-in feature, not default | kept, documented opt-in |
 | tenferro SR backend (`MVMC_RS_SR_BACKEND=tenferro`) | BLAS/LAPACK | different GEMM/Cholesky order | kept, documented opt-in |
 
@@ -516,15 +515,14 @@ Julia ships its own software implementations, which agree with glibc to within o
 bit for bit. The parity path now uses the functions C uses: `mvmc_expert_parsers::utils::c_math`
 maps each to the Rust `f64` method of the same name, which is the platform libm (glibc on Linux,
 the system libm on macOS). Julia's implementations (`julia_exp`, `julia_log`, `julia_trig`,
-`julia_hypot`) are kept only as the explicit, process-wide opt-in `c_math::use_julia_libm()`
-(guarded and serialized), used by the archived Julia SR prefix tests next to
-`pfaffian::use_julia_complex_kernel()`.
+`julia_hypot`) and their opt-in `c_math::use_julia_libm()` were removed with the archived Julia
+SR prefix tests in #695.
 
 | helper | callers on the parity path | C call site |
 |---|---|---|
 | `exp` | Metropolis weight `sampling/metropolis.rs:48`, FSZ real accept `sampling/fsz_real.rs:452`, projection ratio and Green ratios `observables.rs` (`c_exp`), `observables/fsz_green.rs:353,358`, RBM `cexp` real part `sampling/rbm_math.rs` | `w = exp(2.0*(x + logIpNew - logIpOld))` `vmcmake_real.c:185,260,587,651`, `vmcmake.c:203,287,918,980`, `vmcmake_fsz*.c`; `ProjRatio` `projection.c:56`; `cexp` in `rbm.c` |
 | `log` | `LogIP` `sampling/driver.rs:72`, `observables.rs:175`, RBM `clog` real part | `log(fabs(ip))`; `clog` in `rbm.c` |
-| `log1p`, `tan`, `atan2`, `sinh` | Julia complex algorithms only under the opt-in (the default RBM path uses `glibc_complex`, #470) | `clog`, `ctanh` in `rbm.c:345-369` |
+| `log1p`, `tan`, `atan2`, `sinh` | not on the RBM path (it uses `glibc_complex`, #470) | `clog`, `ctanh` in `rbm.c:345-369` |
 | `sin`, `cos` | `qp_weight.rs` (Gauss-Legendre nodes and `SPGLCos/SPGLSin`), `parameter_init.rs:105-106` | `gauleg.c:42`, `qp.c:67-73`; RBM initialization `cexp(2 I pi u)` `parameter.c:53` |
 | `hypot` | `sync.rs:91` and `parameter_init.rs:252` amplitude normalization | `cabs` `parameter.c:155-167` |
 
@@ -538,9 +536,7 @@ largest absolute deviation from C over the changed files is 3.525e-12 before and
 L16/L24/L32 PhysCal, `zvo_cisajs`) the observables were bit-equal after #449 and now differ at
 1e-17 to 1e-16 (max relative 3e-15 to 2e-14), `zvo_cisajscktalt` unchanged (2.1e-15, 3.1e-14,
 2.5e-13), energies |dE| = 0, i.e. the one place where the libm emulation still gave exact Julia
-equality. The four `physcal_ref` fixtures stay `ok` against Julia. The archived Julia SR prefix
-tests need the opt-in: six of them fail without it (RBM and OptTrans trajectories embed Julia's
-`exp` rounding).
+equality. The four `physcal_ref` fixtures stay `ok` against Julia.
 
 **Platform caveat.** glibc and the macOS libm are different implementations; a quantity that
 depends on the last bit of a transcendental function (an acceptance decision at a razor-thin
@@ -559,8 +555,8 @@ were a C-parity gap, not just roundoff. The C RBM code calls `cexp`, `clog(ccosh
 glibc_complex` ports glibc 2.39's `cexp`, `clog`, `ccosh`, `ctanh` and `__x2y2m1` line by line
 (templates `math/s_c*_template.c` and `sysdeps/ieee754/dbl-64/x2y2m1.c`; version, tag object,
 SHA-256 and extraction boundary in `c_toolbox/glibc_complex_470/README.md`); the RBM weights now
-evaluate `clog(ccosh(z))` instead of Julia's sign-flipped `log1p` form. Julia's complex
-algorithms remain only behind `c_math::use_julia_libm()` (the archived Julia prefix tests).
+evaluate `clog(ccosh(z))` instead of Julia's sign-flipped `log1p` form. The Julia complex
+algorithms were removed in #695.
 
 * **Check:** `c_toolbox/glibc_complex_470/probe.c` (a standalone kernel check, not a full
   `vmc.out` run) evaluates the four C functions on 1600 inputs (all combinations of signed zeros,
