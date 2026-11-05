@@ -281,19 +281,6 @@ fn cases_for_job(job: &str) -> BTreeSet<String> {
                     cases.insert(format!("long20/{model}/qp{size}/physcal"));
                 }
             }
-            for model in super::INDEPENDENT_PREFIX_CASES {
-                cases.insert(format!("long20/prefix/{}", model.0));
-            }
-        }
-        "independent-prefixes" => {
-            for model in super::INDEPENDENT_PREFIX_CASES {
-                cases.insert(format!("prefix/{}", model.0));
-            }
-        }
-        "independent-physcal" => {
-            for model in super::INDEPENDENT_PHYSCAL_CASES {
-                cases.insert(format!("physcal/{}", model.0));
-            }
         }
         "direct-sr-failure-boundary" => {
             cases.insert("failure/hubbard_chain_real/qp32/store0/cg0".to_owned());
@@ -303,15 +290,7 @@ fn cases_for_job(job: &str) -> BTreeSet<String> {
                 cases.insert(format!("transfer/hubbard_chain_real/terms{size}"));
             }
         }
-        "reviewed-cg-long20" => {
-            cases.insert("cg20/general_rbm_cmp/steps20/window20/store0/cg1".to_owned());
-        }
-        "independent-real-fsz" => {
-            for stage in ["seeded", "initialized", "pre-sr", "final"] {
-                cases.insert(format!("real-fsz/{stage}"));
-            }
-        }
-        _ => panic!("recorder supports seven explicit selections only"),
+        _ => panic!("recorder supports three explicit selections only"),
     }
     cases
 }
@@ -455,15 +434,9 @@ pub fn configure_child(
     assert!(
         matches!(
             job,
-            "runners-long20-observed"
-                | "direct-sr-failure-boundary"
-                | "independent-prefixes"
-                | "independent-physcal"
-                | "transfer-site"
-                | "reviewed-cg-long20"
-                | "independent-real-fsz"
+            "runners-long20-observed" | "direct-sr-failure-boundary" | "transfer-site"
         ),
-        "recorder supports seven explicit selections only"
+        "recorder supports three explicit selections only"
     );
     // Count actual child invocations separately from planned groups and repeats.
     static COUNTS: std::sync::Mutex<Vec<(String, usize, usize)>> =
@@ -548,49 +521,6 @@ fn initial_stage_shape(
         }
         _ => panic!("unknown initial stage"),
     }
-}
-
-pub fn retain_initial_stage(
-    label: &str,
-    stage: &str,
-    rng: &sfmt19937::Sfmt19937Rng,
-    parameters: Option<&[num_complex::Complex64]>,
-    weights: Option<&[num_complex::Complex64]>,
-) {
-    if root().is_none() {
-        return;
-    }
-    assert!(label
-        .bytes()
-        .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c)));
-    assert!(!label.is_empty());
-    initial_stage_shape(label, stage, parameters, weights);
-    let seed = JOB_MEMORY.with(|cell| {
-        let memory = cell.borrow();
-        memory.assert_binding(&current_binding());
-        assert!(!memory.layouts.contains(label), "duplicate initial stage");
-        *memory.seeds.get(label).expect("explicit launch seed")
-    });
-    let id = decimal(&std::env::var("ISSUE182_CASE_INVOCATION").unwrap(), false);
-    let run = std::env::var("ISSUE182_CASE_RUN_UUID").unwrap();
-    run_uuid(&run);
-    let (raw, index) = rng.state_snapshot();
-    let count = rng.words_consumed();
-    let mut shadow = rng.clone();
-    let next: Vec<u32> = (0..624).map(|_| shadow.gen_rand32()).collect();
-    write(
-        &format!("child-{id}.initial-stage-{label}.json"),
-        format!("{{\"run_uuid\":\"{run}\",\"invocation\":{id},\"label\":\"{label}\",\"stage\":\"{stage}\",\"launch_seed\":{seed},\"raw624\":{raw:?},\"index\":{index},\"draw_count\":{count},\"next624\":{next:?},\"npara\":{},\"nqp\":{}}}\n", parameters.map_or(0, |v| v.len()), weights.map_or(0, |v| v.len())).as_bytes(),
-    );
-    super::discrete(&format!("{label}-raw624"), raw);
-    super::discrete(&format!("{label}-rng-index"), index);
-    super::discrete(&format!("{label}-draw-count"), count);
-    super::discrete(&format!("{label}-rng"), next);
-    if let (Some(parameters), Some(weights)) = (parameters, weights) {
-        super::complex(&format!("{label}-parameters"), parameters);
-        super::complex(&format!("{label}-qpweights"), weights);
-    }
-    JOB_MEMORY.with(|cell| cell.borrow_mut().layout(label));
 }
 
 pub fn retain_sr_dimension(label: &str, dimension: usize) {
@@ -1035,28 +965,25 @@ mod tests {
     }
 
     #[test]
-    fn case_ids_are_exactly_the_full_83_group_inventory() {
+    fn case_ids_are_exactly_the_full_64_group_inventory() {
         let mut all = BTreeSet::new();
         for job in [
             "runners-long20-observed",
-            "independent-prefixes",
-            "independent-physcal",
             "direct-sr-failure-boundary",
             "transfer-site",
-            "reviewed-cg-long20",
-            "independent-real-fsz",
         ] {
             for case in cases_for_job(job) {
                 assert!(all.insert(case), "duplicate group inventory");
             }
         }
-        assert_eq!(all.len(), 83);
+        assert_eq!(all.len(), 64);
     }
 
     #[test]
     fn wrong_job_case_and_unknown_selection_rejected() {
-        let cases = cases_for_job("independent-prefixes");
-        assert!(!cases.contains("long20/prefix/heisenberg_chain_real"));
+        let cases = cases_for_job("runners-long20-observed");
+        assert!(!cases.contains("prefix/heisenberg_chain_real"));
+        assert!(catch_unwind(|| cases_for_job("independent-prefixes")).is_err());
         assert!(!cases.contains("prefix/../../file"));
         assert!(catch_unwind(|| cases_for_job("invented-pass")).is_err());
     }

@@ -1,9 +1,0 @@
-1	initialized	initialized	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-2	overlaid	overlaid	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-3	synchronized	MVMCOptimizers.sync_modified_parameter!(data)	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-4	initialized	initialized	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-5	overlaid	overlaid	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-6	synchronized	MVMCOptimizers.sync_modified_parameter!(data)	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-7	initialized	initialized	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-8	overlaid	overlaid	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1
-9	synchronized	MVMCOptimizers.sync_modified_parameter!(data)	rbm_reference_cmp	102	1,5,0,0,0,0,2,0,0,4,0,0,80,10,0	1	0	1

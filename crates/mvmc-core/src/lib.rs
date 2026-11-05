@@ -13,10 +13,6 @@
 
 #![warn(missing_docs)]
 
-#[cfg(test)]
-#[path = "../../../tests/support/julia_fixture.rs"]
-mod julia_fixture;
-
 pub mod accel_validation;
 pub mod average;
 mod c_complex;
@@ -106,7 +102,3 @@ mod historical_orbital_model;
 #[cfg(test)]
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
-
-#[cfg(test)]
-#[path = "../../../tests/support/historical_optimization_flags.rs"]
-mod historical_optimization_flags;
