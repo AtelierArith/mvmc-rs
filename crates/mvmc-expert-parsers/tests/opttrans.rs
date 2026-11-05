@@ -9,10 +9,7 @@ use common::historical_kernel_model as parse_expert_mode_files;
 use mvmc_expert_parsers::parsers::opttrans::{parse_opttrans_content, parse_opttrans_def};
 use mvmc_expert_parsers::utils::parameter_init::init_parameter;
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
-use mvmc_expert_parsers::{
-    parse_expert_mode_files_with_c_opt_trans, parse_expert_mode_files_with_opt_trans,
-    ExpertModeData,
-};
+use mvmc_expert_parsers::{parse_expert_mode_files_with_opt_trans, ExpertModeData};
 use num_complex::Complex64;
 use sfmt19937::Sfmt19937Rng;
 use std::path::PathBuf;
@@ -40,33 +37,29 @@ fn c_disabled_opttrans_ignores_definition_and_keeps_default_layout() {
     assert!(data.optimization_flags.is_empty());
 }
 
+// C 1.3.0 `GetInfoOptTrans` (`readdef.c:2385-2402`) writes undoubled flags at
+// `NProj + NSlater + i`, freezing the weights and activating unrelated
+// projection/Slater components. That is a C defect (#676,
+// tmisawa/Julia-mVMC#94); Rust activates only the real weight components.
 #[test]
-fn c_enabled_opttrans_writes_consecutive_native_flags() {
+fn enabled_opttrans_activates_only_real_weight_components() {
     let data =
-        parse_expert_mode_files_with_c_opt_trans(root().join("namelist_valid.def"), true).unwrap();
-    assert_eq!(data.optimization_flags, vec![1, 1, 0, 0]);
+        parse_expert_mode_files_with_opt_trans(root().join("namelist_valid.def"), true).unwrap();
+    assert_eq!(data.optimization_flags, vec![1, 0, 1, 0]);
 }
 
 #[test]
-fn c_opttrans_flag_base_is_declared_projection_plus_slater_width() {
-    let mut data = ExpertModeData::new();
-    data.n_gutzwiller_idx = 3;
-    data.opt_trans = vec![Complex64::new(0.5, 0.0), Complex64::new(0.75, 0.0)];
-    mvmc_expert_parsers::set_opt_trans_c_opt_flags(&mut data);
-    assert_eq!(&data.optimization_flags[..7], &[0, 0, 0, 1, 1, 0, 0]);
-}
-
-#[test]
-fn c_opttrans_unwritten_tail_does_not_inherit_active_reservation_defaults() {
+fn opttrans_flags_follow_projection_rbm_and_slater_blocks() {
     let mut data = ExpertModeData::new();
     data.n_gutzwiller_idx = 3;
     data.modpara.n_orbital_idx = 4;
-    data.opt_trans = vec![Complex64::new(1.0, 0.0); 2];
-    data.optimization_flags = vec![7; 18];
-    mvmc_expert_parsers::set_opt_trans_c_opt_flags(&mut data);
-    assert_eq!(&data.optimization_flags[14..18], &[0, 0, 0, 0]);
-    assert_eq!(&data.optimization_flags[7..9], &[1, 1]);
-    assert_eq!(&data.optimization_flags[..7], &[7; 7]);
+    data.opt_trans = vec![Complex64::new(0.5, 0.0), Complex64::new(0.75, 0.0)];
+    data.optimization_flags = vec![0; 14];
+    mvmc_expert_parsers::set_opt_trans_opt_flags(&mut data);
+    // Projection and Slater components keep their flags; C's stray writes at
+    // components 7 and 8 are not reproduced.
+    assert_eq!(&data.optimization_flags[..14], &[0; 14]);
+    assert_eq!(&data.optimization_flags[14..], &[1, 0, 1, 0]);
 }
 
 // Initial coefficients use only a few scale/divide/trig operations;

@@ -67,7 +67,7 @@ fn corrected_general_all_four_prefixes_match_independent_reference() {
     for steps in [1, 2, 3, 20] {
         let case = root.join(format!("general_rbm_cmp/step-{steps}"));
         let mut data =
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false).unwrap();
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, false).unwrap();
         provenance::settings(&root, &case, steps, &data);
         mvmc_core::validation::validate_para_opt(&data).unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
@@ -258,8 +258,7 @@ fn corrected_general_twenty_step_public_runner_is_repeatable() {
     );
     // Public call arguments and immutable input declaration, not internal RNG
     // instrumentation. Both public calls and all output assertions returned.
-    let data =
-        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false).unwrap();
+    let data = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, false).unwrap();
     eprintln!(
         "GENERAL_GATE_SETTINGS kind=public seed={} steps=20 window=20 samples={} frames={} warmup={} interval={} cg={} store={} mode=cmp ranks=1 workers=1 repeats=2",
         data.modpara.rnd_seed,

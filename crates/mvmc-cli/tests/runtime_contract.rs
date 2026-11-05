@@ -743,7 +743,7 @@ fn physcal_timer_environment_controls_report_without_changing_output() {
 
 // Historical Julia runner goldens are checked by the core trajectory tests.
 // These frontend checks use the complete C declarations (including fixed-zero
-// padding) and C's explicit OptTrans activation/flags through both entry points.
+// padding) and C's explicit OptTrans activation (real weight flags, #676) through both entry points.
 fn check_cli_and_library_model(
     dir: &TestDir,
     case: &str,
@@ -753,7 +753,7 @@ fn check_cli_and_library_model(
     let suffix = if opt_trans { "enabled" } else { "disabled" };
     let out = dir.0.join(format!("cli-{case}-{suffix}"));
     let data =
-        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(namelist, opt_trans).unwrap();
+        mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(namelist, opt_trans).unwrap();
     assert!(
         data.input_errors.is_empty(),
         "{case}: {:?}",

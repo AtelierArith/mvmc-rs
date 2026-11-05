@@ -84,7 +84,7 @@ Every inner step first selects an **update type** from `NExUpdatePath`
 | 2, general orbital with `2Sz = -1` (not fixed) | one `genrand_real2` | exchange ($<0.5$) or local spin flip |
 | 2, general orbital with `2Sz` fixed | none | exchange |
 | 3 (Kondo-type) | one, and a second if the first $\ge0.5$ | hopping ($<0.5$), else exchange or local spin flip by the second draw |
-| other | none | no move |
+| other | none | no move in C; Rust rejects the input before any output (#681) |
 
 The C manual's rule of thumb: `0` hopping only, `1` hopping + exchange for
 electron systems, `2` for spin systems (`NLocSpin = 2Ne`, enforced by the C
@@ -210,6 +210,7 @@ restore the stored `InvM`/`PfM` (`copyMAll`).
 > - C: `UpdateMAllTwo_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:189`
 > - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:217`
 > - C: `UpdateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_fsz.c:114`
+> - C: `UpdateMAllTwo_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fsz.c:194`
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
 > - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:73`
 > - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
@@ -217,6 +218,7 @@ restore the stored `InvM`/`PfM` (`copyMAll`).
 > - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:341`
 > - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1405`
 > - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:722`
+> - Rust: `update_m_all_two_fsz_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:907`
 > - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
 > - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
 > - Parity: the C `invM` accumulation order inside `updateMAll_child` is `vec1[msi] += -invM_j[msi] * sltE_aj` over $j$ then $i$-major rank-2 update; the Rust kernels keep this loop nest and scalar order so that results agree to round-off. **Known quirk (observed):** in the two-electron update C defines `rsbOld = raOld + t*Nsite` (it uses `raOld`, not `rbOld`) in all four variants (`pfupdate_two_fcmp.c:227`, `pfupdate_two_real.c:227`, and the FSZ files). The Rust *real* update reproduces this on purpose (`update_m_all_two_real_flat`, `updates.rs:565`, `rsb_old = ra_old + ...` at `updates.rs:588`), but the Rust *complex normal* update uses `rb_old` (`updates.rs:537`). See [11.5](11-compatibility.md#115-open-observations).

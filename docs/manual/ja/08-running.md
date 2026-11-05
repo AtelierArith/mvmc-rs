@@ -21,7 +21,7 @@ mvmc [options] <namelist.def> [initpara]
 | `--seed <N>` | RNG のシード。`RndSeed` を置き換えます(グループ/ランクのオフセットは引き続き加算されます。[4.6](04-theory-sampling.md#46-サンプラー内の並列化)) | `RndSeed` |
 | `--mode real\|cmp\|fsz` | *検査されるラベル*: 数値モードを**選択しません**。数値モードは入力宣言から決まります([3.3](03-theory-wavefunction.md#33-実数モードと複素数モード))。推定されたモードと矛盾するラベルはエラー(終了ステータス 2、ファイル作成前)です。推定と重複しますがスクリプトのために残してあります | 推定(一般軌道なら `fsz`、複素の宣言があれば `cmp`、それ以外は `real`) |
 | `--initial-def auto\|none\|PATH` | 初期パラメータファイル([7.4](07-input-files.md#74-初期パラメータ値)): `auto` は隣接する `initial.def` があれば読み込み、`none` は読み込まず、`PATH` は存在が必須です | `auto` |
-| `-o`, `--opt-trans` | C の OptTrans モードを有効にします(C ドライバーの `-o`) | off |
+| `-o`, `--opt-trans` | OptTrans を有効にします(C ドライバーの `-o`)。重みの実部成分を最適化します(#676) | off |
 | `-b` | バイナリのパラメータ出力: `zvo_var` テキストファイルの代わりに `zvo_varbin_NNN.dat` を書き出します([バイナリ出力](#バイナリ出力-b)) | off |
 | `-F <N>`, `--flush-interval <N>` | `_time_`/`_SRinfo` ファイルを `N` ステップごとにフラッシュします。`N < 1` はエラーです([9.5](09-output-files.md)) | 1 |
 | `-e`, `--expert` | Expert モード(既定)。受理されますが何もしません | on |

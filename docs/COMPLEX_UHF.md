@@ -121,11 +121,36 @@ reported with the PR for issue #350.
 | --- | --- | --- |
 | `readdef.c:186-188`, `:438-440` | `fclose(NULL)` after a failed `fopen` of a definition file: segmentation fault | error naming the file, exit 1, no partial outputs |
 | `readdef.c:975` (`GetFileName`) | an unknown namelist keyword leaves `itmpKWidx` at `-1` (or stale) and then writes `cFileNameList[itmpKWidx]`: heap underflow / overwritten previous keyword | warning, keyword ignored |
-| `readdef.c:70-74` `ReadDefFileError` | returns 0, so every `info = ReadDefFileError(...)` record-count mismatch is only printed and never fails | the message is printed; short files leave zero records (as C); extra records are dropped (C overflows its heap arrays) |
+| `readdef.c:70-74` `ReadDefFileError` | returns 0, so every `info = ReadDefFileError(...)` record-count mismatch is only printed and never fails; a short file runs with zero-filled terms. Upstream issp-center-dev/mVMC#81 (v1.4.0) returns 1 and aborts | see the record-count contract below (#680) |
 | `readdef.c:609` and the index uses in `readdef.c`, `initial.c`, `makeham.c` | the AP-only `Orbital` reader writes `OrbitalIdx` before `CheckPairSite`; `LocSpn[x0]`, `Initial`, Transfer, InterAll and orbital indices are never range checked | range errors for sites, spins and orbital indices |
 | `readdef.c:356-366`, `output.c` gap | `Ncond` not set (`Ne` only, as documented), or `Nsize = 2*Nsite`, gives `Nsize = 0` or no gap index: `EigenValues[-1]`/`[2*Nsite]` is read | error requiring `0 < Nsize < 2*Nsite` |
 | `matrixlapack.c:235-275` `ZHEEVall` | a non-zero LAPACK `info` returns 0 and the caller keeps stale arrays | error |
 | orbital readers | a short line reuses stale `i`, `j` and index variables | error |
+
+### Record-count contract (#680)
+
+mVMC 1.3.0 only prints `Error: <file> (Broken file or Not exist)` on a
+record-count mismatch. Upstream mVMC#81 (v1.4.0) makes `ReadDefFileError`
+return 1, so every mismatch aborts, except that `Initial` stops reading at
+`NInitial` records. Both versions count every `fgets` line, so in C 1.4.0 a
+trailing blank line is fatal in `Trans`, `CoulombIntra`, `CoulombInter` and
+`LocSpin`, harmless in `Initial`, and irrelevant to the `fscanf` readers
+(`Hund`, `Exchange`, `PairHop`, `InterAll`). Rust uses one rule for every
+file:
+
+* Trailing whitespace-only lines are not records. Every other line after the
+  five header lines is one record, as in C (an interior blank line is a
+  zero record, so it cannot hide a missing one).
+* Fewer records than declared (`NTransfer`, `NCoulombIntra`,
+  `NCoulombInter`, `NHund`, `NExchange`, `NPairHop/2`, `NInterAll`,
+  `NInitial`, `Nsite` for `LocSpin`, `Nsite^2` for the AP `Orbital` and
+  `Nsite*(2*Nsite-1)` for `OrbitalGeneral`) is an error. Rust prints the C
+  `Error: ... (Broken file or Not exist)` line, returns
+  `UhfError::Definition` naming the file and both counts, and writes no output.
+* More records than declared are dropped with a `Warning:` line, as C 1.4.0
+  does for `Initial`. C 1.3.0 writes past its heap arrays here, and C 1.4.0
+  aborts for the other files. The orbital readers stop at the expected count,
+  as in C.
 
 ## Verification
 

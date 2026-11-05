@@ -21,7 +21,7 @@ The synopsis is the C driver's `vmc.out [option] NameListFile [OptParaFile]` (`v
 | `--seed <N>` | RNG seed; replaces `RndSeed` (the group/rank offset is still added, [4.6](04-theory-sampling.md#46-parallelism-inside-the-sampler)) | `RndSeed` |
 | `--mode real\|cmp\|fsz` | *checked label*: it does **not select** the numerical mode, which comes from the input declarations ([3.3](03-theory-wavefunction.md#33-real-and-complex-modes)); a label that contradicts the inferred mode is an error (exit 2, before any file is created). Redundant with the inference, kept for scripts | inferred (`fsz` if general orbitals, else `cmp` if any complex declaration, else `real`) |
 | `--initial-def auto\|none\|PATH` | initial parameter file ([7.4](07-input-files.md#74-initial-parameter-values)): `auto` loads a neighbouring `initial.def` if present, `none` skips it, `PATH` is required to exist | `auto` |
-| `-o`, `--opt-trans` | enable the C OptTrans mode (the C driver's `-o`) | off |
+| `-o`, `--opt-trans` | enable OptTrans (the C driver's `-o`); the real weight components are optimized (#676) | off |
 | `-b` | binary parameter output: `zvo_varbin_NNN.dat` replaces the `zvo_var` text file ([binary output](#binary-output--b)) | off |
 | `-F <N>`, `--flush-interval <N>` | flush the `_time_`/`_SRinfo` files every `N` steps; `N < 1` is an error ([9.5](09-output-files.md)) | 1 |
 | `-e`, `--expert` | Expert mode (default); accepted, a no-op | on |

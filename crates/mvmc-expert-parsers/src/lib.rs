@@ -59,9 +59,8 @@ pub use utils::validation::{
 
 pub use utils::opt_flag::{
     ensure_optimization_flags_size, get_slater_opt_flag_index, is_gutzwiller_optimized,
-    is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_opt_trans_c_opt_flags,
-    set_opt_trans_opt_flags, set_orbital_opt_flags, set_projection_opt_flags, set_rbm_opt_flags,
-    write_optimization_status,
+    is_jastrow_optimized, is_slater_optimized, set_dh_opt_flags, set_opt_trans_opt_flags,
+    set_orbital_opt_flags, set_projection_opt_flags, set_rbm_opt_flags, write_optimization_status,
 };
 
 use std::collections::BTreeMap;
@@ -109,25 +108,18 @@ pub fn parse_expert_mode_files<P: AsRef<Path>>(
 /// C only reads and activates an `OptTrans` definition when `FlagOptTrans` is
 /// enabled by the caller. The default parser preserves Julia's definition-file
 /// behavior; C-facing runners should pass `false` unless their `-o` mode is on.
+/// When enabled, the real component of every OptTrans weight is optimized
+/// (#676); C's `GetInfoOptTrans` flag writes are a defect and not reproduced.
 pub fn parse_expert_mode_files_with_opt_trans<P: AsRef<Path>>(
     namelist_path: P,
     enable_opt_trans: bool,
 ) -> Result<ExpertModeData, ParseError> {
-    parse_expert_mode_files_mode(namelist_path, enable_opt_trans, false)
-}
-
-/// Parse Expert Mode files using C's OptTrans activation and flag layout.
-pub fn parse_expert_mode_files_with_c_opt_trans<P: AsRef<Path>>(
-    namelist_path: P,
-    enable_opt_trans: bool,
-) -> Result<ExpertModeData, ParseError> {
-    parse_expert_mode_files_mode(namelist_path, enable_opt_trans, true)
+    parse_expert_mode_files_mode(namelist_path, enable_opt_trans)
 }
 
 fn parse_expert_mode_files_mode<P: AsRef<Path>>(
     namelist_path: P,
     enable_opt_trans: bool,
-    c_opt_trans_flags: bool,
 ) -> Result<ExpertModeData, ParseError> {
     let namelist_path = namelist_path.as_ref();
     let base_dir = namelist_path
@@ -281,11 +273,11 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             .insert("Orbitals".to_string(), raw != 0);
     }
     set_orbital_opt_flags(&mut data, &orbital_flags);
-    if c_opt_trans_flags {
-        utils::opt_flag::set_opt_trans_c_opt_flags(&mut data);
-    } else {
-        set_opt_trans_opt_flags(&mut data);
-    }
+    // C 1.3.0 `GetInfoOptTrans` writes undoubled flags at `NProj + NSlater + i`
+    // (no RBM term), which freezes the weights and activates unrelated
+    // projection/Slater components. That is a C defect (#676,
+    // tmisawa/Julia-mVMC#94); Rust optimizes the real weight components.
+    set_opt_trans_opt_flags(&mut data);
     data.slater_params.resize(
         data.modpara.n_orbital_idx.max(0) as usize,
         num_complex::Complex64::new(0.0, 0.0),

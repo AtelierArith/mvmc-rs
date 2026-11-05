@@ -75,6 +75,6 @@ pub use updates::{
     calculate_new_pf_m_two2_complex_flat, calculate_new_pf_m_two2_real_flat,
     calculate_new_pf_m_two_fsz_complex_flat, calculate_new_pf_m_two_fsz_real_flat,
     update_m_all_complex_flat, update_m_all_fsz_complex_flat, update_m_all_fsz_real_flat,
-    update_m_all_real_flat, update_m_all_two_complex_flat, update_m_all_two_fsz_real_flat,
-    update_m_all_two_real_flat,
+    update_m_all_real_flat, update_m_all_two_complex_flat, update_m_all_two_fsz_complex_flat,
+    update_m_all_two_fsz_real_flat, update_m_all_two_real_flat,
 };

@@ -679,7 +679,7 @@ fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
             if !matches!(mode, "real" | "cmp" | "fsz") {
                 return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
             }
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
                 namelist_path.as_ref(),
                 enable_opt_trans,
             )
@@ -709,7 +709,7 @@ fn prepare_phys_cal_from_namelist_with_seed_offset<R: Reducer + ?Sized>(
             return Err(format!("mode must be :real, :cmp, or :fsz; got :{mode}"));
         }
         let namelist_path = namelist_path.as_ref();
-        let mut data = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+        let mut data = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
             namelist_path,
             enable_opt_trans,
         )
@@ -1683,14 +1683,13 @@ fn run_para_opt_timed<const TIMED: bool, R: Reducer + ReducerAsDyn + ?Sized>(
     timer.start(11);
     let parsed = (|| {
         let data = match config.enable_opt_trans {
-            Some(enabled) => mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
-                &namelist_path,
-                enabled,
-            ),
+            Some(enabled) => {
+                mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist_path, enabled)
+            }
             // The production runner follows C's FlagOptTrans contract: a
             // definition file alone does not activate optimized translation.
             None => {
-                mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist_path, false)
+                mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist_path, false)
             }
         }
         .map_err(|e| e.to_string())?;

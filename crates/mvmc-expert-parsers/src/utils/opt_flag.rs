@@ -365,31 +365,3 @@ pub fn set_opt_trans_opt_flags(data: &mut ExpertModeData) {
         data.optimization_flags[2 * idx + 1] = 0;
     }
 }
-
-/// Apply the native C `GetInfoOptTrans` writes.
-pub fn set_opt_trans_c_opt_flags(data: &mut ExpertModeData) {
-    let count = data.count_opt_trans_parameters();
-    if count == 0 {
-        return;
-    }
-    data.c_opt_trans_flags = true;
-    let fidx = data.projection_layout().n_proj + n_slater(data);
-    let required = 2
-        * (data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(data) + count);
-    if data.optimization_flags.len() < required {
-        data.optimization_flags.resize(required, 0);
-    }
-    // Other setters reserve the whole vector with Julia's active defaults.
-    // C does not write the doubled parameter-tail flags here: it writes at
-    // the consecutive fidx above, even with RBM present. Keep unwritten native
-    // tail components deterministically inactive instead of inheriting ones.
-    // C allocates this buffer with malloc, so those unwritten bytes themselves
-    // are not a portable oracle contract.
-    let tail = 2 * (data.projection_layout().n_proj + data.count_rbm_parameters() + n_slater(data));
-    data.optimization_flags[tail..required].fill(0);
-    for index in fidx..fidx + count {
-        if let Some(flag) = data.optimization_flags.get_mut(index) {
-            *flag = 1;
-        }
-    }
-}

@@ -184,7 +184,7 @@ fn check(model: &str) {
         assert!(resolved.contains("actual_all_complex=false\n"));
         assert!(resolved.contains("actual_orbital_general=0\n"));
         assert!(resolved.contains("actual_n_qp_opt_trans="));
-        assert!(resolved.contains("actual_c_opt_trans_flags="));
+        assert!(resolved.contains("actual_opt_trans_slots="));
         if stage == "sample-0" {
             assert!(resolved.contains("actual_qp_total=Some("));
         }

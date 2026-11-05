@@ -180,7 +180,7 @@ fn public_initialization_matches_native13_defined_contracts() {
         actual_names.sort();
         assert_eq!(expected_names, actual_names);
         let mut data =
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false).unwrap();
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, false).unwrap();
         assert_eq!(data.count_variational_parameters(), npara);
         let segments = stages[2]["segments"].as_array().unwrap();
         assert_eq!(segments.len(), 13);

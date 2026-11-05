@@ -2,7 +2,7 @@
 //! Missing optional input is a Julia API policy, NOT native-C defined behavior:
 //! readdef.c 1202–1206 calls fclose(NULL) in its failed-open branch.
 use mvmc_expert_parsers::utils::read_input_parameters::read_input_parameters;
-use mvmc_expert_parsers::{parse_expert_mode_files, parse_expert_mode_files_with_c_opt_trans};
+use mvmc_expert_parsers::{parse_expert_mode_files, parse_expert_mode_files_with_opt_trans};
 use num_complex::Complex64 as C;
 use std::fs;
 use std::path::PathBuf;
@@ -83,8 +83,7 @@ fn original_opttrans_weights_swap_identity_and_periodic_signs_match_enabled_c_co
         "OptTrans opt.def\n",
         &[("opt.def", definition.to_string())],
     );
-    let data =
-        parse_expert_mode_files_with_c_opt_trans(bundle.0.join("namelist.def"), true).unwrap();
+    let data = parse_expert_mode_files_with_opt_trans(bundle.0.join("namelist.def"), true).unwrap();
     assert!(data.input_errors.is_empty());
     assert_eq!(data.n_qp_opt_trans, 2);
     assert_eq!(
@@ -109,7 +108,7 @@ fn original_parallel_and_opttrans_overlays_keep_ap_offset_and_declared_unused_sl
         ("inopt.def",record("NQPOptTrans",2,"1 0.25 -0.25\n0 0.50 -0.50\n")),
     ]);
     let mut data =
-        parse_expert_mode_files_with_c_opt_trans(bundle.0.join("namelist.def"), true).unwrap();
+        parse_expert_mode_files_with_opt_trans(bundle.0.join("namelist.def"), true).unwrap();
     assert!(data.input_errors.is_empty());
     assert_eq!(data.n_orbital_anti_parallel, 1);
     assert_eq!(data.slater_params.len(), 5);

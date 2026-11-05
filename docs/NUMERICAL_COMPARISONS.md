@@ -117,6 +117,38 @@ forward regression comparisons therefore accompany residual checks instead
 of using a broad `condition * epsilon` allowance. The Rust direct test checks
 `||S*x-g||inf / (||S||inf*||x||inf + ||g||inf) <= 128*n*epsilon`.
 
+## Complex FSZ accepted exchange: C rank-two update (#679)
+
+C applies an accepted complex FSZ exchange with the rank-two update
+`UpdateMAllTwo_fsz` (`vmcmake_fsz.c:295`, `pfupdate_two_fsz.c`). Rust used
+Julia's full recalculation (`update_m_all_two_fsz!`) instead. Rust now ports
+the C update (`sampling::updates::update_m_all_two_fsz_complex_flat`) with
+C's operation order. It shares the rank-two kernel `update_two_complex` with
+the normal complex path. `rsbOld` follows mVMC 1.4.0 (`rbOld + t*Nsite`,
+upstream #100), the C target for new work and the choice of the normal
+complex path. The 1.3.0 `raOld` agrees to roundoff
+(`complex_fsz_rank_two_update_is_independent_of_the_old_ab_element`). The
+proposal, ratio and Metropolis draws are unchanged, so RNG draw order and
+count are identical. The rank-two update cannot fail, which removes the
+discarded `CalcMAllError` of the rebuild. The periodic `nAccept > Nsite`
+refresh now keeps the updated matrices and log-IP when `CalculateMAll_fsz`
+fails, as the normal complex driver does.
+
+- `crates/mvmc-core/tests/two_electron_fsz_complex.rs` compares 80 consecutive
+  rank-two updates (n_size 4-8, 20 exchanges per case without a refresh)
+  against a fresh first-row Pfaffian and Gauss-Jordan inverse. The bound is
+  `16 * (k+1) * n_size * eps * kappa` relative after k updates, with `kappa`
+  the max-norm condition estimate of the current matrix. The largest observed
+  error is 0.09 of that bound.
+- The historical Julia fixture `tests/fixtures/complex_fsz` (full
+  recalculation) still matches all discrete rows exactly. Its matrices differ
+  by at most `4.7e-14` absolute, inside the unchanged `512 * eps` bound. The
+  README labels it as a Julia-order reference.
+- The native C FSZ PhysCal references (`issue181_native_c_physcal` FSZ cases)
+  and the Julia FSZ CG/direct-SR prefix tests (`run::callback_tests`) pass at
+  their existing bounds. `complex_fsz_twenty_step_optimization_is_repeatable`
+  checks 20-step same-seed repeatability.
+
 ## Output, fixture storage and optional oracles
 
 Computed output fields are parsed and compared numerically. Row/column
@@ -237,6 +269,44 @@ bound is `2 * n * eps * max|entry|` (observed at most `0.6 * n * eps`, for
 `n = 4..256`); see the test header for the table and the unchanged complex and
 inverse bounds. C-order correctness is covered by the hand-dyadic and analytic
 tests (`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
+
+## OptTrans optimization flags (#676)
+
+C 1.3.0 `GetInfoOptTrans` (`readdef.c:1067-1068, 2385-2402`) writes
+`OptFlag[NProj + NOrbitalIdx + i] = 1`: the index is not doubled and the offset
+has no RBM term. The OptTrans weights are therefore never optimized, and
+unrelated projection/Slater component flags are set instead (in the real
+`physcal_181/hubbard_chain_dh_opttrans` input, components 35-37, two of them
+imaginary components of real-mode parameters). This is a C defect, reported upstream as
+[tmisawa/Julia-mVMC#94](https://github.com/tmisawa/Julia-mVMC/issues/94).
+Rust keeps the correct mathematics, as Julia and the resident GPU path do: with
+`-o` the real component of every OptTrans weight is optimized, its imaginary
+component stays fixed, and no other flag changes (`set_opt_trans_opt_flags`).
+The OptTrans derivatives use their (value, i*value) component pairs, so their
+slots match these flags (`opt_real`, #370, above). Rust no longer has a C-flag emulation
+path (the #100 `set_opt_trans_c_opt_flags` and `c_opt_trans_flags` were
+removed). C comparisons exclude the affected quantities instead of
+regenerating expectations from Rust:
+
+- `physcal_issue181::independent_c_definition_component_flags`: the C stray
+  cells `NProj + NSlater + i` and the OptTrans tail are excluded from the C
+  flag comparison; the test checks that `-o` leaves every other flag equal to
+  the run without OptTrans and that the tail is `1 0` per weight.
+- `native_comparison_492::native_rbm_sr_operands_active_components_and_rng_match_c_capture`:
+  C's 57 active components (its stray writes fall on already active
+  components here) are the leading Rust active set, followed by the three
+  OptTrans real components; only the leading 57x57 block of the stabilized SR
+  matrix and the first 57 RHS rows are compared with C, at the unchanged
+  `1e-13` bounds. RNG and saved state remain exact.
+- `native_comparison_492::native_opttrans_derivative_values_match_c_in_component_pair_layout`:
+  C's per-sector derivative values are compared at Rust's real/imaginary slot
+  pair; C's consecutive slot layout is excluded.
+- The `ot` cells of `multiwalker_sr_435` and `mpi_issue179_matrix` compare
+  step-1 operands before the SR solve, which do not depend on the flags; the
+  real-mode OptTrans trailing entries stay excluded per #370.
+
+Beyond step 1 the C trajectory of an `-o` optimization freezes the weights
+and Rust's moves them, so no multi-step `-o` C trajectory is compared.
 
 ## C `-b` varbin parameter blocks (#347)
 
