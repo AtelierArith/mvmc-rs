@@ -144,10 +144,10 @@ fn check(model: &str) {
     let provenance = fs::read_to_string(native.join("provenance.txt")).unwrap();
     assert!(provenance.contains("seed=1\n"));
     assert!(provenance.contains(
-        "source_parameter_sha256=46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0"
+        "source_parameter_sha256=801273e47a6f7b3390244a6bdcb74fa09825791e8b8283d2d6d7e36d25470cad"
     ));
     assert!(provenance.contains(
-        "source_readdef_sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9"
+        "source_readdef_sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3"
     ));
     let julia = fs::read_to_string(root.join("provenance.txt")).unwrap();
     assert!(julia.contains("julia=1.13.1\n") && julia.contains("seed=1\n"));

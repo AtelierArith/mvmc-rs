@@ -1,5 +1,5 @@
 /* Optional fixed-value formatting probe. Templates copied verbatim from
- * mVMC-1.3.0 src/mVMC/vmcmain.c:668-689; no computed numerical oracle.
+ * mVMC-1.4.0 src/mVMC/vmcmain.c:668-689; no computed numerical oracle.
  * Reproduce: cc -std=c11 physcal_181_format.c -o /tmp/physcal181-format
  * /tmp/physcal181-format ../tests/fixtures/physcal_181/formatting
  * Cargo never builds or invokes this program.
