@@ -1,13 +1,13 @@
 # Rank-wise native-C MPI optimization matrix (issue #179)
 
-Output of the instrumented native `vmc.out` (stock `extern/mVMC-1.3.0` plus the two
+Output of the instrumented native `vmc.out` (stock `extern/mVMC-1.4.0` plus the two
 read-only patches listed in `PROVENANCE.txt`) for the cells in `cells.txt`. One
 optimization step per cell (`NSROptItrStep = NSROptItrSmp = 1`), seed from the input,
 no initial-parameter file. Regenerate (explicit developer command, Dev Container):
 
 ```sh
 c_toolbox/mpi_matrix_179/build.sh /tmp/mvmc-179-c
-SOURCE_COMMIT=$(git -C extern/mVMC-1.3.0 rev-parse HEAD) \
+SOURCE_COMMIT=$(git -C extern/mVMC-1.4.0 rev-parse HEAD) \
   python3 c_toolbox/mpi_matrix_179/generate.py --vmc /tmp/mvmc-179-c/build/src/mVMC/vmc.out \
   --work /tmp/mvmc-179-runs --out tests/fixtures/mpi_matrix_179
 ```
@@ -22,7 +22,11 @@ Per cell `<model>-<solver>-r<world>w<NSplitSize>-s<samples>/`:
 
 Models: `real`, `cmp` (Heisenberg chain), `fsz1` / `fsz2` (FSZ, `NQPFull` 1 / 2),
 `ot` (Hubbard chain with DH and OptTrans, `NQPOptTrans = 3`, `-o`). Solvers: `d0`
-(direct, `NStore 0`), `d1` (direct, `NStore 1`), `cg` (`NSRCG 1`). Worlds 2 and 4,
+(direct, `NStore 0`), `d1` (direct, `NStore 1`), `cg` (`NSRCG 1`,
+`NSRCGAbortOnFail 0`: on these 7-sample inputs the C 1.4.0 step-1 CG solve meets
+its breakdown guard, "SR-CG became numerically unstable at iter=1", and aborts by
+default; the 1.4.0 option lets the step finish so that the rank state is
+recorded, and the Rust test applies the same override). Worlds 2 and 4,
 widths 1, 2 and the world size; `s7` cells use 7 saved samples (uneven partitions),
 `s3` cells use 3 samples with 4 ranks (empty measurement work) and `fsz1` with
 width 4 (three ranks own an empty QP range). `c_sr_error = 1` marks the two cells

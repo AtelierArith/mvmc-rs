@@ -246,15 +246,16 @@ fn prepare(cell: &Cell, dest: &Path, solver: &str) -> PathBuf {
         }
     }
     for (key, value) in overrides {
-        let line = lines
+        // Keys absent from the input (NSRCGAbortOnFail of the C 1.4.0 CG cells)
+        // are appended, as the generator does.
+        match lines
             .iter_mut()
             .find(|line| line.split_whitespace().next() == Some(key.as_str()))
-            .unwrap_or_else(|| panic!("{key} missing from modpara.def"));
-        *line = format!("{key} {value}");
+        {
+            Some(line) => *line = format!("{key} {value}"),
+            None => lines.push(format!("{key} {value}")),
+        }
     }
-    // The native C references are 1.3.0 runs that continue after a CG solve
-    // reaches its limit; C 1.4.0 does so only with NSRCGAbortOnFail = 0 (#682).
-    lines.push("NSRCGAbortOnFail 0".to_owned());
     fs::write(&modpara, lines.join("\n") + "\n").unwrap();
     dest.join("namelist.def")
 }
