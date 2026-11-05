@@ -17,7 +17,7 @@ and are not listed. Benchmark results under `benchmark/**/results/` and other
 dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historical
 1.3.0 records as well.
 
-39 C sources under `src/` changed between the releases. 62 files are historical 1.3.0 and 219 files cite only 1.4.0 hashes.
+39 C sources under `src/` changed between the releases. 48 files are historical 1.3.0 and 218 files cite only 1.4.0 hashes.
 
 ## Historical 1.3.0
 
@@ -46,8 +46,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `c_toolbox/issue183_ls_empty/README.md` | `initfile.c`, `readdef.c`, `vmcmain.c` |
 | `c_toolbox/mpi_issue179_store.md` | `setmemory.c`, `vmccal.c` |
 | `c_toolbox/native13_initialization/generate-fixtures.pl` | `readdef.c`, `vmcmain.c` |
-| `c_toolbox/real_fsz_direct_sr_audit.md` | `parameter.c` |
-| `c_toolbox/run_real_fsz_direct_sr_audit.jl` | `parameter.c` |
 | `docs/ISSUE184_OVERLAY_EVIDENCE.md` | `readdef.c` |
 | `docs/reference/c-to-julia/verification/evidence/issue-180-real-fsz-direct-15087-provenance.txt` | `parameter.c` |
 | `docs/reference/c-to-julia/verification/issue-176-current-evidence-audit.md` | `setmemory.c`, `vmccal_fsz.c` |
@@ -73,18 +71,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `scripts/compare_mpi_issue179.py` | `readdef.c` |
 | `scripts/issue179_p02/c_written_mask.py` | `readdef.c` |
 | `scripts/test_compare_mpi_issue179.py` | `readdef.c` |
-| `tests/fixtures/physcal_181/heisenberg_chain_cmp/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/heisenberg_chain_fsz/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/heisenberg_chain_real/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_all_terms_lanczos1/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_all_terms_lanczos2/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_dh_opttrans/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_dh_overlays/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_dh_real/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/hubbard_chain_real/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/kondo_chain_real/metadata-provenance.txt` | `readdef.c` |
-| `tests/fixtures/physcal_181/native-macos-measurement-diagnostic/README.md` | `locgrn_fsz.c`, `pfupdate_two_fsz.c` |
 
 ## 1.4.0
 
@@ -302,7 +288,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/physcal_181/hubbard_chain_dh_overlays/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/physcal_181/hubbard_chain_dh_rbm_opttrans/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/physcal_181/native-c-weighted-green/provenance.txt` | `average.c` |
-| `tests/fixtures/physcal_181/slater47-semantic-handoff.md` | `slater.c` |
 | `tests/fixtures/physcal_181/unnormalized-reserved-slater/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/projection_count/c_contracts.txt` | `qp.c`, `readdef.c` |
 | `tests/fixtures/rbm/c_counters.txt` | `rbm.c`, `readdef.c` |
