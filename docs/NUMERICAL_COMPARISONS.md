@@ -58,10 +58,10 @@ documented translation:
   (`c14_cg_breakdown`) were removed in #695. Tests that still run short CG
   optimizations set `NSRCGAbortOnFail 0` only so that a solve that reaches its
   limit does not stop the run; they check Rust repeatability, not a reference.
-- `native_c_lanczos_576`: with `rbOld` the largest Lanczos-output difference
-  from the 1.3.0 native reference is `2.45e-10` absolute (`3.4e-13` relative);
-  with `raOld` Rust reproduces the earlier `1.4e-12`. The Lanczos bound is
-  `max(1e-10, 1e-12 |value|)` (fixture README).
+  The C 1.4.0 references of the #179 MPI matrix CG cells and the #358 step-1
+  operands were generated with the same option in C, because their step-1
+  solve meets the 1.4.0 breakdown guard. The compared values (sampler state,
+  operands, energy) precede the solve.
 
 Deliberate deviations from 1.4.0: an SR-CG step with no active parameter is a
 no-op (C reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds);
@@ -137,6 +137,7 @@ range reduction, scaling and cache fingerprints is unchanged.
 | Short SR prefixes / long-run repeatability | `1e-11` absolute and relative for computed parameters/energy; short independent checkpoints and long same-implementation discrete/RNG repeatability |
 | Optional CUDA resident SR gates (follow-up #623) | S/g on the same Gram: `abs 0 / rel 2 eps` with FMA disabled, as in the existing assembly contract; direct repeats: `abs 1e-11 / rel 1e-11` plus independent C-order solution and residual checks for both solves. CG repeats: `abs 8 eps / rel 2 * iterations * gamma_(samples+components)`, a fixed-problem regression envelope for two GEMV reductions per iteration, not an arbitrary ill-conditioned forward-error guarantee; exact iteration counts remain separate. The converged CG case checks an independently materialized covariance residual against `tolerance * components` plus an operand-scale roundoff bound. Zero-tolerance fixed prefixes are not assumed converged; C/device residuals are reported rather than compared to a direct-solver convergence bound. |
 | Optional CUDA L128 interval sampler, legacy vs resident (#656, `resident_l128_sampling_transfer_benchmark`) | Configurations and accepted-move windows `aw` exact. Pfaffians per walker plane: `16 (aw+1) n eps kappa_F max(abs(a), abs(b))`, `kappa_F = normF(A) normF(A^-1)` of the final configuration from an independent CPU `calc_m_all_real` refactor, checked for resident vs legacy and each against the CPU values. The two samplers use different factorizations (C-order vs paired Julia) and update orders (immediate vs four queued FMA updates), so a fixed relative bound is not meaningful near singular planes (kappa_F up to 2e10). Measured maxima 5.5 (resident vs CPU, W=320). The first divergence audit found a legacy defect: it published the row-dot proposal Pfaffian but pivoted the inverse with the column contraction, unlike C `UpdateMAll` (`PfM *= -vec1[msa]`), so a near-singular plane left a persistent error (normalized 4222). |
+| Optional CUDA resident RBM hidden fields and QP weights (#699) | Hidden fields: `2 gamma_k S_h`, `S_h = |w_b| + 2 sum |w_c|`, `k = width + 2 + 4 accepted moves` (exact products by -1/0/1/2; only additions round; absolute in `S_h`, so cancellation is covered), initially, after the tape and after SR with the updated coefficients. OptTrans QP weights one ulp relative (one product), normalization `2 eps` relative. Measured 0 (same IEEE operations); integer counters, configurations and acceptance counts stay exact. Details: `gpu/mvmc-gpu-cuda/tests/fixtures/rbm/README.md`, `opttrans/README.md` |
 | ComplexUHF Hartree-Fock (`mvmc uhf`) | Iteration counts, indices and headers exact; 10-decimal outputs `abs 2e-10 + rel 1e-10` (print quantum, contraction factor <= 0.9), residual `abs 2e-12 + rel 1e-8`, energy column `abs 1e-10`; orbital files only through eigenvector-gauge-invariant `F F^+` (`abs 3e-5`) and the SFMT noise (`abs 2e-6`); see `docs/COMPLEX_UHF.md` |
 | CLI numerical output | `1e-12` absolute and relative, exact indexed coordinates and parameter headers |
 | Optional CUDA SR-routing / resident-measurement repeats (#623) | Computed output fields and the pre-update energy row use `abs 1e-11 / rel 1e-11`, the existing short-SR/stage-B envelope. File sets, row counts, headers and integer tokens remain exact. Independent C-order stage/trajectory/measurement bounds and routing/transfer counters remain checked separately. |
@@ -370,7 +371,7 @@ unmodified C `vmc.out` therefore uses:
 - block data: C's `NPara` doubles against the leading `NPara` doubles of Rust's block. PhysCal
   blocks (file-read or `InitParameter` values, no accumulated arithmetic) and the optimizer's
   step-0 block are compared exactly; later optimizer steps depend on the SR solve (BLAS
-  operation order, #358) and use an absolute bound of `1e-8` (observed maximum about `5e-10`,
+  operation order, #358) and use an absolute bound of `1e-8` (observed maximum `1.4e-9` against C 1.4.0,
   parameters O(1)) with RNG-driven control paths identical;
 - completeness: the Rust block must contain every parameter of the text `zvo_var` output.
 

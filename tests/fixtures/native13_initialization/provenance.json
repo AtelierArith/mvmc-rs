@@ -1,58 +1,36 @@
 {
-   "origin" : {
-      "capture_first_archive" : {
-         "path" : "/tmp/mvmc-native13-first-families-proof-20261004.tar.gz",
-         "sha256" : "9a9bad9ab3b0dc37bd18d9adf27185eb3139e5b582afbdf268ea42d7f8369761"
+   "origin": {
+      "build": "c_toolbox/physcal_native/build.sh plain (CMake Release, GCC 13.3.0, MPICH 4.2.0, OpenBLAS 0.3.26), then c_toolbox/native13_initialization/reproduce-native-init.sh; dev container image 503e36a6615e, one rank, OMP/OPENBLAS threads 1",
+      "comparison": "Reacquired under mVMC 1.4.0 in #695. All 78 checkpoint captures (13 models x 6 stages) are byte-identical to the former 1.3.0 acquisition: every stage source_sha256 in the model JSON files matches the new capture, so the JSON fixtures are unchanged. The 1.3.0 acquisition record (archives, bindings, manifests) is this file at commit db298139.",
+      "family_vmcmain": {
+         "path": "vmcmain.family.c (extract-family.pl)",
+         "sha256": "62ab63b9c90d0b34e3c9f125ac2c68baabc2a0849dd522a85b5a920300206300"
       },
-      "capture_remaining_archive" : {
-         "path" : "/tmp/mvmc-native13-remaining-init-proof-20261004.tar.gz",
-         "sha256" : "c2c9b364fb594141af21ea80721ff45e15593a8d79bbb91539685c496d9bc158"
+      "instrumented_vmcmain": {
+         "path": "vmcmain.stop.c (extract-init-stop.pl)",
+         "sha256": "3b7eca8537fa2fd030bca4eb2539a9f37fdd9243a113b72b94a4405f2ea6fe97"
       },
-      "first_binding" : {
-         "path" : "/dev/shm/mvmc-native13-first-family-launch.mrxr1I/unified.before.sha256",
-         "sha256" : "066d0e7e90f340a856d6ab339bf914d911dbeeb033b63a3d56b0d8f83469abb6"
+      "native_binary": {
+         "path": "vmc-init-stop",
+         "sha256": "ed932f6ef8b85eea814e91dcefa449f2dd124df116e076b58083ffb2d44a6509"
       },
-      "instrumented_vmcmain" : {
-         "path" : "/tmp/mvmc-native13-init-stop-build.OVRLu0/vmcmain.stop.c",
-         "sha256" : "c033a58fc62be7ec01696a0b1b99f2a53a145c6a42c2825729a9e363388bbc4c"
+      "original_vmcmain": {
+         "path": "src/mVMC/vmcmain.c",
+         "sha256": "da14885da14fd5b98feb27f7c53efd6fa229a4a33d27c30fe44848e6514394f0"
       },
-      "native_binary" : {
-         "path" : "/tmp/mvmc-native13-init-stop-build.OVRLu0/vmc-init-stop",
-         "sha256" : "1cd80a8d3b168e447c2f7f3b33278c63e96f5c217c715396df382a923e827f4f"
+      "readdef": {
+         "path": "src/mVMC/readdef.c",
+         "sha256": "9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3"
       },
-      "original_vmcmain" : {
-         "path" : "/tmp/mvmc-native13-build.sULMMH/source/src/mVMC/vmcmain.c",
-         "sha256" : "fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63"
+      "sfmt_source": {
+         "path": "src/sfmt/SFMT.c",
+         "sha256": "b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a"
       },
-      "products_manifest" : {
-         "path" : "/tmp/mvmc-native13-init-stop-build.OVRLu0/products.sha256",
-         "sha256" : "2c711329f22426efa9845f6e9a2642cd8fba0965fdab8fbce5489678737be1ef"
-      },
-      "readdef" : {
-         "path" : "/tmp/mvmc-native13-build.sULMMH/source/src/mVMC/readdef.c",
-         "sha256" : "6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9"
-      },
-      "remaining_binding" : {
-         "path" : "/dev/shm/mvmc-native13-remaining-launch.CIOqrb/unified.before.sha256",
-         "sha256" : "577f59cf9b09113eb51de34b69e900f091535d7161261f9ca41c8b5f6485b85b"
-      },
-      "runtime_manifest" : {
-         "path" : "/tmp/mvmc-native13-init-stop-build.OVRLu0/runtime.before.sha256",
-         "sha256" : "9d6f2457d9a51005b6cf24b154fe13be754cdf304ed1cf96aa299640a3127fb6"
-      },
-      "sfmt_source" : {
-         "path" : "/tmp/mvmc-native13-build.sULMMH/source/src/sfmt/SFMT.c",
-         "sha256" : "b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a"
-      },
-      "source_manifest" : {
-         "path" : "/tmp/mvmc-native13-init-stop-build.OVRLu0/source-bound.sha256",
-         "sha256" : "c9cebb26ece3ec437642b5d1dbf91b1df14063e98fc5ce92f62f49b8f01f108f"
-      },
-      "tools_manifest" : {
-         "path" : "/tmp/mvmc-native13-init-stop-build.OVRLu0/tools.before.sha256",
-         "sha256" : "b7191a85d9256708337fec960c6744d7e56dad19b21120a2db1ba9b178c4473d"
+      "source": {
+         "commit": "e83aa6cb1e37bfc4876848787ed2f61721a7e972",
+         "tree": "extern/mVMC-1.4.0"
       }
    },
-   "schema" : "native13-init-v2",
-   "scope" : "initialization-only; sampling MissingEvidence"
+   "schema": "native13-init-v2",
+   "scope": "initialization-only; sampling MissingEvidence"
 }

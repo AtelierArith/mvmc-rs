@@ -501,10 +501,27 @@ fn stage_config(steps: usize) -> OptConfig {
 }
 
 fn assert_opt_stages(name: &str, steps_per_site: usize) {
+    assert_opt_stages_with(name, steps_per_site, &[], 1);
+}
+
+/// `assert_opt_stages` after setting the raw real flags of `fixed` parameters
+/// to `flag` (#700). Those components must keep their value exactly through
+/// the SR update (a zero update and no gauge move), and the gauge must still
+/// match the C-order sync with the same raw flags.
+fn assert_opt_stages_with(name: &str, steps_per_site: usize, fixed: &[usize], flag: i64) {
     let probe = Model::prepare(&input(name), &stage_config(1)).unwrap();
     let steps = steps_per_site * probe.ns;
     let config = stage_config(steps);
     let model = Model::prepare(&input(name), &config).unwrap();
+    let model = if fixed.is_empty() {
+        model
+    } else {
+        let mut data = model.data.clone();
+        for &p in fixed {
+            data.optimization_flags[2 * p] = flag;
+        }
+        Model::from_data(data, model.seed).unwrap()
+    };
     let walkers = 8;
     let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
     let backend: &mut CudaEngine = &mut backend;
@@ -568,6 +585,13 @@ fn assert_opt_stages(name: &str, steps_per_site: usize) {
     let (ratio, diff) = worst(&after, &expected, 1e-15, 4.0 * f64::EPSILON);
     assert!(ratio <= 1.0, "{name}: gauge ratio {ratio:e}");
     let m = &state.model;
+    // Fixed components: the SR system has an identity row and a zero
+    // right-hand side, so the update is exactly zero, and an unshifted block
+    // keeps the copied value.
+    for &p in fixed {
+        assert_eq!(update[p], 0.0, "{name}: fixed parameter {p} updated");
+        assert_eq!(after[p], before[p], "{name}: fixed parameter {p} moved");
+    }
     let dh_mean_zero = |offset: usize, count: usize, bins: usize| {
         (0..2 * count)
             .map(|x| {
@@ -608,6 +632,30 @@ fn resident_opt_dh_l16_matches_cpu_c_order() {
 #[ignore = "requires CUDA; DH2+DH4 L128 chain (delayed queue, paired inverse) against the CPU C-order path"]
 fn resident_opt_dh_l128_matches_cpu_c_order() {
     assert_opt_stages("hubbard_dh_L128", 1);
+}
+
+/// #700: DH components with raw flag 2 or -1 are fixed, as in C OptFlag
+/// (stcopt.c:112) and SetFlagShift (parameter.c:255-313): no SR update and no
+/// gauge shift of their block, while the other DH block stays active and
+/// shifted. The gauge agrees with the CPU C-order sync on the same flags.
+#[test]
+#[ignore = "requires CUDA; L16 DH with noncanonical fixed DH flags against the CPU C-order path"]
+fn resident_opt_dh_noncanonical_flags_match_cpu_c_order() {
+    let model = Model::prepare(&input("hubbard_dh_L16"), &stage_config(1)).unwrap();
+    let (dh2, dh4) = (model.ng + model.nj, model.ng + model.nj + 6 * model.n2);
+    for (fixed, flag, shifts) in [
+        (vec![dh2], 2, (false, true)),
+        ((dh4..model.nproj).collect::<Vec<_>>(), -1, (true, false)),
+    ] {
+        let mut data = model.data.clone();
+        for &p in &fixed {
+            data.optimization_flags[2 * p] = flag;
+        }
+        let edited = Model::from_data(data, model.seed).unwrap();
+        assert_eq!((edited.shift_dh2, edited.shift_dh4), shifts);
+        assert!(fixed.iter().all(|&p| edited.flags[p] == 0));
+        assert_opt_stages_with("hubbard_dh_L16", 8, &fixed, flag);
+    }
 }
 
 /// Complete 20-step Opt runs repeat exactly within one implementation, after

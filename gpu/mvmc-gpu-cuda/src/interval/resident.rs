@@ -143,6 +143,53 @@ pub(crate) struct ResidentRbm {
     pub nneuron: usize,
 }
 
+/// Validate the `resident_rbm.cuh` table layout before any device allocation
+/// (#701). Segments, as `opt::model::rbm_tables` builds them:
+/// `[0, 4*nsite)` physical-layer coefficient indices (charge, spin, general),
+/// `[4*nsite, 4*nsite+h)` family tags (0 charge, 1 spin, 2 general),
+/// `[4*nsite+h, 4*nsite+2h)` hidden-layer coefficient indices and
+/// `[4*nsite+2h, ..)` the `[h][2*nsite]` coupling indices. Coefficient indices
+/// lie in `[-1, weights.len())`, where -1 marks an absent section; a family
+/// tag is never -1 and is independent of the coefficient count.
+pub(crate) fn validate_rbm_tables(
+    nsite: usize,
+    tables: &[i32],
+    weights: &[f64],
+    nneuron: usize,
+) -> Result<(), String> {
+    let expected = nneuron
+        .checked_mul(2 * nsite + 2)
+        .and_then(|n| n.checked_add(4 * nsite));
+    if expected != Some(tables.len()) {
+        return Err(format!(
+            "invalid resident RBM tables: length {} for nsite {nsite} and {nneuron} neurons",
+            tables.len()
+        ));
+    }
+    if weights.is_empty() || weights.iter().any(|x| !x.is_finite()) {
+        return Err("invalid resident RBM tables: coefficients must be nonempty and finite".into());
+    }
+    let families = 4 * nsite..4 * nsite + nneuron;
+    if let Some(k) = families.clone().find(|&k| !(0..=2).contains(&tables[k])) {
+        return Err(format!(
+            "invalid resident RBM tables: family tag {} of neuron {}",
+            tables[k],
+            k - 4 * nsite
+        ));
+    }
+    let n = weights.len() as i64;
+    if let Some(k) = (0..tables.len())
+        .filter(|k| !families.contains(k))
+        .find(|&k| !(-1..n).contains(&i64::from(tables[k])))
+    {
+        return Err(format!(
+            "invalid resident RBM tables: coefficient index {} at entry {k} for {n} coefficients",
+            tables[k]
+        ));
+    }
+    Ok(())
+}
+
 impl ResidentInterval {
     /// Upload initial state once, seed one ensemble-owned cuRAND generator once.
     pub fn prepare<B: Engine + ?Sized>(
@@ -283,13 +330,9 @@ impl ResidentInterval {
             self.rbm = None;
             return Ok(());
         }
-        if tables.len() != 4 * g.nsite + 2 * nneuron + 2 * g.nsite * nneuron
-            || weights.is_empty()
-            || weights.iter().any(|x| !x.is_finite())
-            || tables.iter().any(|&i| i < -1 || i >= weights.len() as i32)
-            || g.walkers.checked_mul(nneuron.max(1)).is_none()
-        {
-            return Err("invalid resident RBM tables".into());
+        validate_rbm_tables(g.nsite, tables, weights, nneuron)?;
+        if g.walkers.checked_mul(nneuron.max(1)).is_none() {
+            return Err("invalid resident RBM tables: hidden-field size overflows".into());
         }
         self.rbm = Some(
             with_raw_exec(backend, "mvmc.resident.rbm", |exec| {
