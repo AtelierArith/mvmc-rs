@@ -66,6 +66,7 @@ Recorded instances:
 | Real-mode samplers and Hamiltonian omit the RBM factor; `RBMDiff` reads an unfilled `RBMCnt` (`vmcmake_real.c`, `calham_real.c`, `vmccal.c:120,205`) | #669, PR #671 | Julia-mVMC#59 | RBM factor in sampling and every Green kernel, following the complex path |
 | `GetInfoOptTrans` writes `OptFlag[NProj + NOrbitalIdx + i]`: undoubled index, no RBM offset (`readdef.c:1067-1068, 2400`), so OptTrans weights are never optimized | #676 (replaces the #100 emulation) | Julia-mVMC#94 | OptTrans real components optimized; no stray flags |
 | ComplexUHF ignores `ReadDefFileError` on short definition files (fixed upstream in 1.4.0 #81) | #680 | — | error before running |
+| `getUpdateType` returns `NONE` for `NExUpdatePath` outside the defined paths, so the sampler never moves (`vmcmake.c:606-629`; 1.4.0 defines 4-6, other values still no-op) | #681 | — | values other than 0-3 rejected before any output |
 
 Other C defects reported upstream are Julia-mVMC#56 (NSRCG≥2 with NStore=0
 undefined behaviour), #57 (Ne=0 admitted), and #58–#63.
