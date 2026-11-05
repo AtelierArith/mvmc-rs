@@ -29,6 +29,8 @@ pub enum ResidentFailure {
     Schedule,
     /// A log-derivative was nonfinite.
     Derivatives,
+    /// The SR-CG increment was nonfinite (C `StochasticOptCG` info=1).
+    Cg,
     /// A status word outside `resident_status.cuh`.
     Unknown(i32),
 }
@@ -44,6 +46,7 @@ impl ResidentFailure {
             4 => Self::Parameters,
             5 => Self::Schedule,
             6 => Self::Derivatives,
+            7 => Self::Cg,
             other => Self::Unknown(other),
         })
     }
@@ -58,6 +61,7 @@ impl ResidentFailure {
             Self::Parameters => Some(4),
             Self::Schedule => Some(5),
             Self::Derivatives => Some(6),
+            Self::Cg => Some(7),
             Self::Unknown(code) => Some(code),
         }
     }
@@ -75,6 +79,7 @@ impl std::fmt::Display for ResidentFailure {
             Self::Parameters => "parameters: nonfinite update",
             Self::Schedule => "schedule: unfinished hops after the enqueued rounds",
             Self::Derivatives => "derivatives: nonfinite log-derivative",
+            Self::Cg => "SR-CG: nonfinite parameter increment",
             Self::Unknown(_) => "unknown stage",
         };
         match self.code() {

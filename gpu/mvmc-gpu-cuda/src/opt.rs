@@ -1,9 +1,12 @@
 //! Single-owner, device-resident variational optimization (Julia GPU contract).
 //!
 //! Setup uploads one model, then configuration initialization, sampling, local
-//! energy/derivatives, direct SR, and parameter refresh execute on one stream.
+//! energy/derivatives, direct or CG SR, and parameter refresh execute on one stream.
 //! Only initialization status and final parameters/energy history are downloaded.
 
+mod cg;
+#[cfg(test)]
+mod cg_tests;
 #[cfg(test)]
 mod dh_tests;
 #[cfg(test)]
@@ -38,7 +41,9 @@ const SOURCE: &str = concat!(
     "\n",
     include_str!("resident_rbm.cuh"),
     "\n",
-    include_str!("opt/kernels.cu")
+    include_str!("opt/kernels.cu"),
+    "\n",
+    include_str!("opt/cg.cu")
 );
 const KERNELS: &[&str] = &[
     "opt_fill",
@@ -59,6 +64,14 @@ const KERNELS: &[&str] = &[
     "opt_gauge",
     "opt_rbm_theta",
     "opt_rbm_diff",
+    "cg_moments",
+    "cg_prepare",
+    "cg_ty",
+    "cg_oy",
+    "cg_iterate",
+    "cg_alpha",
+    "cg_refresh",
+    "cg_finish",
 ];
 
 thread_local! {
@@ -121,10 +134,14 @@ pub struct OptResult {
     pub parameters: Vec<f64>,
     pub seed: u64,
     pub walkers: usize,
+    /// SR-CG iteration count of each step (C `StochasticOptCG_Main` return
+    /// value, the last `zqp_SRinfo.dat` column); empty for direct SR.
+    pub cg_iterations: Vec<i32>,
 }
 
 /// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including DH2/DH4
-/// and real RBM factors, local spins and `NExUpdatePath` 1/2 exchanges, with direct SR. Unsupported modes fail before allocating CUDA state.
+/// and real RBM factors, local spins and `NExUpdatePath` 1/2 exchanges, with direct
+/// SR or, for `NSRCG != 0`, the C SR-CG algorithm. Unsupported modes fail before allocating CUDA state.
 pub fn run_gpu_para_opt_from_namelist(
     path: impl AsRef<Path>,
     config: OptConfig,
@@ -174,6 +191,8 @@ struct Buffers {
     initial_scratch: DeviceBuffer,
     candidate: DeviceBuffer,
     remaining: DeviceBuffer,
+    /// SR-CG state (`NSRCG != 0`); direct SR otherwise.
+    cg: Option<cg::CgBuffers>,
 }
 
 struct State {
@@ -309,13 +328,24 @@ impl State {
             &model.parameters[model.nproj..model.nproj + model.nrbm],
             model.nneuron,
         )?;
+        let cg_limit = if derivatives && model.data.modpara.nsrcg != 0 {
+            Some(cg::iteration_limit(
+                model.data.modpara.nsr_opt_cg_max_iter,
+                model.np,
+            )?)
+        } else {
+            None
+        };
         let buffers = with_raw_exec(backend, "mvmc.opt.prepare", |exec| {
             let np = model.np;
             let alloc = |count: usize, size: usize| exec.alloc_bytes((count * size).max(1));
             let sr_np = if derivatives { np } else { 0 };
-            let gram = alloc(sr_np * sr_np, 8)?;
+            // SR-CG never forms the parameter Gram matrix (C stcopt_cg.c).
+            let use_cg = derivatives && model.data.modpara.nsrcg != 0;
+            let direct_np = if use_cg { 0 } else { sr_np };
+            let gram = alloc(direct_np * direct_np, 8)?;
             // SAFETY: this is the allocated square FP64 matrix on this context.
-            let workspace_len = if derivatives {
+            let workspace_len = if derivatives && !use_cg {
                 unsafe { exec.dpotrf_workspace(exec.ptr(&gram)?, np)? }
             } else {
                 0
@@ -356,6 +386,12 @@ impl State {
                 initial_scratch: alloc(w * (n + model.ns), 4)?,
                 candidate: alloc(w, 4)?,
                 remaining: alloc(1, 4)?,
+                cg: match cg_limit {
+                    Some(limit) => {
+                        Some(cg::CgBuffers::allocate(exec, np, w, config.nsteps, limit)?)
+                    }
+                    None => None,
+                },
             })
         })
         .map_err(|e| e.to_string())?;
@@ -804,7 +840,9 @@ impl State {
         Ok(())
     }
 
-    fn update(
+    /// Direct SR (Julia GPU contract): Gram moments, masked covariance and a
+    /// native Cholesky solve into `rhs`/`info`.
+    fn solve_direct(
         &self,
         exec: &RawExec<'_, '_>,
         module: &RawModule,
@@ -813,10 +851,10 @@ impl State {
         let b = &self.buffers;
         let m = &self.model;
         let np = m.np;
-        let s = &self.resident.sampler;
-        let w = s.geom.walkers;
+        let w = self.resident.sampler.geom.walkers;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
         let mp = &m.data.modpara;
+        // SAFETY: Gram, workspace and SR vectors were allocated for np parameters.
         unsafe {
             exec.launch(
                 module.function("opt_means")?,
@@ -910,6 +948,28 @@ impl State {
                 b.workspace_len,
                 exec.ptr(&b.info)?,
             )?;
+        }
+        Ok(())
+    }
+
+    fn update(
+        &self,
+        exec: &RawExec<'_, '_>,
+        module: &RawModule,
+        step: usize,
+    ) -> tenferro_tensor::Result<()> {
+        let b = &self.buffers;
+        let m = &self.model;
+        let np = m.np;
+        let s = &self.resident.sampler;
+        let w = s.geom.walkers;
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        if b.cg.is_some() {
+            self.solve_cg(exec, module, step)?;
+        } else {
+            self.solve_direct(exec, module, step)?;
+        }
+        unsafe {
             exec.launch(
                 module.function("opt_update")?,
                 (np.div_ceil(128) as u32, 1, 1),
@@ -993,9 +1053,18 @@ impl State {
                 exec.download(&mut energies, exec.ptr(&self.buffers.history)?)?;
                 exec.download(&mut parameters, exec.ptr(&self.buffers.parameters)?)?;
             }
+            let mut cg_iterations = vec![];
+            if let Some(cg) = &self.buffers.cg {
+                cg_iterations = vec![0; self.steps];
+                // SAFETY: one i32 per optimization step.
+                unsafe {
+                    exec.download(&mut cg_iterations, exec.ptr(&cg.iterations)?)?;
+                }
+            }
             Ok(OptResult {
                 energies,
                 parameters,
+                cg_iterations,
                 seed: self.model.seed,
                 walkers: self.resident.sampler.geom.walkers,
             })

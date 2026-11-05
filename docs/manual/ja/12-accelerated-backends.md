@@ -174,7 +174,7 @@ CG はステップごとには**比較しません**。サンプリングされ�
 ## 12.8 既知の制限
 
 - **tenferro ステージ**は実数・複素の SR と、実数・非 FSZ の測定ステージ B(RBM と二体 Green 項を除く)を扱います。上流の tenferro には歪対称分解がないため、tenferro の測定 Pfaffian 生成元は純 Rust の PfaPack カーネルを tenferro 拡張演算として登録したものです(`mvmc_core::tenferro_pfaffian`)。テンソルプログラム、その準備と実行は tenferro、分解は C 順序の PfaPack 計算列です(#613)。設計が記録しているその他の上流の欠落(決定性の契約なし、argmax なし、`Tensor` が `Clone` でない、`Module` が `Send` でない)は設計 4.7 と 11.5 を参照してください。
-- **常駐 GPU ランナー**が受け付けるのは、有限な実数パラメータの実数通常軌道、ホッピングのみのサンプリング、局所スピン/RBM/DH/OptTrans なし、`NSRCG = 0`、逐次実行、`2 Ne <= 1024`(PhysCal はさらに `NLanczosMode = 0`)です。それ以外はデバイス上の作業の前に拒否されます(`gpu/mvmc-gpu-cuda/src/opt/model.rs`)。設計上、C/SFMT の軌道は再現しません。
+- **常駐 GPU ランナー**が受け付けるのは、有限な実数パラメータの実数通常軌道、Gutzwiller/Jastrow、DH2/DH4 と実数 RBM 因子、`NExUpdatePath` 0-2 の局所スピン、直接 SR または CG SR(`NSRCG`。PhysCal では無視)、OptTrans なし、逐次実行、`2 Ne <= 1024`(PhysCal はさらに `NLanczosMode = 0`)です。それ以外はデバイス上の作業の前に拒否されます(`gpu/mvmc-gpu-cuda/src/opt/model.rs`)。設計上、C/SFMT の軌道は再現しません。
 - **RTX 3060 の FP64。** 記録された GPU の測定値は、FP64 が FP32 の 1/64 のカードによるものです。データセンター向け GPU では比率が変わると見込まれます。
 - **CI に GPU なし。** CUDA ゲートはセルフホストランナー上のオプションです。設計文書の GPU の数値はローカル実行によるものです。
 

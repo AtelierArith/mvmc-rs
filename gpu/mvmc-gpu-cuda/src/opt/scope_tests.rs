@@ -140,9 +140,10 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
 }
 
 /// Julia GPU PhysCal accepts and ignores `NSRCG` (`ext/cuda_runners.jl:27`):
-/// PhysCal never runs SR. Resident Opt keeps rejecting it (direct SR only).
+/// PhysCal never runs SR. Resident Opt accepts it and runs C SR-CG (#670);
+/// `NSRCG` changes no uploaded model data on either route.
 #[test]
-fn resident_physcal_ignores_nsrcg_while_opt_rejects_it() {
+fn resident_accepts_nsrcg_for_physcal_and_opt() {
     let input = edited(
         "sr-cg",
         &[("modpara.def", "NSRCG          0", "NSRCG          1")],
@@ -150,18 +151,31 @@ fn resident_physcal_ignores_nsrcg_while_opt_rejects_it() {
     let data = parse(&input);
     mvmc_core::validation::validate_para_opt(&data).unwrap();
     mvmc_core::validation::validate_phys_cal(&data).unwrap();
-    let error = Model::prepare(&input, &cfg()).map(|_| ()).unwrap_err();
-    assert!(error.contains(SCOPE), "Opt: {error}");
+    let opt = Model::prepare(&input, &cfg()).unwrap();
+    let opt_base = Model::prepare(&baseline(), &cfg()).unwrap();
+    assert_eq!(opt.data.modpara.nsrcg, 1);
+    assert_eq!(opt.parameters, opt_base.parameters);
+    assert_eq!(opt.flags, opt_base.flags);
     let phys = Model::prepare_physcal(&input, &cfg(), None).unwrap();
     let base = Model::prepare_physcal(&baseline(), &cfg(), None).unwrap();
     assert_eq!(phys.data.modpara.nsrcg, 1);
-    // NSRCG changes nothing that PhysCal uploads.
     assert_eq!(phys.parameters, base.parameters);
     assert_eq!(
         (phys.np, phys.nq, phys.energies.len()),
         (base.np, base.nq, base.energies.len())
     );
     fs::remove_dir_all(input.parent().unwrap()).unwrap();
+}
+
+/// The enqueued CG bound is C's `max_iter` when `NSROptCGMaxIter > 0`, else
+/// `NPara` (an upper bound of `nSmat`); out-of-range limits fail before allocation.
+#[test]
+fn resident_cg_iteration_bound_follows_c_max_iter() {
+    assert_eq!(cg::iteration_limit(0, 120).unwrap(), 120);
+    assert_eq!(cg::iteration_limit(-3, 120).unwrap(), 120);
+    assert_eq!(cg::iteration_limit(7, 120).unwrap(), 7);
+    assert_eq!(cg::iteration_limit(500, 120).unwrap(), 500);
+    assert!(cg::iteration_limit(i32::MAX as i64, 120).is_err());
 }
 
 /// #660: local spins and NExUpdatePath 1/2 follow Julia GPU
