@@ -8,7 +8,7 @@ stored: the inputs are the fixtures.
 
 ## Inputs
 
-`gen_inputs.py` writes the three inputs deterministically
+`gen_inputs.py` writes the inputs deterministically
 (`uv run --no-project gpu/mvmc-gpu-cuda/tests/fixtures/fsz/gen_inputs.py`).
 Each directory's `inputs.sha256` lists its file hashes.
 
@@ -17,6 +17,9 @@ Each directory's `inputs.sha256` lists its file hashes.
 | `hubbard_fsz_L16` | 16 | 12 (doped) | not set (C default -1) | 1 (exchange p 0.5) | `OrbitalGeneral`, 46 classes | 2 | 55 |
 | `kondo_fsz_2sz2` | 8 conduction + 8 local | 14 | 2 (8 up, 6 down) | 1 | `Orbital` + `OrbitalParallel` (C selects general) | 2 | 55 |
 | `hubbard_fsz_L128` | 128 | 128 | not set | 0 | `OrbitalGeneral`, 382 classes | 2 | 447 |
+| `kondo_fsz_kgc` | 8 conduction + 8 local | 14 | not set | 3 (KondoGC) | `OrbitalGeneral`, 46 classes | 2 | 55 |
+| `kondo_fsz_kgc_L128` | 64 conduction + 64 local | 128 | not set | 3 | `OrbitalGeneral`, 382 classes | 2 | 447 |
+| `heisenberg_fsz_L16` | 16 local | 16 | not set | 2 (exchange or local spin flip) | `OrbitalGeneral`, 46 classes | 2 | 55 |
 
 - C reads `2Sz=-1` only as the default; an explicit `2Sz -1` is an error
   (`readdef.c:2215-2218`), so the Sz-free inputs omit the line.
@@ -29,6 +32,14 @@ Each directory's `inputs.sha256` lists its file hashes.
   Hund 0.25 and CoulombInter -0.125 between conduction site `i` and local
   spin `i+8`. Its Hamiltonian conserves spin, as C requires for a fixed
   `2Sz` (GetInfoInterAll).
+- The KondoGC chains (sub-milestone (b)) are the Kondo chain without a fixed
+  `2Sz`, with general orbitals and the Hubbard chains' spin-flip conduction
+  hopping. C `getUpdateType` path 3 proposes hops (1/2), exchanges (1/4) and
+  local spin flips (1/4). The Heisenberg chain has local spins only, so path
+  2 with `2Sz=-1` proposes exchanges and local spin flips. Its Heisenberg
+  exchange (Exchange 0.5, Hund 0.5, CoulombInter -0.25) is joined by a
+  Hermitian pair of spin-changing InterAll terms (`S+_i S+_j` type, 0.15) on
+  two bonds.
 - OneBodyG, TwoBodyG (and TwoBodyGEx on the Hubbard chains) include
   spin-flip pairs.
 - General orbitals are indexed by the class `(spin_i, spin_j, (j - i) mod L)`
@@ -39,7 +50,7 @@ Each directory's `inputs.sha256` lists its file hashes.
 - Real Gutzwiller/Jastrow factors with a nonzero InGutzwiller.
 
 These are engine tests, not physics benchmarks. The Rust parser, the CPU
-C-order validators and the release `mvmc` CLI accept all three inputs (Opt
+C-order validators and the release `mvmc` CLI accept all inputs (Opt
 and PhysCal; see "Timing").
 
 ## Physics and sampler contract
@@ -80,8 +91,9 @@ Exact (integers):
   `update_proj_cnt`), `LogProjRatio`, and full CPU FSZ Pfaffians
   (`calc_m_all_fsz_real`) of every candidate. It asserts that an exchange
   changes no counter and that a fixed `2Sz` keeps its up count. It requires
-  accepted spin-changing moves for `2Sz=-1` and accepted exchanges for
-  `NExUpdatePath=1`.
+  accepted spin-changing moves for `2Sz=-1`, accepted exchanges for
+  `NExUpdatePath` 1-3, and accepted local spin flips for paths 2 (`2Sz=-1`)
+  and 3.
 - Opt and PhysCal accept the same moves on the same tape.
 
 FP64, with the #656 condition-aware interval budget
@@ -116,6 +128,9 @@ largest normalized error (bound 16):
 | `hubbard_fsz_L16` | 2.2e3 / 1.7e2 / 1.5e2 | ≤0.009 / ≤0.005 / ≤0.011 | ≤0.96 | 120 / 39 | 1.2e-4 | 5.2e-18 | 0 |
 | `kondo_fsz_2sz2` | 4.1e2 / 1.8e2 / 1.9e2 | ≤0.005 / ≤0.005 / ≤0.011 | ≤0.069 | 0 / 96 | 5.3e-3 | 1.5e-17 | 0 |
 | `hubbard_fsz_L128` | 4.0e4 / 1.4e5 / 2.5e4 | <0.001 / <0.001 / ≤0.001 | ≤0.005 | 156 / 0 | 1.1e-3 | 1.5e-17 | 0 |
+| `kondo_fsz_kgc` | 2.2e3 / 2.2e4 / 5.3e3 | ≤0.006 / ≤0.001 / ≤0.006 | ≤0.15 | 83 (35 local flips) / 20 | 2.4e-3 | 2.0e-17 | 0 |
+| `kondo_fsz_kgc_L128` | 4.7e3 / 2.0e4 / 2.0e4 | <0.001 / <0.001 / ≤0.001 | ≤0.025 | 120 (58 local flips) / 9 | 4.4e-2 | 1.6e-17 | 0 |
+| `heisenberg_fsz_L16` | 1.6e3 / 2.2e2 / 2.2e2 | ≤0.005 / ≤0.003 / ≤0.006 | ≤0.057 | 212 (212 local flips) / 77 | 8.6e-3 | 8.5e-17 | 0 |
 
 The invalid-plane test (L16) is within 0.011 of its budget. The first
 floating difference is in the independent factorization: the device inverse
@@ -144,6 +159,12 @@ including startup and output files), with `NVMCSample 64`, `NVMCWarmUp 1`,
 | `hubbard_fsz_L16` PhysCal | 33.3 / 0.092 | 0.48 |
 | `kondo_fsz_2sz2` PhysCal | 0.083 / 0.083 | 0.55 |
 | `hubbard_fsz_L128` PhysCal | 0.51 / 0.51 | 15.4 |
+| `kondo_fsz_kgc` Opt | 0.070 / 0.070 | 0.56 |
+| `heisenberg_fsz_L16` Opt | 0.128 / 0.128 | 0.67 |
+| `kondo_fsz_kgc_L128` Opt | 4.61 / 4.61 | 18.8 |
+| `kondo_fsz_kgc` PhysCal | 0.075 / 0.074 | 0.53 |
+| `heisenberg_fsz_L16` PhysCal | 0.133 / 0.133 | 0.65 |
+| `kondo_fsz_kgc_L128` PhysCal | 4.51 / 4.52 | 18.1 |
 
 The GPU first call of a process includes NVRTC module compilation. Every
 sampling, measurement and SR series makes 0 explicit uploads, 0 downloads and
@@ -151,9 +172,13 @@ sampling, measurement and SR series makes 0 explicit uploads, 0 downloads and
 sampler unchanged, including the Opt delayed queue and the paired factor at
 `2Ne=128`; these inputs have 2 QP planes, against 8 for the normal-orbital
 L128 fixtures, which is why L128 runs faster here than the DH L128 input
-(1.39 s).
+(1.39 s). In the KondoGC 64+64 chain every accepted exchange refactors its
+walker in the kernel (`O(nq n^3)` on one block), as for the normal exchange
+(#660); this dominates its 4.6 s.
 
 The GPU and CPU use different random streams, so their energies are
 statistical observations only. `E[0], E[19]` on the GPU / CPU: L16
 `7.10, 3.34` / `8.64, 3.03`; Kondo `-0.011, -0.485` / `0.722, -1.084`; L128
-`108.5, 90.8` / `108.9, 93.4`.
+`108.5, 90.8` / `108.9, 93.4`; KondoGC `4.04, 1.24` / `3.24, 1.16`; Heisenberg
+`-8.24, -8.53` / `-7.97, -8.50`; KondoGC 64+64 `44.0, 29.8` / `32.9, 36.3`
+(128 warmup proposals per walker do not equilibrate this chain).

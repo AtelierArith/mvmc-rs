@@ -49,7 +49,12 @@
 //   w2 -> hop: destination rank among those empty destinations;
 //         exchange: partner slot w2 % n, valid when it has the opposite spin
 //         and both sites are singly occupied (makeCandidate_exchange_fsz)
-//   w3, w4 -> as above.
+//   w3 -> update type, C getUpdateType with one uniform u3 = w3/2^32:
+//         exchange if u3 < exchange_fraction, local spin flip if
+//         u3 < exchange_fraction + flip_fraction, hop otherwise. A local spin
+//         flip turns the slot's spin in place and is valid on a local-spin
+//         site (makeCandidate_LocalSpinFlip_localspin).
+//   w4 -> as above.
 // An invalid proposal is skipped, so each proposal stays symmetric; C redraws
 // until a candidate is valid instead. The projection ratio of an on-site flip
 // is exactly one (C UpdateProjCnt_fsz). Only real tables are handled here; the
@@ -177,7 +182,7 @@ __device__ __forceinline__ void interval_hop_impl(
     int* valid = nullptr, double* fac = nullptr, double* work = nullptr, int* error = nullptr,
     const int* loc = nullptr, const int* dh = nullptr, int n2dh = 0, int n4dh = 0,
     const int* rbm = nullptr, const double* rbmw = nullptr, double* theta = nullptr,
-    int nneuron = 0, int fsz = 0, int spin_free = 0) {
+    int nneuron = 0, int fsz = 0, int spin_free = 0, double flip_fraction = 0.0) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -251,8 +256,15 @@ __device__ __forceinline__ void interval_hop_impl(
         msa = (int)(t[0] % (unsigned)n);
         from = ele_w[msa];
         const int ri = from % nsite, s = from / nsite;
-        exchange = (double)t[3] / 4294967296.0 < exchange_p;
-        if (exchange) {
+        const double u3 = (double)t[3] / 4294967296.0;
+        exchange = u3 < exchange_p;
+        // exchange_p + flip_fraction is a dyadic sum (0.5 for paths 2 and 3).
+        const int localflip = !exchange && u3 < exchange_p + flip_fraction;
+        if (localflip) {
+          // C makeCandidate_LocalSpinFlip_localspin: turn a local spin.
+          to = ri + (1 - s) * nsite;
+          valid = loc != nullptr && loc[ri] == 1 && occ_w[to] == 0;
+        } else if (exchange) {
           // C makeCandidate_exchange_fsz: an opposite-spin partner (w2 % 2Ne),
           // both sites singly occupied.
           partner = (int)(t[2] % (unsigned)n);

@@ -91,20 +91,18 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
             "nsplit",
             &[("modpara.def", "NSplitSize     1", "NSplitSize     2")],
         ),
+        // KondoGC local spin flips need general orbitals (#714).
+        (
+            "normal-path3",
+            &[("modpara.def", "NExUpdatePath  0", "NExUpdatePath  3")],
+        ),
     ];
-    let mut cases: Vec<(String, PathBuf, bool)> = edits
+    // The "two-sz" edit keeps normal orbitals with 2Sz=2, which C rejects
+    // (readdef.c:691-696) and the resident scope rejects with it.
+    let cases: Vec<(String, PathBuf, bool)> = edits
         .iter()
         .map(|(tag, e)| (tag.to_string(), edited(tag, e), true))
         .collect();
-    // Fixture inputs whose only resident-unsupported feature is the named
-    // family: the FSZ Kondo chain (NExUpdatePath=3, general orbitals). The
-    // normal "two-sz" edit keeps normal orbitals with 2Sz=2, which C rejects
-    // (readdef.c:691-696) and the resident scope rejects with it.
-    cases.push((
-        "kondo-local-spin-flip".into(),
-        repo("tests/fixtures/native13_initialization/inputs/KondoChain_fsz/namelist.def"),
-        false,
-    ));
     for (tag, input, temporary) in cases {
         let data = parse(&input);
         // The ordinary C-order validators accept every case.
@@ -1052,10 +1050,15 @@ pub(crate) fn fsz_input(name: &str) -> PathBuf {
 /// follow C `makeInitialSample_fsz` (`Ne + 2Sz/2` up).
 #[test]
 fn resident_scope_accepts_fsz_general_orbitals() {
-    for (name, spin_free, nup, nlocal) in [
-        ("hubbard_fsz_L16", true, 6, 0),
-        ("hubbard_fsz_L128", true, 64, 0),
-        ("kondo_fsz_2sz2", false, 8, 8),
+    // (name, 2Sz=-1, up labels, local spins, (exchange, local spin flip)
+    // probabilities of C getUpdateType).
+    for (name, spin_free, nup, nlocal, moves) in [
+        ("hubbard_fsz_L16", true, 6, 0, (0.5, 0.0)),
+        ("hubbard_fsz_L128", true, 64, 0, (0.0, 0.0)),
+        ("kondo_fsz_2sz2", false, 8, 8, (0.5, 0.0)),
+        ("kondo_fsz_kgc", true, 7, 8, (0.25, 0.25)),
+        ("kondo_fsz_kgc_L128", true, 64, 64, (0.25, 0.25)),
+        ("heisenberg_fsz_L16", true, 8, 16, (0.5, 0.5)),
     ] {
         let input = fsz_input(name);
         let data = parse(&input);
@@ -1073,6 +1076,7 @@ fn resident_scope_accepts_fsz_general_orbitals() {
             let (ns, nq) = (model.ns, model.nq);
             assert!(model.fsz && !model.complex, "{name} {route}");
             assert_eq!((model.spin_free, model.nup), (spin_free, nup), "{name}");
+            assert_eq!((model.exchange, model.flip), moves, "{name}: update types");
             assert_eq!(model.split(), 2 * model.ne);
             assert_eq!(nq, 2, "{name}: NSPGaussLeg=1 x NMPTrans=2");
             assert_eq!(model.localspins.iter().filter(|&&x| x == 1).count(), nlocal);
@@ -1148,9 +1152,9 @@ fn resident_scope_accepts_fsz_general_orbitals() {
 }
 
 /// FSZ inputs outside the supported subset fail before CUDA (#714): complex
-/// general orbitals, local spin flips (NExUpdatePath=2 with 2Sz=-1, and
-/// NExUpdatePath=3), NSPGaussLeg>1, SR-CG for Opt, and RBM/DH/OptTrans. The
-/// CPU validators accept each input, so the rejection is GPU-specific.
+/// general orbitals (also the native KondoGC chain), NSPGaussLeg>1, SR-CG for
+/// Opt, and RBM/DH/OptTrans. The CPU validators accept each input, so the
+/// rejection is GPU-specific.
 #[test]
 fn resident_scope_rejects_fsz_families_before_cuda() {
     const FAMILIES: &str = "resident GPU FSZ supports real Gutzwiller/Jastrow";
@@ -1177,14 +1181,10 @@ fn resident_scope_rejects_fsz_families_before_cuda() {
             false,
         ),
         (
-            "fsz-local-flip",
-            edited_from(
-                &l16,
-                "fsz-local-flip",
-                &[("modpara.def", "NExUpdatePath  1", "NExUpdatePath  2")],
-            ),
-            "local spin flips",
-            true,
+            "fsz-complex-kondo",
+            repo("tests/fixtures/native13_initialization/inputs/KondoChain_fsz/namelist.def"),
+            FAMILIES,
+            false,
         ),
         (
             "fsz-spin-projection",

@@ -85,16 +85,16 @@ inverse residual, supplied-tape and complete Opt numerical checks under #550.
 ## Supported scope and checks
 
 The current runner requires Gutzwiller/Jastrow projection, `NExUpdatePath`
-0, 1 or 2, and serial execution. Normal orbitals need `2Sz=0` and conserved
-spin in each operator pair. SR is direct (`NSRCG=0`) or C's conjugate
+0, 1 or 2 (3 with general orbitals), and serial execution. Normal orbitals
+need `2Sz=0` and conserved spin in each operator pair. SR is direct (`NSRCG=0`) or C's conjugate
 gradient (`NSRCG≠0`, #670). Local spins (#660), DH2/DH4 doublon-holon
 factors (#665), real RBM factors (#667) and real OptTrans weights (#674) are
 supported with real normal orbitals. Complex normal orbitals (#678) are
 supported with Gutzwiller/Jastrow factors, complex QP weights and
 coefficients, exchanges and direct SR. Real general orbitals / FSZ (#714) are
 supported with Gutzwiller/Jastrow factors, any `2Sz`, local spins, exchanges,
-spin-flip operators and direct SR. `NExUpdatePath=3`, local spin flips,
-complex FSZ and grouped execution return errors.
+local spin flips (`NExUpdatePath=3`, path 2 with `2Sz=-1`), spin-flip
+operators and direct SR. Complex FSZ and grouped execution return errors.
 
 ### General orbitals / FSZ (#714)
 
@@ -126,9 +126,13 @@ Rust CPU C-order FSZ path. The physics is C's real FSZ path
   `makeInitialSample_fsz` spins: labels below `Ne + 2Sz/2` (`Ne` for
   `2Sz=-1`) are up. For `2Sz ∈ {0,-1}` the draws equal those of the normal
   contract.
-- **Proposals** (`interval_kernels.cu`). Word 0 picks the slot `w0 % 2Ne`;
-  word 3 decides an exchange with the Julia threshold; word 4 is the
-  acceptance uniform.
+- **Proposals** (`interval_kernels.cu`). Word 0 picks the slot `w0 % 2Ne`
+  and word 4 is the acceptance uniform. Word 3 decides the update type of C
+  `getUpdateType` from one uniform `u3`: exchange if `u3 < p_ex`, local spin
+  flip if `u3 < p_ex + p_lsf`, hop otherwise. `(p_ex, p_lsf)` is `(0, 0)`,
+  `(0.5, 0)` and `(1, 0)` for paths 0-2, `(0.5, 0.5)` for path 2 with
+  `2Sz=-1`, and `(0.25, 0.25)` for path 3 (KondoGC: hop 1/2, then exchange or
+  flip 1/2 each). Paths 0-2 keep the Julia exchange threshold.
   - `2Sz ≥ 0`: a hop keeps the slot's spin (C `makeCandidate_hopping_csz`),
     destination rank `w2` among the empty non-local sites of that spin.
   - `2Sz = -1`: word 1's top bit stands for C's `genrand_real2()<0.5` in
@@ -139,6 +143,10 @@ Rust CPU C-order FSZ path. The physics is C's real FSZ path
     and both sites are singly occupied (`makeCandidate_exchange_fsz`).
     Overlaps come from full Pfaffians and an accept refactors in the kernel,
     as for normal exchanges.
+  - Local spin flip: the slot's spin turns in place, valid on a local-spin
+    site (`makeCandidate_LocalSpinFlip_localspin`). It is a one-slot move,
+    scored and updated as a hop (C `CalculateNewPfM2_fsz`,
+    `UpdateMAll_fsz`).
   - An invalid proposal consumes its five words and is skipped. This keeps
     every proposal symmetric. C redraws until a candidate is valid, which is
     not symmetric for the conduction flip and the exchange; the GPU contract
@@ -154,10 +162,10 @@ Rust CPU C-order FSZ path. The physics is C's real FSZ path
 - **SR and gauge.** Direct SR and C `SyncModifiedParameter` (Slater rescale)
   are unchanged.
 - **Not supported with FSZ** (rejected before allocation): complex
-  parameters, RBM (C FSZ has none), DH2/DH4, OptTrans, `NSPGaussLeg>1`, Opt
-  with `NSRCG≠0`, and local spin flips (`NExUpdatePath=2` with `2Sz=-1`,
-  `NExUpdatePath=3`). Normal orbitals with `2Sz≠0` stay rejected, because C
-  requires general orbitals for them (`readdef.c:691-696`).
+  parameters, RBM (C FSZ has none), DH2/DH4, OptTrans, `NSPGaussLeg>1` and
+  Opt with `NSRCG≠0`. Normal orbitals with `2Sz≠0` or `NExUpdatePath=3` stay
+  rejected, because C requires general orbitals for them
+  (`readdef.c:691-696`; the normal C sampler has no local spin flip).
 
 See `gpu/mvmc-gpu-cuda/tests/fixtures/fsz/README.md` for inputs, bounds and
 timings.
