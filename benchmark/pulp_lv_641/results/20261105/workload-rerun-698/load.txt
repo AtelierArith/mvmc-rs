@@ -1,0 +1,8 @@
+before phys t1:  23:21:00 up 12 days,  4:41,  2 users,  load average: 3.21, 7.47, 9.27
+after phys t1:  23:21:52 up 12 days,  4:42,  2 users,  load average: 8.59, 8.61, 9.59
+before phys t8:  23:21:52 up 12 days,  4:42,  2 users,  load average: 8.59, 8.61, 9.59
+after phys t8:  23:22:04 up 12 days,  4:43,  2 users,  load average: 8.50, 8.59, 9.57
+before opt t1:  23:22:04 up 12 days,  4:43,  2 users,  load average: 8.50, 8.59, 9.57
+after opt t1:  23:32:20 up 12 days,  4:53,  2 users,  load average: 2.14, 7.68, 8.62
+before opt t8:  23:32:20 up 12 days,  4:53,  2 users,  load average: 2.14, 7.68, 8.62
+after opt t8:  23:34:32 up 12 days,  4:55,  2 users,  load average: 7.17, 7.66, 8.48

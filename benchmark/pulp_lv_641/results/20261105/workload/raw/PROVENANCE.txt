@@ -1,0 +1,32 @@
+Raw outputs of the original #641 whole-workload A/B (PR #664), recovered for #698.
+
+The report cited workload/ab-*.log. Those files were never committed: the root .gitignore
+ignores *.log. The #641 agent worktree (agent-a4352bebb3d32e22c), which held the binaries, no
+longer exists. The four logs and the A/B driver as run were recovered unchanged from the
+#641 session scratchpad (.../scratchpad/641/) on 2026-11-05 and are stored here under a tracked
+extension (.log -> .txt). The file contents are byte-identical to the scratchpad files:
+
+  file (here)        scratchpad source   mtime (JST)                     SHA-256
+  ab-phys-t1.txt     ab-phys-t1.log      2026-11-05 04:43:21             55771e476d7fd1a49a0f6184b72e79104e3b2e8982efba23d3e2692ca5432452
+  ab-phys-t8.txt     ab-phys-t8.log      2026-11-05 04:43:33             8b7bee840c8bc8e9549bd552307108d1a1b7c875668acc8bdaa26777ae4eceb2
+  ab-opt-t1.txt      ab-opt-t1.log       2026-11-05 04:52:54             e4d26902db2f4df8116d8988c6250a70dd868dfcd3e18f75b0128d2238f2559e
+  ab-opt-t8.txt      ab-opt-t8.log       2026-11-05 04:55:05             ec99b810839530bbdb0976986894496860085c2e4f7360586c0b56716297f87e
+  ab-as-run.py       ab641.py            2026-11-05 04:42:16             6e7bad60ffe3813e37203e4ecdf02dfa60eb2cf28d8e7ddf706e738417a1c592
+
+The mtimes fit ../ab-load.txt: its four uptime samples are at 04:42:35, the start of PhysCal
+t1 (12 runs of about 3.8 s end at 04:43:21), then 04:43:33, 04:52:54 and 04:55:05, the ends
+of PhysCal t8, Opt t1 and Opt t8. The
+recomputed medians match the report (see the README). ab-as-run.py is tools/ab.py except for
+two lines: HERE = the script directory and REPO = the #641 worktree path, where the
+committed tools/ab.py uses the current directory and the repository containing it.
+
+What was run (from the README and ab-as-run.py): native, L128 inputs from
+benchmark/cpu_scaling_l128/inputs, `ab.py MODE THREADS 0 REPS main=BIN_A pulp=BIN_B`, CPUs
+0..THREADS-1, BLAS/OpenMP 1 thread, MVMC_RS_SR_BACKEND=c-order,
+MVMC_RS_MEASURE_PF_BACKEND=c-order, MVMC_C_TIMER=1. REPS = 5 (PhysCal) and 3 (Opt) after one
+warmup (rep0, excluded). BIN_A was a release mvmc from main b1c0870d and BIN_B the same with
+../pulp-exact.patch applied.
+
+Not recoverable: the exact build commands, the SHA-256 of the two mvmc binaries
+(../binary-sha256.txt lists the cpu_scaling_contract_586 probes, not these binaries) and
+per-repetition load. Only the four uptime samples in ../ab-load.txt exist.

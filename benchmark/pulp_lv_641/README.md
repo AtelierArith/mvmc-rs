@@ -5,7 +5,8 @@ current Hubbard L128 Opt and PhysCal workloads run. It continues the #503 reques
 `main` (`b1c0870d`). The #649 hand AVX2 kernels are already in place (PRs #651, #652, #661).
 
 **Decision: nothing is adopted.** pulp does not beat the hand AVX2 kernels, and a pulp
-replacement makes the whole workload 1.3–3.2 % slower. LoopVectorization gives Julia 7–14 % on
+replacement made the whole workload 1.25–3.2 % slower in the recovered A/B run (section 3; a
+replication on a loaded host agrees in direction). LoopVectorization gives Julia 7–14 % on
 two kernels. It does this by fusing multiply-adds (FMA) and reordering the arithmetic, which
 breaks the C operation order. Even so, Julia `@turbo` only reaches the speed that the exact Rust
 AVX2 kernels already have. The production code, the scalar reference paths and the pinned Julia
@@ -15,7 +16,8 @@ manifest are unchanged.
 
 - Xeon E5-2699 v3 (Haswell). It has AVX2 and FMA but **no AVX-512**. Native Linux, not
   containerized, on a shared host. Load averages are recorded with every run in `load.txt` and
-  `workload/ab-load.txt`; they were mostly 1–3 during the kernel runs.
+  `workload/ab-load.txt`; they were mostly 1–3 during the kernel runs (the A/B load is
+  discussed in section 3).
 - rustc 1.99.0 (LLVM 23.1.1); pulp 0.22.2; OpenBLAS (`OPENBLAS_NUM_THREADS=1`).
 - Julia 1.13.1 with the pinned `extern/Julia-mVMC/Manifest-v1.13.toml` (sha256 `09ebd06d…`,
   unchanged). It uses LoopVectorization 0.12.174 and VectorizationBase 0.21.74. LoopVectorization
@@ -189,15 +191,65 @@ experiment was not committed.
 | case | main | pulp-exact | change | C timer `UpdateMAll` main → pulp |
 |---|---:|---:|---:|---:|
 | PhysCal t1 (N=5) | 3.747 | 3.852 | +2.8 % | 1.339 → 1.415 |
-| PhysCal t8 (N=5) | 0.960 | 0.972 | +1.3 % | 0.228 → 0.241 |
+| PhysCal t8 (N=5) | 0.960 | 0.972 | +1.25 % | 0.228 → 0.241 |
 | Opt t1 (N=3) | 69.42 | 71.04 | +2.3 % | 27.13 → 28.07 |
 | Opt t8 (N=3) | 16.15 | 16.68 | +3.2 % | 4.05 → 4.40 |
 
 Every pulp repetition was slower than every `main` repetition, except at PhysCal t8, where the
-ranges overlap (0.938–0.965 vs 0.957–0.996 s). Raw data is in `workload/ab-*.log`.
-The slowdown sits in `UpdateMAll` (K1). On the real eight-plane working set, the pulp port
-loses about 3–9 % in that timer, while the isolated single-plane microbenchmark showed a tie. The
-`CalculateMAll` change (K2) is within ±2 %.
+ranges overlap (0.938–0.965 vs 0.957–0.996 s). The slowdown sits in `UpdateMAll` (K1). On the
+real eight-plane working set, the pulp port loses 3.4–8.5 % in that timer, while the isolated
+single-plane microbenchmark showed a tie. The `CalculateMAll` change (K2) is +0.8 to +1.8 %.
+
+### Raw A/B data and its provenance (#698)
+
+The report originally cited `workload/ab-*.log`, but those files were never committed (the
+root `.gitignore` ignores `*.log`). The four raw outputs were recovered unchanged from the #641
+session scratchpad. They are now in `results/20261105/workload/raw/` as `ab-{phys,opt}-t{1,8}.txt`,
+together with the driver as run (`ab-as-run.py`). `raw/PROVENANCE.txt` lists their SHA-256,
+modification times, the commands and what could not be recovered.
+`tools/ab_summary.py results/20261105/workload/raw` recomputes the table above from the
+per-repetition lines. The full table, with ranges and every C timer, is the output of that
+command. All medians, ranges and timer changes agree with the original report, except that the
+PhysCal t8 change is +1.25 %; the report rounded it to +1.3 %.
+
+Limits of the original run:
+
+- The SHA-256 of the two `mvmc` binaries was not recorded. `workload/binary-sha256.txt` lists
+  the `cpu_scaling_contract_586` probe builds, not the A/B binaries.
+- The build commands are known only from the description: release `mvmc` from `main`
+  `b1c0870d`, with and without `pulp-exact.patch`.
+- Load was sampled only four times (`workload/ab-load.txt`): 1-minute load 3.1, 2.8, 1.0 and
+  7.0, the last at the end of Opt t8.
+
+The 1.3–3.2 % slowdown is therefore supported by raw data from one run on a shared host. It
+is not backed by a binary-identified repeat.
+
+### Replication on current `main` (2026-11-05, new experiment)
+
+A new experiment was run on `main` `787c1b15` with the same patch (it applies unchanged). It
+used the same inputs, environment and `tools/ab.py`, driven by `tools/run_ab.sh`, which records
+`env.txt` (date, host, CPU, rustc/LLVM, revision, binary SHA-256, BLAS library) and a 10 s
+load trace (`load-trace.txt`). The raw outputs are in `results/20261105/workload-rerun-698/`.
+It is a separate experiment, not a reconstruction of the original. Other jobs ran on the host
+during it. The 1-minute load exceeded 4 in 45 of 81 trace samples and peaked at 13 during
+PhysCal t1 and at 33 during Opt t1 repetition 2. That repetition is the 105.8 s / 87.6 s
+outlier, and PhysCal t1 repetitions 1–3 are inflated too.
+
+| case | main median (range) s | pulp median (range) s | change | ranges overlap |
+|---|---:|---:|---:|---|
+| PhysCal t1 (N=5) | 3.971 (3.843–6.930) | 3.972 (3.925–4.409) | +0.0 % | yes (load spikes) |
+| PhysCal t8 (N=5) | 0.964 (0.940–0.984) | 0.986 (0.954–1.008) | +2.3 % | yes |
+| Opt t1 (N=3) | 69.738 (69.299–105.818) | 71.343 (71.226–87.606) | +2.3 % | yes (rep 2 under load 33) |
+| Opt t8 (N=3) | 16.342 (16.293–16.551) | 16.748 (16.737–17.008) | +2.5 % | no |
+
+The C timer `UpdateMAll` is again slower with pulp in Opt t1 (+5.7 %), Opt t8 (+5.7 %) and
+PhysCal t8 (+7.7 %), and `CalculateMAll` stays within +0.1 to +2.9 %. PhysCal t1 is
+inconclusive under that load. An earlier attempt in the same session
+(`results/20261105/workload-rerun-698-run1/`, no load trace) was disturbed during Opt t1
+(5-minute load 9.4; pulp repetitions 78.1 and 78.5 s) and is kept only as a record. Within these
+limits the replication agrees with the original direction: pulp-exact is about 2–3 % slower
+in Opt, and in PhysCal t8 a slower `UpdateMAll` sits inside overlapping wall-time ranges. A
+clean, idle-host repeat is still needed before quoting precise percentages.
 
 No candidate showed a whole-workload gain worth pursuing, so `scripts/benchmark_cpu.sh` (the
 1+3 C/Julia/Rust round) was not rerun. The acceptance list reserves that run for promising
@@ -252,6 +304,8 @@ Sections 1 and 3 used the native (no Docker) drivers in `tools/`, which follow
 tools/profile.sh "$PWD/target/release/mvmc" phys 1 /tmp/pp-phys-t1 perf    # perf profile
 uv run --no-project python tools/contract_native.py OUT PROBE_A PROBE_B --threads 1 8
 uv run --no-project python tools/ab.py phys 1 0 5 main=BIN_A pulp=BIN_B    # A/B, warmup + 5
+tools/run_ab.sh OUT BIN_A BIN_B 5 3 0     # all four cases with env, load trace and summary
+uv run --no-project python tools/ab_summary.py OUT                     # recompute the tables
 ```
 
 `PROBE_*` are `cpu_scaling_contract_586` example builds. The pulp build is `main` with
