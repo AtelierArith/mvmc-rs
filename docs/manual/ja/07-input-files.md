@@ -71,7 +71,8 @@ TransSym qptransidx.def
 | `RndSeed` | SFMT のシード。ランク/グループ $g$ のシードは `RndSeed + g`。負の値 = 時計 | 11272 | 11272 |
 | `NSplitSize` | MPI グループの幅([8.4](08-running.md#84-mpiとグループ実行)) | 1 | 1 |
 | `Nneuron`, `NneuronCharge`, `NneuronSpin`, `NneuronGeneral`, `NBlockSize_RBMRatio` | RBM の隠れニューロンとブロックサイズ | 0, 0, 0, 0, 200 | 0, 0, 0, 0, 200 |
-| `useDiagScale`, `RescaleSmat` | C にない Julia のオプション | – | 値に関係なく未知のキーワードとして拒否 |
+| `useDiagScale`、`RescaleSmat`、`NSRCGFallback`、`NSRCGAbortOnFail` | mVMC 1.4.0 の SR-CG スイッチ([5.4](05-theory-sr.md#54-共役勾配法ソルバーnsrcg--1)) | 0, 0, 0, 1 | 同じ。`NSRCG 2` は DiagScale CG |
+| `reweight` | mVMC 1.4.0 のサンプル再重み付け | 0 | `1` は拒否(未移植) |
 
 `NOrbitalIdx` は `modpara.def` のキーではありません。軌道パラメータの個数は軌道ファイルから導出されます。
 `NSROptFixSmp`、`NFileFlushInterval`、`ComplexType`、`NOneBodyG` などは ModPara のキーではなく、指定すると拒否されます。
@@ -151,9 +152,10 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 | `NMPTrans == 0` | 拒否(「並進射影なし」には 1 を使います。C の規約) |
 | `NSplitSize < 1` | 拒否 |
 | `NLanczosMode` が 0..2 にない | 拒否 |
-| `NSRCG >= 2`、`NStore = 0` | C で O ストレージが未定義のため拒否。`NStore != 0` なら CG を選択 |
-| `useDiagScale` | 値に関係なく未知の ModPara キーワードとして拒否 |
-| `RescaleSmat` | 値に関係なく未知の ModPara キーワードとして拒否 |
+| `NSRCG >= 3`(または負)、`NStore = 0` | C で O ストレージが未定義のため拒否。`NStore != 0` なら通常の CG(`NSRCG 2` は `NSRCG 1` の DiagScale CG) |
+| `NSRCG 1` なしの `RescaleSmat 1` | C 1.4.0 のエラーで拒否 |
+| 負の `DSROptStepDt` での SR-CG | C 1.4.0 のエラーで拒否(CG に対角化モードはない) |
+| `reweight 1` | 拒否: mVMC 1.4.0 の再重み付けは未移植 |
 
 ### パラメータ最適化(`validate_para_opt`, `crates/mvmc-core/src/validation.rs:108-241`)
 

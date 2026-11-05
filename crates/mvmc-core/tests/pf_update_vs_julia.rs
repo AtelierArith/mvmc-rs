@@ -588,13 +588,17 @@ fn pf_m2_helpers_match_julia() {
 
     let mut pf_tr = f.pf_real.clone();
     let mut inv_tr = f.inv_real.clone();
+    // Julia's real update keeps the 1.3.0 `rsbOld = raOld + t*Nsite`; C 1.4.0
+    // and Rust use `rbOld` (#682). These synthetic operands do not satisfy
+    // invM = M^-1, so the old (a,b) element does not cancel here: pass ra_old as
+    // rb_old to compare the Julia arithmetic itself.
     update_m_all_two_real_flat(
         f.ma_spin.0,
         f.ma_spin.1,
         f.mb_spin.0,
         f.mb_spin.1,
         f.old_sites.0,
-        f.old_sites.1,
+        f.old_sites.0,
         &f.ele_idx,
         &sr,
         &mut inv_tr,
@@ -656,13 +660,14 @@ fn pf_m2_helpers_match_julia() {
 
     let mut pf_tfr = f.pf_real.clone();
     let mut inv_tfr = f.inv_real.clone();
+    // As above: Julia's real FSZ update keeps the 1.3.0 raOld index.
     update_m_all_two_fsz_real_flat(
         f.ma_spin_fsz.0,
         f.ma_spin_fsz.1,
         f.mb_spin_fsz.0,
         f.mb_spin_fsz.1,
         f.old_sites.0,
-        f.old_sites.1,
+        f.old_sites.0,
         &f.ele_idx,
         &f.ele_spn,
         &sr,

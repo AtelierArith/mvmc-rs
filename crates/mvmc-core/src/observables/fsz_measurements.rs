@@ -169,6 +169,10 @@ pub fn calculate_green_func_fsz_timed<const TIMED: bool>(
         phys.phys_cis_ajs_ckt_alt[index] += weight * one_body[first] * one_body[second].conj();
     }
     timer.stop(53);
+    // calgrn_fsz.c: mVMC 1.4.0 times its twist-operator loop as Timer[54]. Twist
+    // operators are not ported (the Lattice/Twist sections are rejected).
+    timer.start(54);
+    timer.stop(54);
 }
 
 /// Normalize accumulated FSZ Green measurements by the accumulated sample weight.

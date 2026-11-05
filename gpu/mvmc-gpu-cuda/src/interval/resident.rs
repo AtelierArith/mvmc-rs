@@ -31,6 +31,9 @@ pub enum ResidentFailure {
     Derivatives,
     /// The SR-CG increment was nonfinite (C `StochasticOptCG` info=1).
     Cg,
+    /// The SR-CG solve did not converge or broke down with `NSRCGAbortOnFail`
+    /// (C 1.4.0 `MPI_Abort`).
+    CgFailed,
     /// A status word outside `resident_status.cuh`.
     Unknown(i32),
 }
@@ -47,6 +50,7 @@ impl ResidentFailure {
             5 => Self::Schedule,
             6 => Self::Derivatives,
             7 => Self::Cg,
+            8 => Self::CgFailed,
             other => Self::Unknown(other),
         })
     }
@@ -62,6 +66,7 @@ impl ResidentFailure {
             Self::Schedule => Some(5),
             Self::Derivatives => Some(6),
             Self::Cg => Some(7),
+            Self::CgFailed => Some(8),
             Self::Unknown(code) => Some(code),
         }
     }
@@ -80,6 +85,9 @@ impl std::fmt::Display for ResidentFailure {
             Self::Schedule => "schedule: unfinished hops after the enqueued rounds",
             Self::Derivatives => "derivatives: nonfinite log-derivative",
             Self::Cg => "SR-CG: nonfinite parameter increment",
+            Self::CgFailed => {
+                "SR-CG: did not converge or became numerically unstable (NSRCGAbortOnFail)"
+            }
             Self::Unknown(_) => "unknown stage",
         };
         match self.code() {

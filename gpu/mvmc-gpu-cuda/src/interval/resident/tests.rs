@@ -401,13 +401,14 @@ fn status_codes_match_cuda_header() {
             "RESIDENT_SCHEDULE" => ResidentFailure::Schedule,
             "RESIDENT_DERIVATIVES" => ResidentFailure::Derivatives,
             "RESIDENT_CG" => ResidentFailure::Cg,
+            "RESIDENT_CG_FAILED" => ResidentFailure::CgFailed,
             other => panic!("unmapped status {other}"),
         };
         assert_eq!(ResidentFailure::from_status(code), Some(expected), "{name}");
         assert_eq!(expected.code(), Some(code));
         seen += 1;
     }
-    assert_eq!(seen, 7);
+    assert_eq!(seen, 8);
     assert_eq!(ResidentFailure::from_status(0), None);
     assert_eq!(
         ResidentFailure::from_status(99),

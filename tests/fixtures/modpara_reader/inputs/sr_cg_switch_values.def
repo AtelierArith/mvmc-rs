@@ -1,0 +1,12 @@
+---
+Model_Parameters   0
+---
+VMC_Cal_Parameters
+---
+CDataFileHead  zvo
+CParaFileHead  zqp
+---
+NSRCGFallback 3
+NSRCGAbortOnFail 0
+RescaleSmat 0
+reweight 2

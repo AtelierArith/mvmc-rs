@@ -4,6 +4,7 @@
 #include "jastrow_contracts_upstream.inc"
 
 int Nsite, NProj, NGutzwillerIdx = 2, NJastrowIdx;
+int NSpinJastrowIdx = 0, **SpinJastrowIdx = 0; /* mVMC 1.4.0 spin Jastrow block, absent here */
 int NDoublonHolon2siteIdx = 0, NDoublonHolon4siteIdx = 0;
 int *GutzwillerIdx, **JastrowIdx, **DoublonHolon2siteIdx, **DoublonHolon4siteIdx;
 #include "jastrow_projection_upstream.inc"

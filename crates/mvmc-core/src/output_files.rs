@@ -45,14 +45,18 @@ pub struct SrInfoRow {
     pub r_max: f64,
     /// `smatToParaIdx[simax]`.
     pub i_max: i64,
-    /// CG rows append `", %d"` with the solver `info`; direct rows do not.
+    /// CG rows append `" %d"` with the solver `info`; direct rows do not.
     pub cg_info: Option<i64>,
 }
 
-/// Header of `_SRinfo.dat` (`initfile.c:46-57`); `SRFlag==1` is diagonalization mode.
-pub fn sr_info_header(diagonalization: bool) -> &'static str {
+/// Header of `_SRinfo.dat` (`initfile.c:46-58`); `SRFlag==1` is diagonalization
+/// mode. mVMC 1.4.0 adds the ` info` column title for SR-CG (`NSRCG != 0`),
+/// which cannot be combined with diagonalization mode.
+pub fn sr_info_header(diagonalization: bool, cg: bool) -> &'static str {
     if diagonalization {
         "#Npara Msize optCut diagCut sEigenMax  sEigenMin    absRmax       imax\n"
+    } else if cg {
+        "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax info\n"
     } else {
         "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax\n"
     }
@@ -75,8 +79,9 @@ pub fn format_c_exp5(x: f64) -> String {
 
 /// Format one SRinfo row, including the trailing newline.
 ///
-/// C: `"%5d %5d %5d %5d % .5e % .5e % .5e %5d\n"` (direct) and
-/// `"%5d %5d %5d %5d % .5e % .5e % .5e %5d, %d\n"` (CG).
+/// C: `"%5d %5d %5d %5d % .5e % .5e % .5e %5d\n"` (direct) and, since
+/// mVMC 1.4.0, `"%5d %5d %5d %5d % .5e % .5e % .5e %5d %d\n"` (CG,
+/// stcopt_cg_impl.c:285; 1.3.0 printed `"%5d, %d"`).
 pub fn format_sr_info_row(row: &SrInfoRow) -> String {
     let mut line = format!(
         "{:5} {:5} {:5} {:5} {} {} {} {:5}",
@@ -90,7 +95,7 @@ pub fn format_sr_info_row(row: &SrInfoRow) -> String {
         row.i_max
     );
     if let Some(info) = row.cg_info {
-        line.push_str(&format!(", {info}"));
+        line.push_str(&format!(" {info}"));
     }
     line.push('\n');
     line
@@ -215,7 +220,9 @@ impl RunFiles {
         )))?;
         let sr_info = if kind == RunKind::ParaOpt {
             let mut file = BufWriter::new(File::create(dir.join(format!("{head}_SRinfo.dat")))?);
-            file.write_all(sr_info_header(data.modpara.sr_flag).as_bytes())?;
+            file.write_all(
+                sr_info_header(data.modpara.sr_flag, data.modpara.nsrcg != 0).as_bytes(),
+            )?;
             Some(file)
         } else {
             None

@@ -1682,6 +1682,7 @@ fn runner_matrix(steps: i64, failure_boundary_only: bool, diagnostic_collect_all
                 data.modpara.nsr_opt_itr_smp = steps;
                 data.modpara.nstore_o = store;
                 data.modpara.nsrcg = cg;
+                data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
                 if real_fsz {
                     data.complex_flags = vec![0];
                 }
@@ -2199,6 +2200,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
         if model == "general_rbm_cmp_cg" {
             assert_eq!((data.modpara.nsrcg, data.modpara.nstore_o), (0, 1));
             data.modpara.nsrcg = 1;
+            data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
             data.modpara.nstore_o = 0;
         }
         let settings = std::fs::read_to_string(expected.join("model-settings.txt")).unwrap();
@@ -2701,6 +2703,7 @@ fn reviewed_cg_long20(output_root: &Path) {
     data.modpara.nsr_opt_itr_step = 20;
     data.modpara.nsr_opt_itr_smp = 20;
     data.modpara.nsrcg = 1;
+    data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
     data.modpara.nstore_o = 0;
     let mut rng = Sfmt19937Rng::new(data.modpara.rnd_seed as u32);
     init_parameter(&mut data, &mut rng).unwrap();

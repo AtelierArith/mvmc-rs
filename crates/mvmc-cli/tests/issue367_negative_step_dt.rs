@@ -70,19 +70,27 @@ fn negative_step_dt_runs_like_the_positive_step_and_reports_diagonalization_mode
 
 #[test]
 fn srinfo_header_spelling_follows_sr_flag() {
-    for (name, dt, expected) in [
+    // Direct SR: the header spells diagonalization mode; SR-CG adds the C 1.4.0
+    // " info" title (initfile.c:47-58). NSROptCGMaxIter is large and
+    // NSRCGAbortOnFail off so the short CG run never aborts on its limit.
+    for (name, dt, cg, expected) in [
         (
-            "cg_negative",
+            "direct_negative",
             "-0.01",
+            "0",
             "#Npara Msize optCut diagCut sEigenMax  sEigenMin    absRmax       imax",
         ),
         (
             "cg_positive",
             "0.01",
-            "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax",
+            "1",
+            "#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax info",
         ),
     ] {
-        let (output, out_dir, _dir) = run(name, &format!("\nDSROptStepDt {dt}\nNSRCG 1\n"));
+        let (output, out_dir, _dir) = run(
+            name,
+            &format!("\nDSROptStepDt {dt}\nNSRCG {cg}\nNSRCGAbortOnFail 0\n"),
+        );
         assert!(
             output.status.success(),
             "{}",
@@ -90,5 +98,24 @@ fn srinfo_header_spelling_follows_sr_flag() {
         );
         let info = fs::read_to_string(out_dir.join("zvo_SRinfo.dat")).unwrap();
         assert_eq!(info.lines().next().unwrap(), expected, "{name}");
+    }
+}
+
+#[test]
+fn sr_cg_with_negative_step_dt_is_rejected_before_output() {
+    // C 1.4.0 ReadDefFileNInt aborts SR-CG in diagonalization mode
+    // (readdef.c:967-975); NSRCG 2 is DiagScale CG and is rejected too.
+    for (name, cg) in [("cg_negative", "1"), ("diag_scale_negative", "2")] {
+        let (output, out_dir, _dir) = run(name, &format!("\nDSROptStepDt -0.01\nNSRCG {cg}\n"));
+        assert!(!output.status.success(), "{name}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(
+                "error: SR-CG (NSRCG=1) cannot be combined with diagonalization mode \
+                 (DSROptStepDt < 0)"
+            ),
+            "{name}: {stderr}"
+        );
+        assert!(!out_dir.exists(), "{name}: no output may be created");
     }
 }

@@ -102,6 +102,7 @@ fn canonical_models_match_independent_prefix_oracles() {
                 if model == "general_rbm_cmp_cg" {
                     assert_eq!((data.modpara.nsrcg, data.modpara.nstore_o), (0, 1));
                     data.modpara.nsrcg = 1;
+                    data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
                     data.modpara.nstore_o = 0;
                 }
                 let settings = fs::read_to_string(expected.join("model-settings.txt")).unwrap();
@@ -453,6 +454,7 @@ fn general_rbm_ctest_short_prefix_and_twenty_step_discrete_trajectory() {
             data.modpara.nsr_opt_itr_step = steps;
             data.modpara.nsr_opt_itr_smp = steps;
             data.modpara.nsrcg = cg;
+            data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
             data.modpara.nstore_o = store;
             let mut state = mvmc_core::VmcOptimizationState::zeros(
                 data.modpara.nsite as usize,

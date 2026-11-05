@@ -119,9 +119,11 @@ build, manifest, generation, import and verification commands. Rust resolves
 the reviewed reads through `julia_fixture::fixture_path`, so
 `tests/fixtures/macos_arm_julia/<openblas-core>/reviewed_cg_62b/<case>/` overrides
 the archived Linux lineage per file. The same core-specific overlays cover the
-fixed-input CG reference (`.../sr_cg/c_refresh/`, from `ctest_cg_refresh.c` on
-the host) and the PhysCal two-sample references (`.../physcal_181/two-samples/`
-and `.../native-c-weighted-green/`).
+PhysCal two-sample references (`.../physcal_181/two-samples/`
+and `.../native-c-weighted-green/`). The fixed-input CG reference has no Apple
+overlay since #682: the 1.3.0 host copies were removed, and Apple hosts compare the
+Linux C 1.4.0 oracle with exact statuses, the backward-error check at every limit and
+forward iterates through limit 5.
 
 ## CI
 

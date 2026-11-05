@@ -1,5 +1,5 @@
-// Device-resident SR-CG (#670, #572 milestone 4): C StochasticOptCG_real
-// (stcopt_cg_impl.c) without host round trips. The host enqueues an upper
+// Device-resident SR-CG (#670, #572 milestone 4): C 1.4.0 StochasticOptCG_real
+// (stcopt_cg_impl.c, plain StochasticOptCG_Main) without host round trips. The host enqueues an upper
 // bound of iterations; every iteration kernel returns at once after the
 // device-side stop flag is set, so the C stopping rule and iteration count are
 // decided on the device.
@@ -10,7 +10,9 @@
 // intrinsics (no FMA), as the C/Rust CPU loops round each product separately.
 //
 // st:  [0] delta, [1] threshold, [2] alpha, [3] coef (<O>.x), [4] 1/Wc
-// ist: [0] stop flag, [1] completed iterations, [2] max iterations, [3] nSmat
+// ist: [0] stop flag, [1] completed iterations, [2] max iterations, [3] nSmat,
+//      [4] C 1.4.0 Main status: iterations, or -(iter+1) on breakdown or
+//          non-convergence (stcopt_cg_impl.c:526-583)
 
 #define CG_BLOCK 1024
 
@@ -133,7 +135,17 @@ extern "C" __global__ void cg_prepare(double* x, double* vec, int* active, doubl
     ist[1] = 0;
     ist[2] = limit;
     ist[3] = nsmat;
-    ist[0] = *error || limit <= 0 || delta < thresh;
+    ist[4] = 0;
+    // An empty active set is an exact no-op, as on the CPU (#682). Otherwise
+    // C returns -(0+1) for a nonfinite delta and stops at fabs(delta) < thresh.
+    int stop = *error || nsmat == 0;
+    if (!stop && !isfinite(delta)) {
+      stop = 1;
+      ist[4] = -1;
+    } else if (!stop && fabs(delta) < thresh) {
+      stop = 1;
+    }
+    ist[0] = stop;
     trace[0] = delta;
     history[step] = energy;
   }
@@ -173,21 +185,44 @@ extern "C" __global__ void cg_oy(double* z, const double* st, const int* ist, co
   z[p] = __dadd_rn(value, __dmul_rn(__dmul_rn(sdiag[p], sta_del), v[p]));
 }
 
-// alpha = delta/(d.q), x += alpha*d (stcopt_cg_impl.c:536-548).
-__device__ double cg_alpha_update(double* x, const double* d, const double* q,
-    const int* active, double* st, int np, double* scratch) {
-  const double alpha = st[0] / cg_block_dot(d, q, active, np, scratch);
-  for (int p = threadIdx.x; p < np; p += blockDim.x)
-    if (active[p]) x[p] = __dadd_rn(x[p], __dmul_rn(alpha, d[p]));
-  return alpha;
+// Record the C 1.4.0 breakdown status -(iter+1) of the running iteration and stop.
+__device__ void cg_breakdown(int* ist) {
+  if (!threadIdx.x) {
+    ist[4] = -(ist[1] + 1);
+    ist[0] = 1;
+  }
 }
 
-// beta = (r.r)/delta, delta = beta*delta, d = r + beta*d and the stop test of
-// the next C loop iteration (stcopt_cg_impl.c:565-582, :270).
+// dq = d.q, alpha = delta/dq, x += alpha*d (stcopt_cg_impl.c:539-549). C 1.4.0
+// stops before the update when dq is nonfinite or below 1e-20, or alpha is
+// nonfinite. Returns false after such a breakdown; `alpha` is this thread's copy.
+__device__ bool cg_alpha_update(double* x, const double* d, const double* q,
+    const int* active, double* st, int* ist, int np, double* scratch, double* alpha_out) {
+  const double dq = cg_block_dot(d, q, active, np, scratch);
+  const double alpha = st[0] / dq;
+  if (!isfinite(dq) || fabs(dq) < 1.0e-20 || !isfinite(alpha)) {
+    cg_breakdown(ist);
+    return false;
+  }
+  for (int p = threadIdx.x; p < np; p += blockDim.x)
+    if (active[p]) x[p] = __dadd_rn(x[p], __dmul_rn(alpha, d[p]));
+  if (!threadIdx.x) st[2] = alpha;
+  *alpha_out = alpha;
+  return true;
+}
+
+// delta_new = r.r, beta = delta_new/delta, delta = beta*delta, d = r + beta*d
+// and the tests at the start of the next C loop iteration
+// (stcopt_cg_impl.c:565-583, :528-535).
 __device__ void cg_direction(double* d, const double* r, const int* active, double* st,
     int* ist, double* trace, int np, double* scratch) {
   const double delta = st[0];
-  const double beta = cg_block_dot(r, r, active, np, scratch) / delta;
+  const double delta_new = cg_block_dot(r, r, active, np, scratch);
+  const double beta = delta_new / delta;
+  if (!isfinite(delta_new) || fabs(delta) < 1.0e-20 || !isfinite(beta)) {
+    cg_breakdown(ist);
+    return;
+  }
   for (int p = threadIdx.x; p < np; p += blockDim.x)
     if (active[p]) d[p] = __dadd_rn(r[p], __dmul_rn(beta, d[p]));
   if (!threadIdx.x) {
@@ -196,7 +231,17 @@ __device__ void cg_direction(double* d, const double* r, const int* active, doub
     st[0] = next;
     ist[1] = iter;
     trace[iter] = next;
-    ist[0] = iter >= ist[2] || next < st[1];
+    if (iter >= ist[2]) {
+      // :583: the limit is reached; fabs(NaN) >= thresh is false, as in C.
+      ist[0] = 1;
+      ist[4] = fabs(next) >= st[1] ? -(ist[2] + 1) : iter;
+    } else if (!isfinite(next)) {
+      ist[0] = 1;
+      ist[4] = -(iter + 1);
+    } else if (fabs(next) < st[1]) {
+      ist[0] = 1;
+      ist[4] = iter;
+    }
   }
 }
 
@@ -208,8 +253,8 @@ extern "C" __global__ void cg_iterate(double* x, double* vec, const int* active,
   double* d = vec + np;
   double* r = vec + 2 * (size_t)np;
   const double* q = vec + 3 * (size_t)np;
-  const double alpha = cg_alpha_update(x, d, q, active, st, np, scratch);
-  if (!threadIdx.x) st[2] = alpha;
+  double alpha;
+  if (!cg_alpha_update(x, d, q, active, st, ist, np, scratch, &alpha)) return;
   for (int p = threadIdx.x; p < np; p += blockDim.x)
     if (active[p]) r[p] = __dsub_rn(r[p], __dmul_rn(alpha, q[p]));
   cg_direction(d, r, active, st, ist, trace, np, scratch);
@@ -218,12 +263,11 @@ extern "C" __global__ void cg_iterate(double* x, double* vec, const int* active,
 // Every 20th iteration: alpha and x first, then r = S x is formed by
 // cg_ty/cg_oy, and cg_refresh replaces it by g - S x.
 extern "C" __global__ void cg_alpha(double* x, double* vec, const int* active, double* st,
-    const int* ist, int np) {
+    int* ist, int np) {
   if (ist[0]) return;
   __shared__ double scratch[32];
-  const double alpha = cg_alpha_update(x, vec + np, vec + 3 * (size_t)np, active, st, np,
-      scratch);
-  if (!threadIdx.x) st[2] = alpha;
+  double alpha;
+  cg_alpha_update(x, vec + np, vec + 3 * (size_t)np, active, st, ist, np, scratch, &alpha);
 }
 
 extern "C" __global__ void cg_refresh(double* vec, const int* active, double* st, int* ist,
@@ -238,10 +282,12 @@ extern "C" __global__ void cg_refresh(double* vec, const int* active, double* st
   cg_direction(d, r, active, st, ist, trace, np, scratch);
 }
 
-// stcopt_cg_impl.c:315-327: a nonfinite increment returns info=1 and C stops
-// (vmcmain.c:503-506). Nothing is published; opt_update observes the status.
+// stcopt_cg_impl.c:203-310: a failed solve aborts with NSRCGAbortOnFail (C 1.4.0
+// MPI_Abort) or continues with the approximate solution; a nonfinite increment
+// then returns info=1 and C stops (vmcmain.c:503-506). Nothing is published;
+// opt_update observes the status. `iterations[step]` is the zqp_SRinfo.dat info.
 extern "C" __global__ void cg_finish(const double* x, const int* active, int* info,
-    const int* ist, int* iterations, int step, int np, int* error) {
+    const int* ist, int* iterations, int step, int np, int* error, int abort_on_fail) {
   __shared__ int bad[32];
   int b = 0;
   for (int p = threadIdx.x; p < np; p += blockDim.x) b |= active[p] && !isfinite(x[p]);
@@ -252,6 +298,10 @@ extern "C" __global__ void cg_finish(const double* x, const int* active, int* in
   for (int i = 1; i < (int)(blockDim.x >> 5); ++i) b |= bad[i];
   info[0] = 0;
   info[1] = 0;
-  iterations[step] = ist[1];
-  if (b) atomicCAS(error, 0, RESIDENT_CG);
+  iterations[step] = ist[4];
+  if (ist[4] < 0 && abort_on_fail) {
+    atomicCAS(error, 0, RESIDENT_CG_FAILED);
+  } else if (b) {
+    atomicCAS(error, 0, RESIDENT_CG);
+  }
 }

@@ -155,8 +155,10 @@ pub struct OptResult {
     pub parameters_imag: Vec<f64>,
     pub seed: u64,
     pub walkers: usize,
-    /// SR-CG iteration count of each step (C `StochasticOptCG_Main` return
-    /// value, the last `zqp_SRinfo.dat` column); empty for direct SR.
+    /// SR-CG status of each step: the C 1.4.0 `StochasticOptCG_Main` return
+    /// value (iteration count, or `-(iter+1)` after a breakdown or
+    /// non-convergence that `NSRCGAbortOnFail = 0` continued), the last
+    /// `zqp_SRinfo.dat` column; empty for direct SR.
     pub cg_iterations: Vec<i32>,
 }
 

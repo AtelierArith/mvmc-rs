@@ -101,13 +101,13 @@ of the DH blocks is the number of patterns, while the row count is $6\times$ (DH
 Written by the **CG** solver only (`NSRCG != 0`), one row per SR step after a one-line header:
 
 ```text
-#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax
-  100   100     0     0  1.22546e+00  1.14682e-02 -6.31767e-02    76, 100
+#Npara Msize optCut diagCut sDiagMax  sDiagMin    absRmax       imax info
+  100   100     0     0  1.22546e+00  1.14682e-02 -6.31767e-02    76 100
 ```
 
 Columns: number of parameters `Npara` (complex count), size of the solved system `Msize` ($n_S$), parameters held fixed by their optimization flag `optCut`,
 parameters removed by `DSROptRedCut` `diagCut`, the largest and smallest diagonal element of $S$, the solution component with the largest modulus `absRmax`, its
-parameter index `imax`, and, after a comma, the number of CG iterations. Format `"%5d %5d %5d %5d % .5e % .5e % .5e %5d, %d"`.
+parameter index `imax`, and the CG status `info`: the iteration count, or `-(iter+1)` when the solve broke down or reached its limit and `NSRCGAbortOnFail 0` continued (also after a fallback). Format `"%5d %5d %5d %5d % .5e % .5e % .5e %5d %d"` and the ` info` header title since mVMC 1.4.0; 1.3.0 printed `"%5d, %d"` and no title.
 The C manual notes that imaginary components of real-mode parameters are counted in `optCut`.
 
 > **Implementation**

@@ -1,7 +1,7 @@
 /* Optional actual-C probe for the run-log files: `_time_` (OutputTime), the SRinfo header
  * (InitFile) and SRinfo row statements, FlushFile and CloseFile. The function bodies in
  * time_srinfo_upstream.inc and the row statements in time_srinfo_rows_*.inc are verbatim
- * C from mVMC-1.3.0. This is a standalone kernel check: no MPI, sampler or SR solver runs,
+ * C from mVMC-1.4.0. This is a standalone kernel check: no MPI, sampler or SR solver runs,
  * and the counters/solver values are supplied literals. Cargo never builds or reads this file.
  *
  * Usage: time_srinfo_format <out-dir>   (run with TZ=UTC; time() is stubbed to a fixed value)
@@ -17,6 +17,7 @@
 char CDataFileHead[D_FileNameMax];
 int NVMCCalMode, NDataIdxStart, SRFlag, FlagBinary = 0, NPara = 48, NSROptItrStep;
 int NFileFlushInterval = 1;
+int NSRCG = 0; /* mVMC 1.4.0 InitFile adds " info" to the SRinfo header for SR-CG */
 int Counter[6] = {0, 0, 0, 0, 0, 0};
 FILE *FileOut, *FileVar, *FileTime, *FileSRinfo;
 /* Fixed clock: 2023-11-14 22:13:20 UTC. */
@@ -57,7 +58,7 @@ int main(int argc, char **argv) {
   char base[4096];
   snprintf(base, sizeof(base), "%s", argv[1]);
 
-  /* Case A: ParaOpt, head "custom", NDataIdxStart 7, direct and CG rows, flush interval 2. */
+  /* Case A: ParaOpt, head "custom", NDataIdxStart 7, direct rows, flush interval 2. */
   enter(base, "paraopt");
   strcpy(CDataFileHead, "custom"); NDataIdxStart = 7; NVMCCalMode = 0; SRFlag = 0;
   NFileFlushInterval = 2;
@@ -71,7 +72,6 @@ int main(int argc, char **argv) {
     }
     OutputTime(step);
     row_direct(40, 4, 4, 3.10304e-2, 0.0, 7.84187e-3, 13);
-    row_cg(40, 4, 4, 3.53637e-2, 0.0, -5.5165e-3, 43, 35);
     row_direct(1, 0, 0, 1.0e100, -1.0e-300, 123456.789, 99999);
     row_direct(12345, 100000, 7, -0.0, 2.5, -0.0, -1);
     FlushFile(step, 0);
@@ -91,6 +91,17 @@ int main(int argc, char **argv) {
   OutputTime(1); FlushFile(0, 0);
   OutputTime(2);
   fclose(FileTime);
+
+  /* Case D: SR-CG (NSRCG=1): the 1.4.0 " info" header and "%5d %d" rows, with a
+   * converged count, a fallback/continue -(iter+1) and a non-convergence code. */
+  enter(base, "cg");
+  strcpy(CDataFileHead, "zvo"); NDataIdxStart = 0; NVMCCalMode = 0; SRFlag = 0; NSRCG = 1;
+  InitFile("namelist.def", 0);
+  row_cg(40, 4, 4, 3.53637e-2, 0.0, -5.5165e-3, 43, 35);
+  row_cg(40, 4, 4, 3.53637e-2, 0.0, -5.5165e-3, 43, -12);
+  row_cg(12345, 100000, 7, 1.0e100, -1.0e-300, 123456.789, 99999, -41);
+  CloseFile(0);
+  NSRCG = 0;
 
   /* Case C: diagonalization-mode header and eigenvalue row. */
   enter(base, "diag");

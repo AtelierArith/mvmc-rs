@@ -18,7 +18,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `integer_flags.c` | Production AP/P header normalization, raw integer flags, coefficient bits, native SFMT and SR selection, 70 cases | `python3 scripts/check_integer_flags_c_parity.py` |
 | `projection_flags.c` | Native DH2/DH4 raw-flag readers, 24 cases; real gauge eligibility, 86 cases | `python3 scripts/check_projection_flags_c_parity.py` |
 | `gutzwiller_contracts.c` | Physical headers, complete site mappings and raw ordered flags, 144 cases | `python3 scripts/check_gutzwiller_contracts_c_parity.py` |
-| `jastrow_contracts.c` | Directional mappings, physical headers and raw ordered flags, 144 cases; 1,795 native projection workloads | `python3 scripts/check_jastrow_contracts_c_parity.py` |
+| `jastrow_contracts.c` | 1.4.0 symmetric mappings, physical headers and raw ordered flags, 171 cases; 1,795 native projection workloads | `python3 scripts/check_jastrow_contracts_c_parity.py` |
 | `initial_records.c` | Successive complete records, final values, C scalar/complex conversion and unchanged native SFMT, 35 cases | `python3 scripts/check_initial_records_c_parity.py` |
 | `interall_real.c` | Actual real Green/Pfaffian/projection/overlap kernels, 4,096 operators and four ordered InterAll sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_real_c_parity.py` |
 | `interall_complex.c` | Actual complex Green/Pfaffian/projection/overlap kernels, 4,096 operators, four ordered InterAll sums and four PairHop sums; MPI_COMM_SELF plumbing, no RBM | `uv run --no-project python scripts/check_interall_complex_c_parity.py` |
@@ -29,6 +29,7 @@ are unchanged, and no Julia runtime is needed for these C-derived Rust checks.
 | `complex_division.c` | Actual compiler complex division: 373 normal/subnormal/range/nonfinite cases; pure Rust scaled quotient port | `uv run --no-project python scripts/check_complex_division_c_parity.py` |
 | `interall_reader.c` | Native physical headers, exact counts, partial scan carry, sites/TwoSz and numeric prefixes, 463 cases (411 accepted / 52 rejected) | `uv run --no-project python scripts/check_interall_reader_c_parity.py` |
 | `negative_stepdt.c` | Negative `DSROptStepDt` normalization and `SRFlag` header (readdef.c, initfile.c) plus actual `stcOptInit` + LAPACK `dposv` on fixed 3-parameter operands, 5 cases; standalone kernel check, no MPI/sampling | `uv run --no-project python scripts/check_negative_stepdt_c_parity.py` |
+| `c_timer_report.c` | Verbatim 1.4.0 `OutputTimerParaOpt`/`OutputTimerPhysCal` with zero timers: the `zvo_CalcTimer.dat` line sets (1.4.0 adds `addPhysTwist [54]`); standalone format check | `uv run --no-project python scripts/check_c_timer_c_parity.py` |
 | `complex_uhf/cases.py` | Full unmodified C `ComplexUHF` (`UHF`) executable (gcc, OpenBLAS) on 10 cases: Hubbard chain/square/triangular, InterAll, `Initial` file, all two-body families, AP/AP+P/General orbital output, no orbital file, non-converged run; case inputs only, the driver builds C from `extern/` | `uv run --no-project python scripts/check_complex_uhf_c_parity.py` (add `--write` to regenerate `tests/fixtures/complex_uhf/`) |
 | `stdface/` | Full C StdFace executable (mVMC build, `mvmc_dry.out`) run on chain, ladder, 2D-lattice and Wannier90 inputs (upstream `test/mvmc` plus feature and error cases) for byte-identical Expert files, `stdout` and exit status; standalone `double complex` expression probe (signed zeros). See `c_toolbox/stdface/README.md` | `c_toolbox/stdface/build_reference.sh DIR && uv run --no-project python c_toolbox/stdface/generate_fixtures.py DIR/mvmc_dry.out`; `c_toolbox/stdface/check_complex_expr.sh` |
 | `greenr2k/` (`build.sh`, `generate_fixtures.py`, `format_probe.f90`) | Authoritative Fortran `tool/greenr2k.F90` built with gfortran and run on mVMC/HPhi-style inputs (C StdFace geometry/indices), plus a gfortran output-format probe; full executable check of the post-processing tool, not a kernel excerpt | see `tests/fixtures/greenr2k/PROVENANCE.md` |
@@ -162,15 +163,16 @@ reader's supported contract, not full C validation, initialization, MPI or
 sampling parity. RBM complete readers remain separate work in #21/#26.
 
 The Jastrow probe extracts the actual header, `GetInfoJastrow`, `GetInfoOpt`
-and site-check functions. Its 144 cases cover directed pairs, count errors,
-raw signed flags and a nonzero Gutzwiller offset. `jastrow_projection.c` adds
+and site-check functions. Its 171 cases (60 accepted) cover complete symmetric
+pair tables, the mVMC 1.4.0 rejections of repeated, missing, asymmetric and
+out-of-range pairs, count errors, raw signed flags and a nonzero Gutzwiller
+offset; the 1.3.0 directed rows remain as the `asymmetric_classes` cases. `jastrow_projection.c` adds
 actual `MakeProjCnt` and `UpdateProjCnt` bodies from `projection.c`, supplying
 two Gutzwiller slots, disabled DH factors and eight occupancy patterns. All
 1,795 initial/count-update workloads across 60 complete tables are serialized
 as checked-in Rust expectations; legal moves in both directions are included.
-The reader preserves asymmetric entries, while C's projection kernels always
-look up the upper-triangle index. Duplicate tables with unwritten cells are
-excluded from kernel execution. Unwritten index=-1 and imaginary=0 sentinels
+Since 1.4.0 the reader stores a symmetric table, and C's projection kernels
+look up the upper-triangle index. Unwritten index=-1 and imaginary=0 sentinels
 are documented, and neither driver establishes native malloc initialization,
 full sampling, MPI, global complex-header or OptTrans behavior. The script
 also reproduces the complete three-site historical replacement without editing
@@ -275,8 +277,9 @@ platform level (`interall/c_reader.txt` NaN payloads,
 last-bit products): their data lines are kept and only their header hashes were
 replaced, after the Linux 1.3.0 and 1.4.0 outputs were shown identical. Some
 headers keep the scripts' fixed `Apple clang 17` label; the 1.4.0 reruns used
-GCC on Linux. The Jastrow reader, ModPara reader and `zqp_SRinfo.dat` probes
-change under 1.4.0 and are regenerated together with the Rust contract changes.
+GCC on Linux. The Jastrow reader, ModPara reader, `zqp_SRinfo.dat`, CG refresh
+and timer probes changed under 1.4.0; they were regenerated with the Rust
+contract changes (`docs/NUMERICAL_COMPARISONS.md`, "mVMC 1.4.0 contract changes").
 
 Tools that pin 1.3.0 source hashes for a recorded investigation
 (`check_threaded_182_real_*.jl`, `generate_threaded_182_real_fsz.jl`,
@@ -314,8 +317,8 @@ Rust tests read that fixture without compiling or invoking C.
 
 `modpara_reader_upstream.inc` embeds, verbatim and balanced-brace delimited,
 `CheckWords`, `ReadDefFileError`, `SetDefaultValuesModPara` and
-`GetInfoFromModPara` from `extern/mVMC-1.3.0/src/mVMC/readdef.c` (SHA-256
-`6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9`), plus the
+`GetInfoFromModPara` from `extern/mVMC-1.4.0/src/mVMC/readdef.c` (SHA-256
+`9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3`), plus the
 NBlockSize_RBMRatio block of `ReadDefFileNInt` (lines 375-380) wrapped in
 `ApplyNBlockSizeRBMRatioAdjustment`. `modpara_reader.c` includes the unmodified
 `include/readdef.h`/`global.h`, replaces `time(NULL)` by a sentinel and prints
@@ -329,7 +332,9 @@ uv run --no-project python scripts/check_modpara_reader_c_parity.py --write
 uv run --no-project python scripts/check_modpara_reader_c_parity.py
 ```
 
-Results (71 accepted/rejected variants) and the input files are stored in
+The probe also runs the verbatim 1.4.0 SR-CG/`DSROptStepDt` normalization
+block of `ReadDefFileNInt` (readdef.c:927-976) with `MPI_Abort` reported as
+status 2. Results (80 accepted/rejected variants) and the input files are stored in
 `tests/fixtures/modpara_reader/`; Rust tests read them without invoking C.
 
 ## SR operand dump (#358)

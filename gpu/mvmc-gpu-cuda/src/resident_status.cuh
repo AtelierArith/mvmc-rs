@@ -12,5 +12,6 @@ enum {
   RESIDENT_SCHEDULE = 5,     // a walker did not finish its scheduled hops
   RESIDENT_DERIVATIVES = 6,  // nonfinite log-derivative
   RESIDENT_CG = 7,           // nonfinite SR-CG increment (C StcOpt info=1)
+  RESIDENT_CG_FAILED = 8,    // SR-CG solve failed with NSRCGAbortOnFail (C 1.4.0 MPI_Abort)
 };
 #endif

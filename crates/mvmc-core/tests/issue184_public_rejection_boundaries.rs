@@ -163,11 +163,11 @@ fn s200_physcal_split_three_general_needs_communicator_before_output_state_and_r
     );
 }
 #[test]
-fn s205_paraopt_cg_two_without_store_rejects_before_output_state_and_rng() {
+fn s205_paraopt_cg_three_without_store_rejects_before_output_state_and_rng() {
     boundary(
         false,
         |d| {
-            d.modpara.nsrcg = 2;
+            d.modpara.nsrcg = 3;
             d.modpara.nstore_o = 0;
         },
         "undefined in mVMC C",

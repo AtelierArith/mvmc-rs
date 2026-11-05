@@ -59,8 +59,8 @@ Differences that a user can observe:
 | 9 | `NSROptItrSmp > NSROptItrStep` | leaves rows unwritten | rejected |
 | 10 | Lanczos | any of the supported orbital/term sets of C (incl. `InterAll`) | no FSZ (C also rejects it), no spin-changing `Trans`; spin-conserving `InterAll` is supported; `NSplitSize>1` is supported as in C; a failed $\alpha$ writes `NaN` |
 | 11 | `TwoBodyGEx` in optimization | read and ignored by the optimizer | read and ignored (accepted by `validate_para_opt`, as by PhysCal) |
-| 12 | BackFlow (`BF`, `BFRange`) | C 1.3.0 rejects it | rejected in both optimization and PhysCal |
-| 13 | `NSRCG >= 2`; `useDiagScale`, `RescaleSmat` | nonzero `NSRCG` selects CG; storage is undefined with `NStore=0`. The other keys are not C keywords | `NSRCG >= 2` selects CG with `NStore != 0` and is rejected with `NStore=0`; the other keys are rejected as unknown regardless of value |
+| 12 | BackFlow (`BF`, `BFRange`) | C rejects it (`_NOTBACKFLOW`) | rejected in both optimization and PhysCal |
+| 13 | `NSRCG`, `useDiagScale`, `RescaleSmat`, `NSRCGFallback`, `NSRCGAbortOnFail` | 1.4.0: `NSRCG 2` is DiagScale CG with `NSRCG 1`; other nonzero values are plain CG, with storage undefined for `NStore=0` unless `NSRCG=1`; `RescaleSmat` needs `NSRCG 1` | same normalization, remarks and errors ([5.4](05-theory-sr.md#54-conjugate-gradient-solver-nsrcg--1)); undefined storage is rejected; the resident GPU runs plain CG only |
 | 14 | `exp`, `cosh`, `hypot`, `sin/cos` | libm / C99 complex | Julia-compatible ports (last-bit differences possible) |
 | 15 | OpenMP reduction order in the local energy and `NProj` sums | thread-dependent | fixed sequential order |
 | 16 | Variance column when $\lvert\langle H\rangle\rvert\le10^{-14}$ | $\pm\infty$/NaN | `0.0` (optimization output only) |
@@ -70,6 +70,12 @@ Differences that a user can observe:
 | 20 | Negative `DSROptStepDt` | sets `SRFlag` and negates the value | parser performs the same transformation |
 | 21 | Electron count key in `modpara.def` | `Nelectron`, `Ne` | accepts the same keys |
 | 22 | SR stages with `MVMC_RS_SR_BACKEND=tenferro` or `cuda` | not applicable | opt-in Rust extension ([chapter 12](12-accelerated-backends.md)): same RNG draws and Metropolis protocol; the SR Gram, solve and CG product agree with the C-order path within derived bounds, not byte-identical; the default `c-order` path is unchanged |
+| 23 | SR-CG failure (1.4.0) | breakdown or limit returns `-(iter+1)`; `NSRCGAbortOnFail 1` (default) calls `MPI_Abort`; `NSRCGFallback` retries the other variant | same messages and `zvo_SRinfo.dat` status; abort is an error before the row is written; the resident GPU ports the abort/continue policy but not the fallback |
+| 24 | SR-CG with no active parameter ($n_S=0$) | 1.4.0 reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds | the step is an exact no-op (#682) |
+| 25 | SR-CG with a negative `DSROptStepDt` | 1.4.0 aborts | rejected before any output |
+| 26 | `reweight 1` | 1.4.0 reweights samples by $\lvert\psi\rvert^2/\lvert\mathrm{Pf}\rvert^2$ | rejected (reweighting is not ported); other values are accepted and leave $w=1$ |
+| 27 | Jastrow reader | 1.4.0 requires every directed pair once and the same class for $(i,j)$ and $(j,i)$, then symmetrises | same checks; the stored table is symmetric |
+| 28 | `zvo_CalcTimer.dat` (PhysCal) | 1.4.0 adds `addPhysTwist [54]` | same line (always 0; twist operators are not ported) |
 
 ## 11.4 Numerical comparison policy
 
@@ -92,10 +98,8 @@ The detailed policy is [docs/NUMERICAL_COMPARISONS.md](../NUMERICAL_COMPARISONS.
 
 Items noticed while writing this manual, to be handled by separate issues. "Observed" means reproduced with a release build of `mvmc`; "code reading" means seen in the sources but not exercised.
 
-1. **Two-electron update, complex normal path.** C defines `rsbOld = raOld + t*Nsite` in all four two-electron update functions (`pfupdate_two_fcmp.c:230`, `pfupdate_two_real.c:230`,
-   `pfupdate_two_fsz.c:235`, `pfupdate_two_fsz_real.c:221`), i.e. it uses the *old site of electron a* for the second index of the old matrix element $M^{\rm old}_{ab}$. The Rust *real* update
-   preserves this deliberately (`crates/mvmc-core/src/sampling/updates.rs:588`), while the Rust *complex* normal update
-   `update_m_all_two_complex_flat` uses the old site of electron b (`crates/mvmc-core/src/sampling/updates.rs:537`), as Julia does. Whether this changes complex exchange updates numerically was **not tested** (code reading).
+1. **Two-electron update `rsbOld`.** mVMC 1.3.0 defined `rsbOld = raOld + t*Nsite`, the *old site of electron a*, for the second index of the old matrix element $M^{\rm old}_{ab}$. mVMC 1.4.0 (upstream #100) uses `rbOld + t*Nsite` in all four two-electron update functions (`pfupdate_two_fcmp.c:230`, `pfupdate_two_real.c:230`,
+   `pfupdate_two_fsz.c:235`, `pfupdate_two_fsz_real.c:221`). The element enters only through `vecS[msb]` and cancels in the ratio and the inverse update, so both choices agree to roundoff (`crates/mvmc-core/tests/two_electron_rsbold.rs`). Rust follows 1.4.0 on every path since #682; the real and real-FSZ updates used the 1.3.0 `raOld` before.
 2. **PhysCal namelist admission.** The former validation gap was fixed in #366; optimization and PhysCal now share the check that rejects unsupported sections.
 3. **`TwoBodyGEx` in optimization** is accepted and ignored, as in C (it was rejected with a stale "issue #30" message until #349).
 4. **`--help` text** claims the default output directory is "namelist parent dir"; the code uses `<namelist parent>/output` (observed).

@@ -84,7 +84,7 @@ struct Solve {
     x: Vec<f64>,
     gradient: Vec<f64>,
     active: Vec<i32>,
-    /// `[stop, iterations, max iterations, nSmat]`.
+    /// `[stop, iterations, max iterations, nSmat, C status]`.
     ist: Vec<i32>,
     trace: Vec<f64>,
     info: Vec<i32>,
@@ -114,7 +114,7 @@ fn solve_once(backend: &mut CudaEngine, state: &State) -> Solve {
             x: download(exec, &b.rhs, np)?,
             gradient: download(exec, &cg.vec, np)?,
             active: download(exec, &cg.active, np)?,
-            ist: download(exec, &cg.ist, 4)?,
+            ist: download(exec, &cg.ist, 5)?,
             trace: download(exec, &cg.trace, cg.limit + 1)?,
             info: download(exec, &b.info, 2)?,
             seconds,
@@ -327,7 +327,15 @@ fn assert_solve(name: &str, model: &Model, g: &Solve) -> usize {
     let count_determined = k < chaotic && (k == max_iter || stop_margin > budget(k));
     if count_determined {
         assert_eq!(gpu_k, k, "{name}: C CG iteration count");
+        // C 1.4.0 status: the count on convergence, -(max_iter+1) at the limit.
+        assert_eq!(i64::from(g.ist[4]), cpu.status, "{name}: C 1.4.0 CG status");
     }
+    // A nonnegative device status is a convergence count.
+    assert!(
+        g.ist[4] < 0 || g.ist[4] as usize == gpu_k,
+        "{name}: device status {} vs {gpu_k} iterations",
+        g.ist[4]
+    );
 
     // A posteriori solution bound, independent of the trajectory: for the true
     // residuals r = g - S x (evaluated on the host), ||x - x*|| <= ||r|| /
@@ -405,8 +413,12 @@ fn config(walkers: usize, interval: usize) -> OptConfig {
 }
 
 /// Sample, then solve on the device and on the CPU. Returns the C iteration count.
+/// `NSRCGAbortOnFail 0` keeps a solve that reaches its limit (C 1.4.0 status
+/// `-(max_iter+1)`) inspectable instead of aborting.
 fn check(name: &str, tag: &str, extra: &[&str], walkers: usize) -> usize {
-    let input = cg_input(name, tag, extra);
+    let mut extra = extra.to_vec();
+    extra.push("NSRCGAbortOnFail 0");
+    let input = cg_input(name, tag, &extra);
     let probe = Model::prepare(&input, &config(walkers, 1)).unwrap();
     let config = config(walkers, 8 * probe.ns);
     let model = Model::prepare(&input, &config).unwrap();
@@ -473,12 +485,12 @@ fn resident_cg_l128_matches_cpu_c_order() {
     check("L128", "max40", &["NSROptCGMaxIter 40"], 320);
 }
 
-/// A nonfinite increment is C `StochasticOptCG` info=1 (`stcopt_cg_impl.c:315-327`):
-/// C stops the optimization (`vmcmain.c:503-506`); the device latches
-/// RESIDENT_CG and publishes nothing.
+/// A NaN gradient makes C 1.4.0 return -(0+1) before the loop
+/// (`stcopt_cg_impl.c:526`); with the default `NSRCGAbortOnFail = 1` C aborts
+/// (`:252-262`). The device latches RESIDENT_CG_FAILED and publishes nothing.
 #[test]
-#[ignore = "requires CUDA; nonfinite SR-CG increment must never publish parameters"]
-fn resident_cg_rejects_nonfinite_increment() {
+#[ignore = "requires CUDA; a failed SR-CG solve must abort without publishing parameters"]
+fn resident_cg_failed_solve_aborts_by_default() {
     let input = cg_input("L16", "nan", &["NSROptCGMaxIter 5"]);
     let config = config(8, 16);
     let model = Model::prepare(&input, &config).unwrap();
@@ -491,8 +503,7 @@ fn resident_cg_rejects_nonfinite_increment() {
         let module = exec.module(SOURCE, KERNELS)?;
         state.observe(exec, &module)?;
         let before = download::<f64>(exec, &state.buffers.parameters, np)?;
-        // A NaN local energy gives a NaN gradient: C's `delta < cg_thresh` is
-        // false for NaN, so CG runs to max_iter and returns a NaN increment.
+        // A NaN local energy gives a NaN gradient and a nonfinite initial delta.
         // SAFETY: walker 0's local energy.
         unsafe {
             exec.upload(exec.ptr(&state.buffers.local_energy)?, &[f64::NAN])?;
@@ -502,14 +513,18 @@ fn resident_cg_rejects_nonfinite_increment() {
         Ok((
             before,
             download::<f64>(exec, &state.buffers.parameters, np)?,
-            download::<i32>(exec, &cg.ist, 4)?,
+            download::<i32>(exec, &cg.ist, 5)?,
         ))
     })
     .unwrap();
-    assert_eq!(iterations[1], 5, "NaN delta never stops before max_iter");
+    assert_eq!(
+        (iterations[1], iterations[4]),
+        (0, -1),
+        "C 1.4.0 status -(0+1)"
+    );
     close("unpublished NaN update", &after, &before, 0.0, 0.0);
     let error = state.result(backend).unwrap_err();
-    assert!(error.contains("device status 7"), "{error}");
+    assert!(error.contains("device status 8"), "{error}");
     std::fs::remove_dir_all(input.parent().unwrap()).unwrap();
 }
 
@@ -520,7 +535,9 @@ fn resident_cg_rejects_nonfinite_increment() {
 #[ignore = "requires CUDA; 20-step SR-CG repeatability, transfers and timing"]
 fn resident_cg_opt_repeats_twenty_steps() {
     for (name, walkers) in [("L16", 64), ("L128", 64)] {
-        let input = cg_input(name, "repeat", &[]);
+        // Some of the 20 solves reach max_iter = nSmat: C 1.4.0 aborts there by
+        // default, so the series continues them like the 1.3.0 reference.
+        let input = cg_input(name, "repeat", &["NSRCGAbortOnFail 0"]);
         let config = OptConfig {
             nsteps: 20,
             walkers: Some(walkers),
@@ -560,7 +577,8 @@ fn resident_cg_opt_repeats_twenty_steps() {
         );
         assert_eq!(first.cg_iterations, second.cg_iterations);
         assert_eq!(first.cg_iterations.len(), 20);
-        assert!(first.cg_iterations.iter().all(|&k| k > 0));
+        // C 1.4.0 status: the count, or -(max_iter+1) for a continued limit.
+        assert!(first.cg_iterations.iter().all(|&k| k != 0 && k != -1));
         let (traffic, run_seconds) = with_runtime(0, |backend| {
             let model = Model::prepare(&input, &config)?;
             let mut state = State::prepare(backend, model, &config)?;

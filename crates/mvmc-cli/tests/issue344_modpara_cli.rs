@@ -40,7 +40,7 @@ fn run_with_modpara(name: &str, body: &str) -> (std::process::Output, PathBuf, T
 fn unknown_modpara_keyword_exits_nonzero_naming_the_keyword() {
     for keyword in [
         "BogusKeyword",
-        "useDiagScale",
+        "NSRCGPrecond",
         "NElec",
         "NFileFlushInterval",
     ] {

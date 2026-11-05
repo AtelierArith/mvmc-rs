@@ -15,7 +15,7 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
         ("NLanczosMode 3", "NLanczosMode must be"),
         ("NLanczosMode -1", "NLanczosMode must be"),
         ("NLanczosMode 1", "parameter optimization"),
-        ("NSRCG 2\nNStore 0", "undefined in mVMC C"),
+        ("NSRCG 3\nNStore 0", "undefined in mVMC C"),
         ("NVMCCalMode 1", "PhysCal"),
         ("NSplitSize 2", "MPI group communicator"),
         ("NVMCSample -1", "NVMCSample must be positive"),

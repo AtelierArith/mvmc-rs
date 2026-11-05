@@ -4871,6 +4871,7 @@ mod callback_tests {
                 for interall in [false, true] {
                     let (mut data, _, mut rng) = prepared_case(3, "hubbard_chain_real");
                     data.modpara.nsrcg = cg;
+                    data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
                     data.modpara.nstore_o = store;
                     data.exchange_terms.clear();
                     if complex {
@@ -5351,6 +5352,20 @@ mod callback_tests {
         assert_eq!(actual, expected, "step {steps} RNG block");
     }
 
+    /// SR-CG families whose step-1 solve meets a C 1.4.0 breakdown guard
+    /// (`|d.S.d| < 1e-20`, stcopt_cg_impl.c:540) that 1.3.0 and Julia lacked, with
+    /// the Rust `zqp_SRinfo.dat` status `-(iter+1)` (#682). The historical
+    /// trajectories continue the solve, so only the step-1 sampling, energy and
+    /// SR diagnostic columns 0-5 are compared with them; later steps check
+    /// repeatability. C 1.4.0 itself aborts these inputs by default.
+    fn c14_cg_breakdown(case: &str, cg: bool, store: i64) -> Option<i64> {
+        match (case, cg, store) {
+            ("real", true, 0) => Some(-3),
+            ("cmp", true, 0) => Some(-6),
+            _ => None,
+        }
+    }
+
     /// Real ordinary families whose CG/direct-SR parameter trajectories were
     /// previously compared at 1e-11 against Julia-order references.
     fn c_order_amplified_family(case: &str, cg: bool, store: i64) -> bool {
@@ -5369,10 +5384,38 @@ mod callback_tests {
         )
     }
 
+    /// The 1.3.0 layout of a C 1.4.0 SR-CG `zqp_SRinfo.dat` (#682), for the
+    /// historical references: the header loses the ` info` title and each
+    /// `"%5d %d"` row becomes `"%5d, %d"` with the iteration count. A 1.4.0
+    /// failure status `-(iter+1)` (continued with `NSRCGAbortOnFail = 0`) is
+    /// the count `iter` that 1.3.0 printed after the same iterations.
+    fn as_historical_cg_srinfo(text: &str) -> String {
+        text.lines()
+            .map(|line| {
+                if let Some(header) = line.strip_suffix(" info") {
+                    return format!("{header}\n");
+                }
+                if line.starts_with('#') {
+                    return format!("{line}\n");
+                }
+                let (prefix, info) = line.rsplit_once(' ').unwrap();
+                let info: i64 = info.parse().unwrap();
+                let count = if info < 0 { -info - 1 } else { info };
+                format!("{prefix}, {count}\n")
+            })
+            .collect()
+    }
+
     /// Step-1 SR diagnostics: sizes and counts exactly, S diagonal extrema at
     /// the five printed digits. Columns 6 and 7 (largest solution entry and its
     /// index) depend on the amplified solve and are not compared.
-    fn assert_srinfo_conditioned_columns(case: &str, steps: i64, actual: &str, expected: &str) {
+    fn assert_srinfo_conditioned_columns(
+        case: &str,
+        steps: i64,
+        actual: &str,
+        expected: &str,
+        compare_count: bool,
+    ) {
         let columns = |text: &str| -> Vec<String> {
             text.lines()
                 .filter(|line| !line.starts_with('#'))
@@ -5385,9 +5428,10 @@ mod callback_tests {
         // Column 8 is the CG iteration count, which follows the amplified solve; on
         // kernels outside the reference lineage it is not a portable reference
         // (e.g. pairhop_fsz 142 vs 140 iterations on OpenBLAS Sandybridge, #455).
-        let exact: &[usize] = if julia_fixture::kernel_class(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures"),
-        ) == julia_fixture::KernelClass::Unverified
+        let exact: &[usize] = if !compare_count
+            || julia_fixture::kernel_class(
+                &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures"),
+            ) == julia_fixture::KernelClass::Unverified
         {
             &[0, 1, 2, 3]
         } else {
@@ -5459,7 +5503,24 @@ mod callback_tests {
                     },
                 )
                 .collect::<String>();
-            assert_srinfo_conditioned_columns(case, steps, &rust_srinfo, &read("SRinfo"));
+            let breakdown = c14_cg_breakdown(case, cg, store);
+            if let Some(status) = breakdown {
+                let info: i64 = rust_srinfo
+                    .lines()
+                    .nth(1)
+                    .and_then(|row| row.split_whitespace().last())
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                assert_eq!(info, status, "{case} step 1 C 1.4.0 CG breakdown status");
+            }
+            assert_srinfo_conditioned_columns(
+                case,
+                steps,
+                &as_historical_cg_srinfo(&rust_srinfo),
+                &read("SRinfo"),
+                breakdown.is_none(),
+            );
         }
     }
 
@@ -5565,6 +5626,7 @@ mod callback_tests {
             .join("../../tests/fixtures/opttrans/run_opt_real/namelist.def");
         let (mut data, mut state, mut rng) = prepared_namelist(1, &path);
         data.modpara.nsrcg = 1;
+        data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
         data.modpara.nstore_o = 0;
         assert!(!get_all_complex_flag(&data).unwrap());
         let weights: Vec<f64> = data.opt_trans.iter().map(|w| w.re).collect();
@@ -5806,6 +5868,7 @@ mod callback_tests {
                 prepared_case(steps, &name)
             };
             data.modpara.nsrcg = i64::from(cg);
+            data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
             data.modpara.nstore_o = store;
             let initial_data = data.clone();
             let initial_rng = rng.clone();
@@ -5944,10 +6007,12 @@ mod callback_tests {
             // docs/NUMERICAL_COMPARISONS.md) flip one Metropolis acceptance, so
             // the saved configuration legitimately differs from the Julia-order
             // trajectory. Steps 1 and 2 remain exact; step 3 is repeatability-only.
-            if !(case == "pairhop_real" && steps >= 3) {
+            let breakdown = c14_cg_breakdown(case, cg, store);
+            if !(case == "pairhop_real" && steps >= 3) && !(breakdown.is_some() && steps > 1) {
                 assert_sampling_checkpoint(case, steps, &state, &mut rng, &read);
             }
-            if c_order_amplified_family(case, cg, store) || unverified_kernel {
+            if c_order_amplified_family(case, cg, store) || unverified_kernel || breakdown.is_some()
+            {
                 // See docs/NUMERICAL_COMPARISONS.md ("C-order real kernels and
                 // CG amplification"): after step 1 the optimizer trajectory of
                 // this family is not a portable reference, so only the
@@ -6119,6 +6184,11 @@ mod callback_tests {
                         },
                     )
                     .collect::<String>();
+                let rust_srinfo = if cg {
+                    as_historical_cg_srinfo(&rust_srinfo)
+                } else {
+                    rust_srinfo
+                };
                 crate::numerical_comparison::assert_numeric_text(
                     &rust_srinfo,
                     &read("SRinfo"),
@@ -6283,6 +6353,7 @@ mod callback_tests {
             data.modpara.nsr_opt_itr_step = 3;
             data.modpara.nsr_opt_itr_smp = 3;
             data.modpara.nsrcg = 1;
+            data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
             data.modpara.nstore_o = 0;
             let mut rng = Sfmt19937Rng::new(12395);
             init_parameter(&mut data, &mut rng).unwrap();
@@ -6441,9 +6512,11 @@ mod callback_tests {
             for (cg, store) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
                 let (mut baseline, mut base_state, mut base_rng) = prepared_case(3, case);
                 baseline.modpara.nsrcg = cg;
+                baseline.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
                 baseline.modpara.nstore_o = store;
                 let (mut data, mut state, mut rng) = prepared_case(3, case);
                 data.modpara.nsrcg = cg;
+                data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
                 data.modpara.nstore_o = store;
                 let baseline_dir = fresh_output_directory().unwrap();
                 let observed_dir = fresh_output_directory().unwrap();
@@ -6568,6 +6641,7 @@ mod callback_tests {
         ] {
             let (mut data, mut state, mut rng) = prepared_case(3, case);
             data.modpara.nsrcg = 1;
+            data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
             data.modpara.nstore_o = 0;
             let dir = fresh_output_directory().unwrap();
             vmc_para_opt(
@@ -6581,14 +6655,13 @@ mod callback_tests {
             .unwrap();
             let info = fs::read_to_string(dir.join("zvo_SRinfo.dat")).unwrap();
             assert_eq!(info.lines().count(), 4, "{case}");
+            assert!(info.starts_with("#Npara") && info.lines().next().unwrap().ends_with(" info"));
             for row in info.lines().skip(1) {
-                // C CG rows end with ", info" and print the global NPara (not 2*NPara).
-                let fields: Vec<&str> = row
-                    .split([' ', ','])
-                    .filter(|field| !field.is_empty())
-                    .collect();
+                // C 1.4.0 CG rows end with " info" ("%5d %d") and print the
+                // global NPara (not 2*NPara).
+                let fields: Vec<&str> = row.split_whitespace().collect();
                 assert_eq!(fields.len(), 9, "{case}: {row}");
-                assert!(row.contains(", "), "{case}: {row}");
+                assert!(!row.contains(','), "{case}: {row}");
                 assert_eq!(
                     fields[0].parse::<usize>().unwrap(),
                     data.count_variational_parameters(),
@@ -6646,6 +6719,7 @@ mod callback_tests {
             // Exercise the CG accumulator with the already sampled walkers.
             data.modpara.nstore_o = 0;
             data.modpara.nsrcg = 1;
+            data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
             clear_phys_quantity(&mut state);
             let complex = get_all_complex_flag(&data).unwrap();
             let fsz = data.i_flg_orbital_general != 0;
@@ -6870,10 +6944,11 @@ mod callback_tests {
     }
 
     #[test]
-    fn nsrcg_two_with_store_follows_nsrcg_one_control_path() {
+    fn nsrcg_three_with_store_follows_nsrcg_one_control_path() {
         // C treats every nonzero NSRCG as CG (vmcmain.c:463,487; vmccal.c:591,602)
         // and allocates SROptO storage for NSRCG==1 || NStoreO!=0 (setmemory.c:428),
-        // so NSRCG=2,NStore=1 and NSRCG=1,NStore=1 execute identical code in C.
+        // so NSRCG=3,NStore=1 and NSRCG=1,NStore=1 execute identical code in C
+        // (1.4.0 maps only NSRCG=2 to DiagScale CG, readdef.c:927-930).
         // This is a same-implementation equivalence, not a C numerical reference.
         for case in [
             "heisenberg_chain_real",
@@ -6881,9 +6956,10 @@ mod callback_tests {
             "hubbard_chain_real",
         ] {
             let mut runs = Vec::new();
-            for cg in [1, 2] {
+            for cg in [1, 3] {
                 let (mut data, mut state, mut rng) = prepared_case(3, case);
                 data.modpara.nsrcg = cg;
+                data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
                 data.modpara.nstore_o = 1;
                 let dir = fresh_output_directory().unwrap();
                 vmc_para_opt(

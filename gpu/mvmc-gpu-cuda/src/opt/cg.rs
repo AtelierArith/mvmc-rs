@@ -17,13 +17,14 @@ pub(super) struct CgBuffers {
     pub active: DeviceBuffer,
     /// `[delta, threshold, alpha, <O>.x, 1/Wc]`.
     pub st: DeviceBuffer,
-    /// `[stop, iterations, max iterations, nSmat]`.
+    /// `[stop, iterations, max iterations, nSmat, C status]`.
     pub ist: DeviceBuffer,
     /// Per-sample product `O^T v`.
     pub y: DeviceBuffer,
     /// `delta` after initialization and each iteration of the latest solve.
     pub trace: DeviceBuffer,
-    /// C iteration count (`StochasticOptCG_Main` return value) of each step.
+    /// C 1.4.0 `StochasticOptCG_Main` status of each step: the iteration
+    /// count, or `-(iter+1)` after a breakdown or non-convergence.
     pub iterations: DeviceBuffer,
     /// Enqueued iterations per solve.
     pub limit: usize,
@@ -57,7 +58,7 @@ impl CgBuffers {
             vec: alloc(6 * np, 8)?,
             active: alloc(np, 4)?,
             st: alloc(8, 8)?,
-            ist: alloc(4, 4)?,
+            ist: alloc(5, 4)?,
             y: alloc(walkers, 8)?,
             trace: alloc(limit + 1, 8)?,
             iterations: alloc(steps, 4)?,
@@ -239,6 +240,7 @@ impl State {
                     i(step),
                     i(np),
                     p(&self.resident.error)?,
+                    i(usize::from(mp.nsrcg_abort_on_fail)),
                 ],
             )
         }

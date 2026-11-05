@@ -1,4 +1,4 @@
-//! Authoritative C Jastrow headers, directed mappings and ordered raw flags.
+//! Authoritative C 1.4.0 Jastrow headers, complete symmetric mappings and ordered raw flags.
 use crate::types::JastrowTerm;
 use crate::utils::file::read_def_file;
 use num_complex::Complex64;
@@ -19,7 +19,7 @@ pub struct JastrowSection {
     pub is_complex: bool,
     /// Raw flags assigned by pair order, ignoring printed labels.
     pub opt_flags: BTreeMap<i64, i64>,
-    /// Directional site-to-parameter table. Unwritten cells are deterministic -1.
+    /// Symmetric site-to-parameter table (mVMC 1.4.0); the diagonal is -1.
     pub idx_matrix: Vec<Vec<i64>>,
 }
 
@@ -74,24 +74,61 @@ pub fn parse_jastrow_content(content: &str, nsite: i64) -> io::Result<JastrowSec
             .map(i64::from)
             .map_err(|_| invalid("invalid integer in Jastrow definition"))
     };
-    let mut idx_matrix = vec![vec![-1; nsite]; nsite];
-    for triple in fields[..mapping_fields].as_chunks::<3>().0.iter() {
+    // mVMC 1.4.0 GetInfoJastrow (readdef.c:2477-2587): -1 on the diagonal, -2
+    // for an unread pair; every directed pair exactly once, with the same class
+    // for (i,j) and (j,i). The table is then symmetric.
+    const UNREAD: i64 = -2;
+    let mut idx_matrix: Vec<Vec<i64>> = (0..nsite)
+        .map(|i| {
+            (0..nsite)
+                .map(|j| if i == j { -1 } else { UNREAD })
+                .collect()
+        })
+        .collect();
+    for (row, triple) in fields[..mapping_fields]
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .enumerate()
+    {
         let site1 = integer(triple[0])?;
         let site2 = integer(triple[1])?;
         let idx = integer(triple[2])?;
-        if site1 < 0 || site2 < 0 || site1 >= nsite as i64 || site2 >= nsite as i64 {
-            return Err(invalid("Jastrow site is outside Nsite"));
-        }
+        let row = row + 1;
         if site1 == site2 {
-            return Err(invalid("Jastrow mappings require distinct sites"));
+            return Err(invalid(&format!(
+                "Jastrow mappings require distinct sites ([Condition] i neq j at row {row})"
+            )));
+        }
+        if site1 < 0 || site2 < 0 || site1 >= nsite as i64 || site2 >= nsite as i64 {
+            return Err(invalid(&format!(
+                "Jastrow site is outside Nsite (site index is incorrect at row {row})"
+            )));
         }
         if idx < 0 || idx >= n_jastrow_idx {
-            return Err(invalid(
-                "Jastrow parameter index is outside the declared width",
-            ));
+            return Err(invalid(&format!(
+                "Jastrow parameter index {idx} is outside the declared width [0, {n_jastrow_idx}) \
+                 at row {row}"
+            )));
         }
-        idx_matrix[site1 as usize][site2 as usize] = idx;
+        let (i, j) = (site1 as usize, site2 as usize);
+        if idx_matrix[i][j] != UNREAD {
+            return Err(invalid(&format!(
+                "Jastrow pair ({i},{j}) is duplicated at row {row}"
+            )));
+        }
+        idx_matrix[i][j] = idx;
+        let reverse = idx_matrix[j][i];
+        if reverse != UNREAD && reverse != idx {
+            let (a, b) = (i.min(j), i.max(j));
+            return Err(invalid(&format!(
+                "Jastrow pair ({a},{b}) has inconsistent classes at row {row}"
+            )));
+        }
     }
+    // Nsite*(Nsite-1) distinct directed pairs cover the table, so nothing is
+    // missing here; C checks it explicitly after the loop.
+    debug_assert!(idx_matrix.iter().flatten().all(|&idx| idx != UNREAD));
     let mut opt_flags = BTreeMap::new();
     for (index, pair) in fields[mapping_fields..]
         .as_chunks::<2>()

@@ -206,7 +206,7 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - Rust: `update_m_all_two_fsz_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:907`
 > - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
 > - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
-> - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。**既知の癖(観測):** 2電子更新において、Cは4つのすべての変種で `rsbOld = raOld + t*Nsite` を定義しています(`rbOld` ではなく `raOld` を用います)(`pfupdate_two_fcmp.c:230`、`pfupdate_two_real.c:230`、およびFSZのファイル)。Rustの*実数*版の更新はこれを意図的に再現していますが(`update_m_all_two_real_flat`、`updates.rs:565`、`rsb_old = ra_old + ...` は `updates.rs:588`)、Rustの*複素数の通常*版の更新は `rb_old` を用います(`updates.rs:537`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
+> - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。2電子更新では、mVMC 1.4.0 は4つのすべての変種で `rsbOld = rbOld + t*Nsite` を定義しており(`pfupdate_two_fcmp.c:230`、`pfupdate_two_real.c:230`、およびFSZのファイル。1.3.0 は `raOld` を用いていました)、Rustのすべての更新がこれに従います(`update_m_all_two_real_flat`、`update_m_all_two_complex_flat`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
 
 ## 4.6 サンプラー内の並列化
 

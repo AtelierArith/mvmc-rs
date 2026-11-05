@@ -83,7 +83,8 @@ parser and **differ from C**. Always specify every key that matters explicitly.
 | `RndSeed` | SFMT seed; the seed of rank/group $g$ is `RndSeed + g`; negative = clock | 11272 | 11272 |
 | `NSplitSize` | MPI group width ([8.4](08-running.md#84-mpi-and-grouped-execution)) | 1 | 1 |
 | `Nneuron`, `NneuronCharge`, `NneuronSpin`, `NneuronGeneral`, `NBlockSize_RBMRatio` | RBM hidden neurons and block size | 0, 0, 0, 0, 200 | 0, 0, 0, 0, 200 |
-| `useDiagScale`, `RescaleSmat` | Julia-only options, not C keywords | – | rejected as unknown keywords regardless of value |
+| `useDiagScale`, `RescaleSmat`, `NSRCGFallback`, `NSRCGAbortOnFail` | mVMC 1.4.0 SR-CG switches ([5.4](05-theory-sr.md#54-conjugate-gradient-solver-nsrcg--1)) | 0, 0, 0, 1 | same; `NSRCG 2` means DiagScale CG |
+| `reweight` | mVMC 1.4.0 sample reweighting | 0 | `1` is rejected (not ported) |
 
 `NOrbitalIdx` is not a `modpara.def` key; the number of orbital parameters is derived from the orbital file.
 `NSROptFixSmp`, `NFileFlushInterval`, `ComplexType` and `NOneBodyG` are not ModPara keys and are rejected if supplied.
@@ -172,9 +173,10 @@ Optimization and PhysCal share the namelist admission check. See `crates/mvmc-cl
 | `NMPTrans == 0` | rejected (use 1 for "no translation projection", the C contract) |
 | `NSplitSize < 1` | rejected |
 | `NLanczosMode` not in 0..2 | rejected |
-| `NSRCG >= 2`, `NStore = 0` | rejected because C leaves O storage undefined; `NStore != 0` selects CG |
-| `useDiagScale` | rejected as an unknown ModPara keyword regardless of value |
-| `RescaleSmat` | rejected as an unknown ModPara keyword regardless of value |
+| `NSRCG >= 3` (or negative), `NStore = 0` | rejected because C leaves O storage undefined; `NStore != 0` selects plain CG (`NSRCG 2` is DiagScale CG with `NSRCG 1`) |
+| `RescaleSmat 1` without `NSRCG 1` | rejected with the C 1.4.0 error |
+| SR-CG with a negative `DSROptStepDt` | rejected with the C 1.4.0 error (no diagonalization mode for CG) |
+| `reweight 1` | rejected: the mVMC 1.4.0 reweighting is not ported |
 
 ### Parameter optimization (`validate_para_opt`, `crates/mvmc-core/src/validation.rs:108-241`)
 

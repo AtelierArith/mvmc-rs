@@ -34,13 +34,19 @@ tmisawa/Julia-mVMC#95.
   `benchmark/**/results/` and other generated evidence stay labelled 1.3.0
   (`d73d06bd`) unless they are regenerated with recorded provenance. They are
   records of the 1.3.0 reference, not claims about 1.4.0.
-- **1.4.0 contract changes to adopt** (#682):
-  - SR-CG aborts by default at max iterations.
+- **1.4.0 contract changes adopted** (#682):
+  - SR-CG aborts by default at max iterations and on the new breakdown guards
+    (`NSRCGAbortOnFail`, `NSRCGFallback`).
   - `NSRCG=2` means DiagScale-preconditioned CG, with `RescaleSmat` and
     preconditioner fallback.
   - SR-CG rejects a negative `DSROptStepDt`.
   - The `zqp_SRinfo.dat` CG row uses the format `%5d %d`.
   - The Jastrow reader is stricter.
+  - `rsbOld = rbOld + t*Nsite` on every two-electron update; the PhysCal timer
+    report has the `addPhysTwist` line; `reweight 1` is rejected (not ported).
+  - Deviations: an SR-CG step with no active parameter stays a no-op (1.4.0
+    aborts and reads `r[0]` out of bounds); the resident GPU CG supports plain
+    CG with the abort policy only. Details: `docs/NUMERICAL_COMPARISONS.md`.
 - **Out of scope for #682:** the new 1.4.0 features (reweight, twist, spin
   Jastrow, t-J, `NExUpdatePath=6`, backflow) are tracked separately under the
   C-only features policy below.

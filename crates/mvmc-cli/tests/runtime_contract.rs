@@ -615,7 +615,7 @@ fn timer_environment_controls_reports_without_changing_numerical_output() {
         false,
         "legacy observation output",
     );
-    let golden = include_str!("../../../tests/fixtures/timers/julia_para_opt_zero.dat");
+    let golden = include_str!("../../../tests/fixtures/timers/c_para_opt_zero.dat");
     let report = fs::read_to_string(enabled.join("zvo_CalcTimer.dat")).unwrap();
     assert_eq!(report.lines().count(), golden.lines().count());
     for (row, expected) in report.lines().zip(golden.lines()) {
@@ -651,9 +651,9 @@ fn timer_environment_controls_reports_without_changing_numerical_output() {
 }
 
 // PhysCal (`NVMCCalMode=1`) emits its own C-format `OutputTimerPhysCal` report.
-// The committed zero golden `tests/fixtures/timers/julia_phys_cal_zero.dat` was
-// generated with `MVMCOptimizers.write_ctimer_phys_cal(CTimer(false), dir)` on
-// Julia 1.13.1 from the julia-patch branch.
+// The committed zero golden `tests/fixtures/timers/c_phys_cal_zero.dat` is the
+// C mVMC 1.4.0 `OutputTimerPhysCal` report with every timer at zero
+// (`scripts/check_c_timer_c_parity.py`); 1.4.0 added the `addPhysTwist [54]` line.
 #[test]
 fn physcal_timer_environment_controls_report_without_changing_output() {
     let dir = TestDir::new("physcal-timer");
@@ -719,7 +719,7 @@ fn physcal_timer_environment_controls_report_without_changing_output() {
         );
     }
 
-    let golden = include_str!("../../../tests/fixtures/timers/julia_phys_cal_zero.dat");
+    let golden = include_str!("../../../tests/fixtures/timers/c_phys_cal_zero.dat");
     let report = fs::read_to_string(enabled.join("zvo_CalcTimer.dat")).unwrap();
     assert_eq!(report.lines().count(), golden.lines().count());
     for (row, expected) in report.lines().zip(golden.lines()) {

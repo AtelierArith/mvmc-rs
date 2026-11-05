@@ -281,6 +281,9 @@ fn optimization(fixture: &str, cg: bool, interall: bool) {
         ("NVMCSample", "60"),
         ("NVMCWarmUp", "10"),
         ("NSRCG", if cg { "1" } else { "0" }),
+        // C 1.4.0 aborts a CG solve that reaches its limit; these short runs
+        // continue like the 1.3.0 reference (#682).
+        ("NSRCGAbortOnFail", "0"),
         ("NStore", if cg { "1" } else { "0" }),
         ("NDataIdxStart", "1"),
         ("NDataQtySmp", "1"),

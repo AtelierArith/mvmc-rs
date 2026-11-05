@@ -143,9 +143,9 @@ fn run(case: &Case, ra_old_arg: usize, rb_old_arg: usize) -> (f64, f64, C, Vec<C
     (pf_err, inv_err, pfm[0], inv)
 }
 
-/// C defines `rsbOld = raOld + t*Nsite` in `pfupdate_two_fcmp.c:230` (and the real/fsz/fsz_real
-/// variants) where `rbOld + t*Nsite` was evidently meant, and the Rust real paths reproduce it.
-/// The complex path uses `rb_old`. The old (a,b) matrix element only enters through
+/// mVMC 1.3.0 defined `rsbOld = raOld + t*Nsite`; 1.4.0 (upstream #100) uses `rbOld + t*Nsite`
+/// in `pfupdate_two_fcmp.c:230` and the real/fsz/fsz_real variants, and every Rust path follows
+/// it (#682). The old (a,b) matrix element only enters through
 /// `vec_s[msb]`, and the updated Pfaffian and inverse do not depend on it beyond roundoff:
 /// every (raOld, rbOld) argument pair must reproduce the independently recomputed Pfaffian and
 /// inverse of the new matrix. Tolerance 1e-11: entries are O(1), matrices are 4x4/6x6, and the
