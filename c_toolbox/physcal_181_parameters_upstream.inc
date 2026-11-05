@@ -1,6 +1,6 @@
 /* Verbatim parameter.c InitParameter/ReadInitParameter/SyncModifiedParameter; readdef.c ReadInputParameters.
- * parameter_sha256=46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0
- * readdef_sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9 */
+ * parameter_sha256=801273e47a6f7b3390244a6bdcb74fa09825791e8b8283d2d6d7e36d25470cad
+ * readdef_sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3 */
 void InitParameter() {
   int i;
   //printf("AllComplexFlag=%d \n",AllComplexFlag);
@@ -212,13 +212,61 @@ int ReadInputParameters(char *xNameListFile, MPI_Comm comm) {
           }
           break;
 
+        case KWInSpinJastrow:
+          fprintf(stdout, "Read InSpinJastrow File. \n");
+          if (idx != NSpinJastrowIdx) {
+            info = 1;
+            break;
+          }
+          count = NGutzwillerIdx + NJastrowIdx;
+          if (NSpinJastrowIdx > 0) {
+            int *seen = (int *)calloc(NSpinJastrowIdx, sizeof(int));
+            if (seen == NULL) {
+              fprintf(stderr, "Error: memory allocation failed in InSpinJastrow parser.\n");
+              info = 1;
+              break;
+            }
+            for (i = 0; i < NSpinJastrowIdx; i++) {
+              if (fscanf(fp, "%d %lf %lf ", &idx, &tmp_real, &tmp_comp) != 3) {
+                fprintf(stderr, "Error in %s: invalid parameter row %d in InSpinJastrow.\n", defname, i + 1);
+                info = 1;
+                break;
+              }
+              if (idx < 0 || idx >= NSpinJastrowIdx) {
+                fprintf(stderr, "Error in %s: index %d out of range [0, %d) in InSpinJastrow.\n",
+                        defname, idx, NSpinJastrowIdx);
+                info = 1;
+                break;
+              }
+              if (seen[idx] != 0) {
+                fprintf(stderr, "Error in %s: duplicated index %d in InSpinJastrow.\n", defname, idx);
+                info = 1;
+                break;
+              }
+              seen[idx] = 1;
+              Proj[idx+count] = tmp_real + I * tmp_comp;
+            }
+            if (info == 0) {
+              for (i = 0; i < NSpinJastrowIdx; i++) {
+                if (seen[i] == 0) {
+                  fprintf(stderr, "Error in %s: missing index %d in InSpinJastrow.\n", defname, i);
+                  info = 1;
+                  break;
+                }
+              }
+            }
+            free(seen);
+            if (info != 0) break;
+          }
+          break;
+
         case KWInDH2:
           fprintf(stdout, "Read InDH2 File. \n");
           if (idx != NDoublonHolon2siteIdx) {
             info = 1;
             continue;
           }
-          count = NGutzwillerIdx + NJastrowIdx;
+          count = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
           for (i = count; i < count + 2 * 3 * NDoublonHolon2siteIdx; i++) {
             fscanf(fp, "%d %lf %lf ", &idx, &tmp_real, &tmp_comp);
             Proj[idx+count] = tmp_real + I * tmp_comp;
@@ -231,7 +279,7 @@ int ReadInputParameters(char *xNameListFile, MPI_Comm comm) {
             info = 1;
             continue;
           }
-          count = NGutzwillerIdx + NJastrowIdx + 2 * 3 * NDoublonHolon2siteIdx;
+          count = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx + 2 * 3 * NDoublonHolon2siteIdx;
           for (i = count; i < count + 2 * 5 * NDoublonHolon4siteIdx; i++) {
             fscanf(fp, "%d %lf %lf ", &idx, &tmp_real, &tmp_comp);
             Proj[idx+count] = tmp_real + I * tmp_comp;

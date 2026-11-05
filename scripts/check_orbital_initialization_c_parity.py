@@ -53,7 +53,7 @@ def main():
             loaded_cases += f"{mode}\n" + subprocess.check_output([str(tmp / "probe"), str(tmp / "initial.def")], text=True)
     checksums = "; ".join(f"{name} sha256={hashlib.sha256((src / name).read_bytes()).hexdigest()}"
                           for name in ("mVMC/parameter.c", "mVMC/slater.c", "sfmt/SFMT.c", "sfmt/SFMT.h", "sfmt/SFMT-params19937.h"))
-    actual = f"# mVMC-1.3.0 actual InitParameter/SyncModifiedParameter/SFMT; NSlater=13; no correlation/RBM/OptTrans factors; {checksums}\n" + "\n".join(line.rstrip() for line in actual.splitlines()) + "\n"
+    actual = f"# mVMC-1.4.0 actual InitParameter/SyncModifiedParameter/SFMT; NSlater=13; no correlation/RBM/OptTrans factors; {checksums}\n" + "\n".join(line.rstrip() for line in actual.splitlines()) + "\n"
     target = root / "tests/fixtures/orbital_general/c_initialization.txt"
     if args.write:
         if not target.exists() or target.read_text() != actual:
@@ -62,7 +62,7 @@ def main():
         compare_text(actual,target.read_text(),lambda r,c,t: (32*math.ulp(1.0),32*math.ulp(1.0)) if r%4 in (1,2) else None)
     for name, body in (("c_declared_flags.txt", flag_cases), ("c_loaded.txt", loaded_cases),
                        ("c_rbm_prefix.txt", prefix_cases), ("c_shared_matrix.txt", shared_case)):
-        result = f"# mVMC-1.3.0 actual InitParameter/ReadInitParameter/SyncModifiedParameter/SFMT; {checksums}\n" + "\n".join(line.rstrip() for line in body.splitlines()) + "\n"
+        result = f"# mVMC-1.4.0 actual InitParameter/ReadInitParameter/SyncModifiedParameter/SFMT; {checksums}\n" + "\n".join(line.rstrip() for line in body.splitlines()) + "\n"
         path = target.parent / name
         if args.write:
             if not path.exists() or path.read_text() != result:

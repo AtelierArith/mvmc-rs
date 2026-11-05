@@ -1,5 +1,10 @@
 # Two-hop bilinear form of the C two-electron Pfaffian update (issue #449)
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `pfupdate_two_real.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 Standalone kernel check, not a full `vmc.out` run: it evaluates the reduction of the
 authoritative C kernel `calculateNewPfMTwo_child_real` for the inputs of
 `tests/fixtures/pfaffian_cg/two_hop_bilinear.txt` (size-6 cases of the Julia fixture plus sizes

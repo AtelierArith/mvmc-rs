@@ -6,6 +6,7 @@
 #include <string.h>
 #define D_FileNameMax 4096
 int NSROptItrSmp, NPara, NGutzwillerIdx, NJastrowIdx;
+int NSpinJastrowIdx = 0; /* mVMC 1.4.0 spin Jastrow output block; never present here */
 int NDoublonHolon2siteIdx, NDoublonHolon4siteIdx;
 int NChargeRBM_PhysLayerIdx, NSpinRBM_PhysLayerIdx, NGeneralRBM_PhysLayerIdx;
 int NChargeRBM_HiddenLayerIdx, NSpinRBM_HiddenLayerIdx, NGeneralRBM_HiddenLayerIdx;

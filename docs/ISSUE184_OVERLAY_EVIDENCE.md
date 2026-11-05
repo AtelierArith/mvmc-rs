@@ -1,5 +1,10 @@
 # Issue184 parameter-overlay evidence (publication candidate)
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `readdef.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 Related to #184 and #185; neither issue is complete. This document is a SOURCE-only publication candidate, not an accepted main-tree milestone. The candidate production/test base is main `d7cb76b15c59595c6b9ee8940d1119e001108841`. No numerical tolerances, RNG expectations, or independent golden data change.
 
 | Acceptance cell | Contract and evidence | Actual state |

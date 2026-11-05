@@ -1,4 +1,4 @@
-# C AP/P header normalization, integer flags, actual InitParameter/SFMT and SR filter; Apple clang 17 -O0 -ffp-contract=off -DMEXP=19937; mVMC/readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; mVMC/parameter.c sha256=46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0; mVMC/stcopt.c sha256=43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2; sfmt/SFMT.c sha256=b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
+# C AP/P header normalization, integer flags, actual InitParameter/SFMT and SR filter; Apple clang 17 -O0 -ffp-contract=off -DMEXP=19937; mVMC/readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3; mVMC/parameter.c sha256=801273e47a6f7b3390244a6bdcb74fa09825791e8b8283d2d6d7e36d25470cad; mVMC/stcopt.c sha256=43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2; sfmt/SFMT.c sha256=b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
 ap0_pNone_rotate0_seed1 1 5 0 0 0 0 5 0
 ===|NOrbitalIdx 5|ComplexType 0|===|===|0 0 0 1|0 1 1 1|1 0 1 1|1 1 0 1|4 -2|99 0|2 1|99 2|0 3|
 

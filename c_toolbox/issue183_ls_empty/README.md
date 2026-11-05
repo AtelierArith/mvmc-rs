@@ -1,5 +1,10 @@
 # Issue183: native C zero-GEx Lanczos output contract
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `vmcmain.c`, `readdef.c` and `initfile.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 Explicit optional developer probe, never a Cargo dependency. Rust tests/builds
 must not read, compile or invoke this directory. No generated fixture is added.
 This checks original complete C writer functions, not full C executable, parser,

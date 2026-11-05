@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: projection.c sha256=2c01cc16ec75f6d5f3c9e7927bd68f96d1db329c124702b06b771ccd314522c1.
+/* Generated verbatim from authoritative mVMC-1.4.0: projection.c sha256=9459b9819d08bd67dc40bc9a2103a43851667af3775e4a32752f1f7f559e5794.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*
@@ -64,9 +64,23 @@ void MakeProjCnt(int *projCnt, const int *eleNum) {
     }
   }
 
+  /* Spin Jastrow factor exp(sum {v^s_ij * mi * mj}) */
+  if(NSpinJastrowIdx>0) {
+    offset = NGutzwillerIdx + NJastrowIdx;
+    for(ri=0;ri<nSite;ri++) {
+      xi = n0[ri]-n1[ri];
+      if(xi==0) continue;
+      for(rj=ri+1;rj<nSite;rj++) {
+        xj = n0[rj]-n1[rj];
+        idx = offset + SpinJastrowIdx[ri][rj];
+        projCnt[idx] += xi*xj;
+      }
+    }
+  }
+
   /* 2-site doublon-holon correlation factor */
   if(NDoublonHolon2siteIdx>0) {
-    offset = NGutzwillerIdx + NJastrowIdx;
+    offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx;
     #pragma omp parallel for default(shared) private(xn,dh,ri,xi,r0,r1,xm,idx)
     for(xn=0;xn<NDoublonHolon2siteIdx;xn++) {
       dh=DoublonHolon2siteIdx[xn];
@@ -92,7 +106,7 @@ void MakeProjCnt(int *projCnt, const int *eleNum) {
 
   /* 4-site doublon-holon correlation factor */
   if(NDoublonHolon4siteIdx>0) {
-    offset = NGutzwillerIdx + NJastrowIdx + 6*NDoublonHolon2siteIdx;
+    offset = NGutzwillerIdx + NJastrowIdx + NSpinJastrowIdx + 6*NDoublonHolon2siteIdx;
     #pragma omp parallel for default(shared) private(xn,dh,ri,xi,r0,r1,r2,r3,xm,idx)
     for(xn=0;xn<NDoublonHolon4siteIdx;xn++) {
       dh=DoublonHolon4siteIdx[xn];

@@ -1,5 +1,10 @@
 # C averaging-window bounds, without undefined numerical output
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `readdef.c`, `vmcmain.c`, `setmemory.c` and `avevar.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 `ctest_window_bounds.c` executes the unchanged count assignments from
 `readdef.c:818–819`, loop header from `vmcmain.c:341`, and complete collection
 condition/index body from `vmcmain.c:513–515`. Its StoreOptData stub marks a

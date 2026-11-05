@@ -7,6 +7,8 @@
 #include <stdlib.h>
 
 int Nsite, Nsite2, Ne, Nsize, NQPFull, NProj, NGutzwillerIdx, NJastrowIdx;
+/* mVMC 1.4.0 globals read by the extracted kernels: no spin Jastrow, ordinary update paths. */
+int NSpinJastrowIdx = 0, **SpinJastrowIdx = 0, NExUpdatePath = 0;
 int NDoublonHolon2siteIdx = 0, NDoublonHolon4siteIdx = 0;
 int *GutzwillerIdx, **JastrowIdx, **DoublonHolon2siteIdx, **DoublonHolon4siteIdx;
 double complex *Proj, *QPFullWeight;

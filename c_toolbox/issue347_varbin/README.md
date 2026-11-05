@@ -1,5 +1,10 @@
 # Issue #347: C `vmc.out -b` varbin layout probe
 
+> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
+> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `vmcmain.c` and `initfile.c` changed in mVMC 1.4.0, so the
+> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
+> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+
 Full-executable validation (not a standalone kernel): builds the unmodified `extern/mVMC-1.4.0`
 `vmc.out` and runs it with `-b` on the tiny Heisenberg-chain inputs to produce
 `tests/fixtures/issue347_varbin/c_expected/`. The Rust build and tests never read this directory.

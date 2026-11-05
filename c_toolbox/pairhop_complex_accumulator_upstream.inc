@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: locgrn.c sha256=14cdec8555efda3d1132969dc31696fcda6021b03dc91fd8b83b1c1d91eeb8b6; calham.c sha256=94e3053a1c05ccee6e1c4359c94f24ce1d86cc07cbe4036231a37cd9622819b4.
+/* Generated verbatim from authoritative mVMC-1.4.0: locgrn.c sha256=be754992d459933dceca7e3071a8f7f80eee898180148eb3b27065e53db388a4; calham.c sha256=94e3053a1c05ccee6e1c4359c94f24ce1d86cc07cbe4036231a37cd9622819b4.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

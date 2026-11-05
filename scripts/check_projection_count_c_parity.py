@@ -23,7 +23,7 @@ def function(source, signature):
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--write", action="store_true")
-    args.add_argument("--source", type=Path, help="Path to the mVMC-1.3.0 source tree")
+    args.add_argument("--source", type=Path, help="Path to the mVMC-1.4.0 source tree")
     options = args.parse_args()
     write = options.write
     root = Path(__file__).resolve().parent.parent
@@ -49,7 +49,7 @@ def main():
         actual = subprocess.check_output([str(tmp / "probe")], text=True)
     checksums = "; ".join(f"{name} sha256={hashlib.sha256((src / name).read_bytes()).hexdigest()}"
                           for name in ("readdef.c", "qp.c"))
-    actual = f"# mVMC-1.3.0 snapshot; actual C readdef conversion and QP kernels; NSPGaussLeg=1; {checksums}\n" + "\n".join(line.rstrip() for line in actual.splitlines()) + "\n"
+    actual = f"# mVMC-1.4.0 snapshot; actual C readdef conversion and QP kernels; NSPGaussLeg=1; {checksums}\n" + "\n".join(line.rstrip() for line in actual.splitlines()) + "\n"
     target = root / "tests/fixtures/projection_count/c_contracts.txt"
     if write:
         target.parent.mkdir(parents=True, exist_ok=True)

@@ -8,6 +8,20 @@ authority; Julia remains the design reference. Reference numerical work runs
 on Linux, using the Dev Container on a non-Linux host. Native macOS tests
 verify portability and retain labelled historical/platform expectations.
 
+## C reference version (#682)
+
+The C authority is mVMC 1.4.0 (`extern/mVMC-1.4.0`, `v1.4.0`, `e83aa6cb`).
+C-derived fixtures generated from the former 1.3.0 reference (`d73d06bd`) are
+historical 1.3.0 records unless they were re-hashed or regenerated against
+1.4.0; `tests/fixtures/C_REFERENCE_PROVENANCE.md` labels each file. A historical
+fixture is a valid 1.4.0 comparison only where the C code path it exercises did
+not change; the 1.4.0 changes on ported paths are the #682 contract changes
+(SR-CG failure handling, `NSRCG=2`, `RescaleSmat`, the CG `zqp_SRinfo.dat` row,
+the Jastrow reader) and the roundoff-only `rsbOld` and SIMD items. 1.4.0 adds
+`#pragma omp simd` reductions to `pfupdate*.c`; C references built with OpenMP
+may reorder those sums, so new full-executable references are built without
+OpenMP or record the OpenMP/SIMD flags.
+
 ## Comparison rules
 
 `tests/support/numerical_comparison.rs` compares each finite component using

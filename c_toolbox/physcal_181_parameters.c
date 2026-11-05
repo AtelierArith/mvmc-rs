@@ -17,8 +17,11 @@ typedef int MPI_Comm;
 static void MPI_Comm_rank(int comm, int *rank) { (void)comm; *rank=0; }
 static void MPI_Abort(int comm, int code) { (void)comm; exit(code); }
 #include "readdef.h"
+/* mVMC 1.4.0 readdef.h declares this extern; readdef.c defines it. */
+char (*cFileNameListFile)[D_CharTmpReadDef] = NULL;
 int NProj, NRBM, NSlater, NOptTrans, NPara, FlagRBM, AllComplexFlag;
 int NGutzwillerIdx, NJastrowIdx, NDoublonHolon2siteIdx, NDoublonHolon4siteIdx;
+int NSpinJastrowIdx = 0; /* mVMC 1.4.0 spin Jastrow block, absent here */
 int NChargeRBM_PhysLayerIdx, NSpinRBM_PhysLayerIdx, NGeneralRBM_PhysLayerIdx;
 int NChargeRBM_HiddenLayerIdx, NSpinRBM_HiddenLayerIdx, NGeneralRBM_HiddenLayerIdx;
 int NChargeRBM_PhysHiddenIdx, NSpinRBM_PhysHiddenIdx, NGeneralRBM_PhysHiddenIdx;

@@ -6,16 +6,21 @@ values come from the separately recorded canonical Julia/C-contract observer,
 never Rust. Results are explicitly mixed references, not full C execution.
 Cargo builds/tests never compile, invoke or read these programs.
 
-Authoritative source: `extern/mVMC-1.3.0/src/mVMC/avevar.c`, SHA-256
-`509a573944a5eabde93864346902674faaff6c23d0c88f89867263f8372dd51a`.
+Authoritative source: `extern/mVMC-1.4.0/src/mVMC/avevar.c`, SHA-256
+`286f1c792c42c358c01977540e819638db4219d9ffeac9c2e5df261bb1f94c9a`.
 `ctest_opt_window_upstream.inc` retains lines 1–27 (copyright/license) and
-34–260 (complete `CalcAveVar`, `WriteHeader`, `Child_OutputOptData`,
+34–267 (complete `CalcAveVar`, `WriteHeader`, `Child_OutputOptData`,
 `StoreOptData`, `OutputOptData` bodies). Only include directives and the
 outer include guard are omitted. No numerical bodies are translated or
-edited. Verify this extraction before reproducing:
+edited. The only 1.4.0 change in these bodies is the `NSpinJastrowIdx` block of
+`OutputOptData`, which is inactive here (the adapter sets `NSpinJastrowIdx = 0`).
+The window fixtures and `c-window-provenance.txt` files recorded before #682 were
+generated from the 1.3.0 extraction (`avevar.c` SHA-256 `509a5739...`) and remain
+historical 1.3.0 records (`tests/fixtures/C_REFERENCE_PROVENANCE.md`). Verify this
+extraction before reproducing:
 
 ```sh
-diff -u <(sed -n '1,27p;34,260p' extern/mVMC-1.4.0/src/mVMC/avevar.c) \
+diff -u <(sed -n '1,27p;34,267p' extern/mVMC-1.4.0/src/mVMC/avevar.c) \
   c_toolbox/ctest_opt_window_upstream.inc
 ctest_window_build=$(mktemp -d /tmp/mvmc-ctest-window.XXXXXX)
 cc -O0 -ffp-contract=off c_toolbox/ctest_opt_window.c -lm \

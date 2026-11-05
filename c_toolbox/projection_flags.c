@@ -6,6 +6,7 @@
 #include "orbital_contracts_upstream.inc"
 #include "dh_flag_reader_upstream.inc"
 int NGutzwillerIdx,NJastrowIdx,NDoublonHolon2siteIdx,NDoublonHolon4siteIdx;
+int NSpinJastrowIdx=0; /* mVMC 1.4.0 spin Jastrow block, absent here */
 int OptFlag[64]={0},FlagShiftGJ,FlagShiftDH2,FlagShiftDH4;
 #include "flag_shift_upstream.inc"
 

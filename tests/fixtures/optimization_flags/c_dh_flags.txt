@@ -1,4 +1,4 @@
-# actual C DH readers; zero untouched imaginary storage; Apple clang 17 -O0; readdef.c sha256=6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9; parameter.c sha256=46ad04622f4475337028cee633bd76ce318a6d5058d03f202b55204500399fb0
+# actual C DH readers; zero untouched imaginary storage; Apple clang 17 -O0; readdef.c sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3; parameter.c sha256=801273e47a6f7b3390244a6bdcb74fa09825791e8b8283d2d6d7e36d25470cad
 dh2_complex0_rotate0 2 0
 0 1 2 0|1 2 0 0|2 0 1 0|99 -2|98 -1|97 0|96 1|95 2|94 3|
 0 6

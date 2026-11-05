@@ -2,7 +2,7 @@
 
 Developer-only standalone kernel probe; never invoked/read by Cargo. Numerical
 bodies are included unchanged, not extracted/rewritten: authoritative
-`extern/mVMC-1.3.0/src/ltl2inv/invert.tcc` lines12–33 sktdsmx and76–120 utu2inv,
+`extern/mVMC-1.4.0/src/ltl2inv/invert.tcc` lines12–33 sktdsmx and76–120 utu2inv,
 SHA256 `d477c7d2bb6d2b0c29872d06ec75fd7e804e1e30ace00888b77d31d2c74b821c`.
 Its MPL-2.0 notice and included common headers remain in upstream sources.
 ILAENV uses unchanged ilaenv_lauum.cc and ilaenv_wrap.f90, hashes

@@ -4,9 +4,14 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 int NMPTrans, APFlag, NQPFix, NQPFull, NSPGaussLeg=1, NSPStot=0;
 int NQPOptTrans, NOptTrans, FlagOptTrans;
+/* mVMC 1.4.0 SR-CG settings read in the same block; defaults leave it inactive. */
+int NSRCG=0, useDiagScale=0, NSRCGFallback=0, NSRCGAbortOnFail=1, RescaleSmat=0, rank=0;
+typedef int MPI_Comm; static MPI_Comm comm=0;
+static void MPI_Abort(MPI_Comm c, int e) { (void)c; assert(!"MPI_Abort"); (void)e; }
 double complex ParaQPTrans[2], OptTrans[2];
 double complex QPFixWeight[4], QPFullWeight[8];
 double complex SPGLCos[1], SPGLSin[1], SPGLCosSin[1], SPGLCosCos[1], SPGLSinSin[1];

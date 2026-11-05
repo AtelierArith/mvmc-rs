@@ -30,8 +30,8 @@ conditioning evidence, not a certificate for every intermediate solve.
 Authoritative C sources:
 
 ```text
-43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2  extern/mVMC-1.3.0/src/mVMC/stcopt.c
-2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca  extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c
+43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2  extern/mVMC-1.4.0/src/mVMC/stcopt.c
+2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca  extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c
 ```
 
 `StochasticOpt` selects components using exact optimization flags and the

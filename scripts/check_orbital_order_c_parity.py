@@ -70,7 +70,7 @@ def main():
                     cases[key] = actual
     checksums = "; ".join(f"{name} sha256={hashlib.sha256((src / name).read_bytes()).hexdigest()}"
                           for name in ("readdef.c", "include/readdef.h"))
-    actual = f"# mVMC-1.3.0 actual C filename registry, keyword iteration and AP/P readers; {checksums}\n"
+    actual = f"# mVMC-1.4.0 actual C filename registry, keyword iteration and AP/P readers; {checksums}\n"
     for (alias, boundary), result in cases.items():
         actual += f"{alias} {boundary}\n{result}"
     target = root / "tests/fixtures/orbital_general/c_order.txt"

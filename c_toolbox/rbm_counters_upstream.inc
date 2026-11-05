@@ -1,4 +1,4 @@
-/* Generated verbatim from authoritative mVMC-1.3.0: rbm.c sha256=e35af053ce06e127309b1636dd2776650b4f1b2abd1ea0eaca10cd5257c3d742.
+/* Generated verbatim from authoritative mVMC-1.4.0: rbm.c sha256=bbe4a1ab7d6f3ab0cbaa41d6ffabe10f729ce5bc560a22802a6939e287fbd870.
  * Regenerate with the corresponding scripts/check_*_c_parity.py --write.
  * This optional C oracle is not a Rust test/build dependency. */
 /*

@@ -8,6 +8,8 @@
 #include <string.h>
 
 int Nsite = 4, Nsite2 = 8, Ne = 2, Nsize = 4, NQPFull = 2;
+/* mVMC 1.4.0 globals read by the extracted kernels: no spin Jastrow, ordinary update paths. */
+int NSpinJastrowIdx = 0, **SpinJastrowIdx = 0, NExUpdatePath = 0;
 int NProj = 2, NGutzwillerIdx = 1, NJastrowIdx = 1;
 int NDoublonHolon2siteIdx = 0, NDoublonHolon4siteIdx = 0;
 int gutz[4], jast[4][4], *GutzwillerIdx = gutz;

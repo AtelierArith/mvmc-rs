@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include "splitloop.c"
 static int NSRCG = 1;
+static int reweight = 0; /* mVMC 1.4.0 reweight branch, off as in every Rust run */
 static void unused_dgemm(char *a, char *b, int *c, int *d, int *e, double *f,
                          double *g, int *h, double *i, int *j, double *k,
                          double *l, int *m) {

@@ -99,7 +99,7 @@ def main():
     ]
     cc_version = subprocess.check_output(["cc", "--version"], text=True).splitlines()[0]
     provenance = [
-        "# C mVMC 1.3.0 ComplexUHF reference outputs (issue #350)",
+        "# C mVMC 1.4.0 ComplexUHF reference outputs (issue #350)",
         "# Unmodified C source of extern/mVMC-1.4.0/src/ComplexUHF run as the full UHF executable.",
         *(f"# {p.relative_to(ROOT)} sha256={sha256(p)}" for p in hashed),
         f"# compiler: {cc_version}",

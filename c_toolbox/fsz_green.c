@@ -8,6 +8,8 @@
 #include <string.h>
 
 int Nsite = 4, Nsite2 = 8, Ne = 2, Nsize = 4, NQPFull = 2;
+/* mVMC 1.4.0 globals read by the extracted kernels: no spin Jastrow, ordinary update paths. */
+int NSpinJastrowIdx = 0, **SpinJastrowIdx = 0, NExUpdatePath = 0;
 int NProj = 2, NGutzwillerIdx = 1, NJastrowIdx = 1;
 int NDoublonHolon2siteIdx = 0, NDoublonHolon4siteIdx = 0;
 int gutz[4], jast[4][4], *GutzwillerIdx = gutz;
@@ -97,6 +99,10 @@ double complex ParaTransfer[65], ParaInterAll[4098];
 #error CalculateGreenFunc_fsz always uses the complex shadow arrays
 #endif
 int NCisAjs = 64, NCisAjsCktAltDC = 4098, NCisAjsCktAlt = 8;
+/* mVMC 1.4.0 twist operators (PhysCal only): none in this probe, so the loop never runs. */
+int NTwist = 0, **TwistIdx = 0, **LatticeIdx = 0;
+double **ParaTwist = 0;
+double complex *PhysTwist = 0;
 int CisAjsIdx[64][4], CisAjsCktAltDCIdx[4098][8];
 int CisAjsCktAltIdx[8][2] = {{0,0}, {19,35}, {35,19}, {18,63},
                             {63,0}, {19,19}, {27,35}, {0,0}};

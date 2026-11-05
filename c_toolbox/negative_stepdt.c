@@ -18,6 +18,9 @@ typedef int MPI_Comm; /* headers declare MPI prototypes; no MPI is linked. */
 void stcOptInit(double *const S, double *const g, const int nSmat, const int *const smatToParaIdx);
 extern void dposv_(const char *uplo, const int *n, const int *nrhs, double *a, const int *lda,
                    double *b, const int *ldb, int *info);
+/* mVMC 1.4.0 aborts SR-CG with a negative step; the probe keeps NSRCG = 0. */
+static MPI_Comm comm = 0;
+static void MPI_Abort(MPI_Comm c, int code) { (void)c; exit(code); }
 #include "negative_stepdt_upstream.inc"
 
 #define NP 3
