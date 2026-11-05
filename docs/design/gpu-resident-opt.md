@@ -84,13 +84,69 @@ inverse residual, supplied-tape and complete Opt numerical checks under #550.
 
 ## Supported scope and checks
 
-The current runner requires real normal orbitals, conserved spin in each
+The current runner requires normal orbitals, conserved spin in each
 operator pair, Gutzwiller/Jastrow projection, `NExUpdatePath` 0, 1 or 2,
 and serial execution. SR is direct (`NSRCG=0`) or C's conjugate gradient
 (`NSRCG≠0`, #670). Local spins (#660), DH2/DH4
 doublon-holon factors (#665), real RBM factors (#667) and real OptTrans
-weights (#674) are supported. Complex/general orbitals, `NExUpdatePath=3`
-and grouped execution return errors.
+weights (#674) are supported with real orbitals. Complex normal orbitals
+(#678) are supported with Gutzwiller/Jastrow factors, complex QP weights
+and coefficients, exchanges and direct SR. General orbitals,
+`NExUpdatePath=3` and grouped execution return errors.
+
+### Complex normal orbitals (#678)
+
+Julia GPU rejects complex parameters (`ext/cuda_state.jl:39`), so this is new
+functionality validated against the Rust CPU C-order complex path. The
+sampler keeps the Julia GPU tape contract. The physics is C's complex normal
+path (`AllComplexFlag≠0`):
+
+- **Layout.** Parameters, Slater tables, inverses, Pfaffians, QP weights,
+  overlaps and Hamiltonian coefficients are interleaved `(re, im)` FP64
+  pairs (`src/resident_complex.cuh`). Projection factors use the real parts,
+  as C `LogProjVal`/`LogProjRatio` (`creal(Proj)`); the sampler reads a real
+  projection copy that the gauge refreshes. Every complex product and sum is
+  separately rounded.
+- **Rebuild.** C `CalculateMAll_fcmp` runs on the device as the batched complex
+  PFAPACK kernel already in `pfaffian_batched.cu`
+  (`pfinv_plane<Cx<double>>`: `zsktf2`, `utu2pfa`, `utu2inv`), followed by the
+  #573 validity commit (`interval_complex.cu`).
+- **Sampling.** `interval_complex_hop` proposes with the five-word tape,
+  scores a hop with C `CalculateNewPfM2`
+  (`pfMNew = -pfM sum_j invM[a][j] sltE[a][j]`), accepts in log space on
+  `2 (LogProjRatio + log|ip_new| - log|ip_old|)` (C `vmcmake.c`,
+  `creal(clog(ip))`, with the `1e-100` floor) and applies C
+  `UpdateMAll_child_fcmp` immediately. There is no delayed queue or paired
+  factor. Exchanges and walkers with an invalid plane use full complex
+  Pfaffians and refactor in the kernel (complex `resident_dense.cuh`
+  counterparts), as the real path does.
+- **Observables.** Operator values are C `locgrn.c`'s
+  `conj(ProjRatio ip_new / ip)`, i.e. `<psi|O|x>/<psi|x>`; the local energy is
+  `sum_t c_t v_t` with complex Transfer/InterAll coefficients (C `calham.c`).
+  PhysCal's TwoBodyGEx row is C `calgrn.c`'s `G1[idx0] conj(G1[idx1])`, and
+  `PhysCalResult` reports the imaginary parts in `*_imag`.
+- **Derivatives.** C `SlaterElmDiff_fcmp`: `O_k = -sum W_q coeff Pf_q
+  invM[j][i] / ip` for d/dRe, and `i O_k` for d/dIm; the projection slots are
+  the counters and 0 (C `vmccal.c`). Invalid planes use the exact complex
+  minors.
+- **SR.** C's complex `StochasticOpt` solves a real system over `2*NPara`
+  components: `S_ij = Re<O_i^* O_j> - Re<O_i> Re<O_j>` and
+  `g_i = -2 dt (Re<e O_i> - Re<e> Re<O_i>)` (`stcopt.c`, `stcopt_dposv.c`).
+  With the stacked real matrix `D = [Re O; Im O]` (`2W x 2NPara`),
+  `Re<O_i^* O_j> = (D^T D)_ij / W`, `Re<O_i>` is the mean of the first `W`
+  rows and `Re<e O_i> = (D^T [Re e; -Im e])_i / W`. The direct-SR kernels and
+  the Cholesky solve run unchanged on `D`; the parameter update adds the
+  solution to the interleaved parameters, slot for slot.
+- **Gauge.** C `SyncModifiedParameter` with complex parameters (`opt_gauge_c`):
+  `shiftGJ` on the real parts, then the Slater block scaled by
+  `D_AmpMax / max|z|` (`cabs`).
+- **Not supported in complex mode** (rejected before allocation): RBM,
+  OptTrans, DH2/DH4, local spins and SR-CG for Opt. PhysCal ignores `NSRCG`.
+  A complex `ParaQPTrans` weight in real mode stays rejected; C's real path
+  and Julia GPU take its real part.
+
+See `gpu/mvmc-gpu-cuda/tests/fixtures/complex/README.md` for inputs, bounds
+and timings.
 
 ### Doublon-holon factors DH2/DH4 (#665)
 

@@ -155,6 +155,7 @@ impl ResidentInterval {
         seed: u64,
     ) -> Result<Self, String> {
         let geom = sampler.geom;
+        let complex = sampler.complex;
         with_raw_exec(backend, "mvmc.resident.prepare", |exec| {
             let rng = DeviceRng::new(exec, seed)?;
             let error = exec.alloc_bytes(4)?;
@@ -175,12 +176,13 @@ impl ResidentInterval {
                 fallback: exec.alloc_bytes(geom.walkers * 4)?,
                 // n>=128 uses four queued (u,v) pairs plus two dots per pair
                 // and one ratio. This is smaller than the validated inverse.
-                delayed: exec.alloc_bytes(if geom.n >= 128 {
+                // The complex sampler (#678) uses immediate updates only.
+                delayed: exec.alloc_bytes(if geom.n >= 128 && !complex {
                     geom.walkers * geom.nqp * (8 * geom.n + 9) * 8
                 } else {
                     1
                 })?,
-                delayed_updates: true,
+                delayed_updates: !complex,
                 valid,
                 localspins: None,
                 exchange_fraction: 0.0,
@@ -395,6 +397,9 @@ impl ResidentInterval {
         // every later one needs >= nsite+1 hops. One final launch finishes any
         // remainder. Masked kernels are no-ops once each walker has completed.
         let rounds = 1 + hops.div_ceil(g.nsite + 1);
+        if s.complex {
+            return self.enqueue_complex_hops(exec, &module, hops, rounds);
+        }
         let (threads, groups, shared) = launch_geometry(g);
         // SAFETY: dimensions validated at construction, buffers remain resident
         // through all launches; one stream orders every producer and consumer.
@@ -463,11 +468,143 @@ impl ResidentInterval {
         Ok(())
     }
 
+    /// The complex counterpart of the hop/rebuild rounds of `enqueue_hops`
+    /// (`interval_complex.cu`). Same bounded schedule and completion guard.
+    fn enqueue_complex_hops(
+        &self,
+        exec: &RawExec<'_, '_>,
+        module: &RawModule,
+        hops: usize,
+        rounds: usize,
+    ) -> tenferro_tensor::Result<()> {
+        let s = &self.sampler;
+        let g = s.geom;
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        let i = |n: usize| Arg::I(n as i32);
+        // SAFETY: as enqueue_hops; the complex tables were allocated with two
+        // FP64 lanes, and complex_shared_bytes was checked at setup.
+        unsafe {
+            exec.zero_bytes(exec.ptr(&s.hop_off)?, g.walkers * 4)?;
+            exec.zero_bytes(exec.ptr(&self.total_accepts)?, g.walkers * 4)?;
+            for _ in 0..rounds {
+                exec.launch(
+                    module.function("interval_complex_hop")?,
+                    (g.walkers as u32, 1, 1),
+                    COMPLEX_THREADS,
+                    complex_shared_bytes(g),
+                    &[
+                        p(&s.ele)?,
+                        p(&s.occ)?,
+                        p(&s.inv)?,
+                        p(&s.pf)?,
+                        p(&s.aw)?,
+                        p(&s.logip)?,
+                        p(&s.slater)?,
+                        p(&s.weights)?,
+                        p(&s.gutz)?,
+                        p(&s.jast)?,
+                        p(&s.params)?,
+                        p(&s.tape)?,
+                        i(hops),
+                        p(&s.hop_off)?,
+                        i(g.n),
+                        i(g.ne),
+                        i(g.nsite),
+                        i(g.nqp),
+                        i(g.ngutz),
+                        i(g.nproj),
+                        p(&s.hops_done)?,
+                        p(&s.rebuild)?,
+                        p(&s.accepts)?,
+                        p(&self.total_accepts)?,
+                        p(&self.error)?,
+                        p(&self.valid)?,
+                        p(&s.planes)?,
+                        p(&s.pfinv_w)?,
+                        Arg::D(self.exchange_fraction),
+                    ],
+                )?;
+                self.enqueue_rebuild(exec, module)?;
+            }
+            exec.launch(
+                module.function("interval_resident_complete")?,
+                (g.walkers.div_ceil(128) as u32, 1, 1),
+                128,
+                0,
+                &[p(&s.hop_off)?, i(hops), p(&self.error)?, i(g.walkers)],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Complex rebuild of every flagged walker: C CalculateMAll_fcmp on the
+    /// device (`interval_complex_factor`), then the validity commit.
+    fn enqueue_complex_rebuild(
+        &self,
+        exec: &RawExec<'_, '_>,
+        module: &RawModule,
+    ) -> tenferro_tensor::Result<()> {
+        let s = &self.sampler;
+        let g = s.geom;
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        let i = |n: usize| Arg::I(n as i32);
+        let (nt, shared) = crate::pfaffian::launch_geometry(g.n, 8, 2);
+        // SAFETY: all buffers are sized for walkers*nqp complex planes.
+        unsafe {
+            exec.launch(
+                module.function("interval_complex_factor")?,
+                ((g.walkers * g.nqp) as u32, 1, 1),
+                nt,
+                shared,
+                &[
+                    p(&s.rebuild)?,
+                    p(&self.error)?,
+                    p(&s.ele)?,
+                    p(&s.slater)?,
+                    p(&s.planes)?,
+                    p(&s.pfinv_w)?,
+                    p(&s.pfinv_out)?,
+                    p(&s.pfinv_pf)?,
+                    p(&s.pfinv_st)?,
+                    i(g.n),
+                    i(g.ne),
+                    i(g.nsite),
+                    i(g.nqp),
+                ],
+            )?;
+            exec.launch(
+                module.function("interval_complex_commit")?,
+                (g.walkers as u32, 1, 1),
+                128,
+                0,
+                &[
+                    p(&s.rebuild)?,
+                    p(&self.error)?,
+                    p(&s.pfinv_st)?,
+                    p(&s.pfinv_out)?,
+                    p(&s.pfinv_pf)?,
+                    p(&s.weights)?,
+                    p(&s.inv)?,
+                    p(&s.pf)?,
+                    p(&s.logip)?,
+                    p(&s.aw)?,
+                    p(&self.valid)?,
+                    i(g.n),
+                    i(g.nqp),
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn enqueue_rebuild(
         &self,
         exec: &RawExec<'_, '_>,
         module: &RawModule,
     ) -> tenferro_tensor::Result<()> {
+        if self.sampler.complex {
+            return self.enqueue_complex_rebuild(exec, module);
+        }
         let s = &self.sampler;
         let g = s.geom;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
@@ -607,6 +744,15 @@ impl ResidentInterval {
         .map_err(|e| e.to_string())?;
         Ok(out)
     }
+}
+
+/// Threads per block of the complex sampler (four warps).
+pub(crate) const COMPLEX_THREADS: u32 = 128;
+
+/// Dynamic shared bytes of `interval_complex_hop`: aligned n ints, nqp complex
+/// candidate Pfaffians, 3n complex vectors and 8 ints.
+pub(crate) fn complex_shared_bytes(g: IntervalGeometry) -> u32 {
+    (((g.n + 1) & !1) * 4 + (g.nqp + 3 * g.n) * 16 + 8 * 4) as u32
 }
 
 // Four warps balance QP cooperation with the number of resident walker blocks.

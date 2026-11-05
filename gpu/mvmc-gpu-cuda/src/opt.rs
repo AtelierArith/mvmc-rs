@@ -8,6 +8,8 @@ mod cg;
 #[cfg(test)]
 mod cg_tests;
 #[cfg(test)]
+mod complex_tests;
+#[cfg(test)]
 mod dh_tests;
 #[cfg(test)]
 mod localspin_tests;
@@ -43,7 +45,11 @@ const SOURCE: &str = concat!(
     "\n",
     include_str!("resident_rbm.cuh"),
     "\n",
+    include_str!("resident_complex.cuh"),
+    "\n",
     include_str!("opt/kernels.cu"),
+    "\n",
+    include_str!("opt/complex.cu"),
     "\n",
     include_str!("opt/cg.cu")
 );
@@ -74,6 +80,15 @@ const KERNELS: &[&str] = &[
     "cg_alpha",
     "cg_refresh",
     "cg_finish",
+    "opt_slater_c",
+    "opt_initial_commit_c",
+    "opt_overlaps_c",
+    "opt_derivatives_c",
+    "opt_energy_terms_c",
+    "opt_energy_fallback_c",
+    "opt_cofactors_c",
+    "opt_energy_c",
+    "opt_gauge_c",
 ];
 
 thread_local! {
@@ -133,7 +148,11 @@ impl Default for OptConfig {
 #[derive(Debug)]
 pub struct OptResult {
     pub energies: Vec<f64>,
+    /// Real parts of the final parameters (all of them for real inputs).
     pub parameters: Vec<f64>,
+    /// Imaginary parts of the final parameters: zeros for real inputs,
+    /// C's complex parameters for `AllComplexFlag != 0` (#678).
+    pub parameters_imag: Vec<f64>,
     pub seed: u64,
     pub walkers: usize,
     /// SR-CG iteration count of each step (C `StochasticOptCG_Main` return
@@ -144,6 +163,8 @@ pub struct OptResult {
 /// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including DH2/DH4,
 /// real RBM factors, real OptTrans weights, local spins and `NExUpdatePath`
 /// 1/2 exchanges, with direct SR or, for `NSRCG != 0`, the C SR-CG algorithm.
+/// Complex normal-orbital inputs (Gutzwiller/Jastrow, complex QP weights and
+/// coefficients, exchanges) use C's complex path with direct SR (#678).
 /// Unsupported modes fail before allocating CUDA state.
 pub fn run_gpu_para_opt_from_namelist(
     path: impl AsRef<Path>,
@@ -276,14 +297,16 @@ impl State {
             return Err("invalid resident GPU sampling dimensions".into());
         }
         let n = 2 * model.ne;
+        let lanes = model.lanes();
+        let sr = model.sr_dimension();
         // Kernel indexing is i32 within a walker; allocations use checked usize.
         for dims in [
-            [w, model.np, 1],
+            [lanes * w, sr, 1],
             [w, model.energies.len(), 1],
-            [model.nq, 2 * model.ns, 2 * model.ns],
-            [w, model.nq, 1],
+            [model.nq, 2 * model.ns, 2 * model.ns * lanes],
+            [w, model.nq, lanes],
             [w, warmup.max(interval), 5],
-            [model.np, model.np, 1],
+            [sr, sr, 1],
             [w, 2 * model.ne + 2 * model.ns + 16, 1],
         ] {
             if dims
@@ -296,7 +319,7 @@ impl State {
             }
         }
         w.checked_mul(model.nq)
-            .and_then(|v| v.checked_mul(n * n * 8))
+            .and_then(|v| v.checked_mul(n * n * 8 * lanes))
             .ok_or("GPU inverse size overflow")?;
         let geom = IntervalGeometry {
             walkers: w,
@@ -307,11 +330,17 @@ impl State {
             ngutz: model.ng,
             nproj: model.nproj,
         };
-        if geom.shared_bytes() > 48 * 1024 {
+        let shared = if model.complex {
+            crate::interval::resident::complex_shared_bytes(geom)
+        } else {
+            geom.shared_bytes()
+        };
+        if shared > 48 * 1024 {
             return Err("GPU sampler shared-memory capacity exceeded".into());
         }
         let placeholder: Vec<i32> = (0..w * n).map(|a| (a % model.ne) as i32).collect();
-        let slater = vec![0.; model.nq * 4 * model.ns * model.ns];
+        let slater = vec![0.; model.nq * 4 * model.ns * model.ns * lanes];
+        let projection = model.projection();
         let host = IntervalHost {
             ele: &placeholder,
             inv: &[],
@@ -320,10 +349,15 @@ impl State {
             weights: &model.weights,
             gutz: &model.gutz,
             jast: &model.jast,
-            params: &model.parameters[..geom.nproj],
+            params: &projection,
         };
-        let sampler =
-            IntervalSampler::prepare_for_rebuild(backend, geom, &host, warmup.max(interval))?;
+        let sampler = IntervalSampler::prepare_for_rebuild(
+            backend,
+            geom,
+            &host,
+            warmup.max(interval),
+            model.complex,
+        )?;
         let mut resident = ResidentInterval::from_sampler(backend, sampler, model.seed)?;
         resident.set_moves(backend, &model.localspins, model.exchange)?;
         resident.set_doublon_holon(backend, &model.dh, model.n2, model.n4)?;
@@ -342,7 +376,9 @@ impl State {
             None
         };
         let buffers = with_raw_exec(backend, "mvmc.opt.prepare", |exec| {
-            let np = model.np;
+            // SR runs on C's 2*NPara real components in complex mode, on the
+            // stacked [Re O; Im O] derivative rows (opt/complex.cu).
+            let np = sr;
             let alloc = |count: usize, size: usize| exec.alloc_bytes((count * size).max(1));
             let sr_np = if derivatives { np } else { 0 };
             // SR-CG never forms the parameter Gram matrix (C stcopt_cg.c).
@@ -373,11 +409,11 @@ impl State {
                 fix: upload(exec, &model.fix)?,
                 lookup: alloc(w * 2 * model.ns, 4)?,
                 counts: alloc(w * geom.nproj, 4)?,
-                overlaps: alloc(w, 8)?,
+                overlaps: alloc(w * lanes, 8)?,
                 logs: alloc(w, 8)?,
-                derivatives: alloc(w * sr_np, 8)?,
+                derivatives: alloc(lanes * w * sr_np, 8)?,
                 values: alloc(w * model.energies.len(), 8)?,
-                local_energy: alloc(w, 8)?,
+                local_energy: alloc(lanes * w, 8)?,
                 mean: alloc(sr_np + 1, 8)?,
                 gram,
                 ho: alloc(sr_np, 8)?,
@@ -417,7 +453,11 @@ impl State {
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
         unsafe {
             exec.launch(
-                module.function("opt_slater")?,
+                module.function(if m.complex {
+                    "opt_slater_c"
+                } else {
+                    "opt_slater"
+                })?,
                 ((m.nq * m.ns * m.ns).div_ceil(256) as u32, 1, 1),
                 256,
                 0,
@@ -456,7 +496,8 @@ impl State {
                     p(&b.counts)?,
                     p(&s.gutz)?,
                     p(&s.jast)?,
-                    p(&b.parameters)?,
+                    // Complex mode: the real projection copy (C creal(Proj)).
+                    p(if m.complex { &s.params } else { &b.parameters })?,
                     p(&s.pf)?,
                     p(&s.weights)?,
                     p(&b.overlaps)?,
@@ -470,7 +511,19 @@ impl State {
                     i(m.n2),
                     i(m.n4),
                 ],
-            )
+            )?;
+            if m.complex {
+                // The complex overlap replaces opt_counts' real-table value.
+                let w = s.geom.walkers;
+                exec.launch(
+                    module.function("opt_overlaps_c")?,
+                    (w.div_ceil(128) as u32, 1, 1),
+                    128,
+                    0,
+                    &[p(&b.overlaps)?, p(&s.pf)?, p(&s.weights)?, i(m.nq), i(w)],
+                )?;
+            }
+            Ok(())
         }
     }
 
@@ -540,7 +593,7 @@ impl State {
                 let b = &self.buffers;
                 let g = s.geom;
                 let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
-                let (nt, shared) = crate::pfaffian::launch_geometry(g.n, 8, 1);
+                let (nt, shared) = crate::pfaffian::launch_geometry(g.n, 8, m.lanes());
                 let mut remaining = [0i32];
                 unsafe {
                     exec.zero_bytes(exec.ptr(&b.remaining)?, 4)?;
@@ -564,7 +617,11 @@ impl State {
                     self.counts(exec, &module)?;
                     self.rbm_theta(exec, &module)?;
                     exec.launch(
-                        interval.function("interval_resident_factor")?,
+                        interval.function(if m.complex {
+                            "interval_complex_factor"
+                        } else {
+                            "interval_resident_factor"
+                        })?,
                         ((w * m.nq) as u32, 1, 1),
                         nt,
                         shared,
@@ -585,7 +642,11 @@ impl State {
                         ],
                     )?;
                     exec.launch(
-                        module.function("opt_initial_commit")?,
+                        module.function(if m.complex {
+                            "opt_initial_commit_c"
+                        } else {
+                            "opt_initial_commit"
+                        })?,
                         (w as u32, 1, 1),
                         256,
                         0,
@@ -624,7 +685,7 @@ impl State {
     /// Dynamic shared bytes of the dense single-block fallbacks: n sites, 2n doubles.
     fn dense_shared(&self) -> u32 {
         let n = 2 * self.model.ne;
-        (((n + 1) & !1) * 4 + 2 * n * 8) as u32
+        (((n + 1) & !1) * 4 + 2 * n * 8 * self.model.lanes()) as u32
     }
 
     /// Exact minor cofactors for invalid planes; every valid plane returns.
@@ -636,7 +697,11 @@ impl State {
         // walkers*nq*n*n; one stream orders this before the derivatives.
         unsafe {
             exec.launch(
-                module.function("opt_cofactors")?,
+                module.function(if m.complex {
+                    "opt_cofactors_c"
+                } else {
+                    "opt_cofactors"
+                })?,
                 ((s.geom.walkers * m.nq) as u32, 1, 1),
                 256,
                 self.dense_shared(),
@@ -669,6 +734,40 @@ impl State {
         let m = &self.model;
         let s = &self.resident.sampler;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        if m.complex {
+            // SAFETY: as opt_energy_terms_c, plus per-walker complex `planes` scratch.
+            return unsafe {
+                exec.launch(
+                    module.function("opt_energy_fallback_c")?,
+                    (s.geom.walkers as u32, 1, 1),
+                    256,
+                    self.dense_shared(),
+                    &[
+                        p(values)?,
+                        p(operators)?,
+                        p(&s.ele)?,
+                        p(&s.occ)?,
+                        p(&b.lookup)?,
+                        p(&b.overlaps)?,
+                        p(&s.gutz)?,
+                        p(&s.jast)?,
+                        p(&s.params)?,
+                        p(&s.slater)?,
+                        p(&s.weights)?,
+                        p(&self.resident.valid)?,
+                        p(&s.planes)?,
+                        i(m.ns),
+                        i(m.ne),
+                        i(m.nq),
+                        i(m.ng),
+                        i(m.nj),
+                        i(terms),
+                        i(s.geom.walkers),
+                        p(&self.resident.error)?,
+                    ],
+                )
+            };
+        }
         // SAFETY: as opt_energy_terms, plus per-walker `planes` scratch.
         unsafe {
             exec.launch(
@@ -724,6 +823,43 @@ impl State {
         let s = &self.resident.sampler;
         let w = s.geom.walkers;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        if m.complex {
+            // SAFETY: `values` holds walkers*terms complex slots; the complex
+            // tables were allocated with two FP64 lanes.
+            unsafe {
+                exec.launch(
+                    module.function("opt_energy_terms_c")?,
+                    ((terms * w).div_ceil(8) as u32, 1, 1),
+                    256,
+                    0,
+                    &[
+                        p(values)?,
+                        p(operators)?,
+                        p(&s.ele)?,
+                        p(&s.occ)?,
+                        p(&b.lookup)?,
+                        p(&b.overlaps)?,
+                        p(&s.gutz)?,
+                        p(&s.jast)?,
+                        p(&s.params)?,
+                        p(&s.slater)?,
+                        p(&s.weights)?,
+                        p(&s.inv)?,
+                        p(&s.pf)?,
+                        i(m.ns),
+                        i(m.ne),
+                        i(m.nq),
+                        i(m.ng),
+                        i(m.nj),
+                        i(terms),
+                        i(w),
+                        p(&self.resident.error)?,
+                        p(&self.resident.valid)?,
+                    ],
+                )?;
+            }
+            return self.energy_fallback(exec, module, values, operators, terms);
+        }
         // SAFETY: `values` holds walkers*terms FP64 slots and `operators`
         // 7*terms i32 codes; every resident table is sized by the model.
         unsafe {
@@ -775,6 +911,9 @@ impl State {
         let w = s.geom.walkers;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
         self.cofactors(exec, module)?;
+        if m.complex {
+            return self.observe_complex(exec, module);
+        }
         unsafe {
             exec.launch(
                 module.function("opt_derivatives")?,
@@ -849,8 +988,72 @@ impl State {
         Ok(())
     }
 
+    /// Complex derivatives and local energies (C SlaterElmDiff_fcmp,
+    /// CalculateHamiltonian) into the stacked SR rows of `opt/complex.cu`.
+    fn observe_complex(
+        &self,
+        exec: &RawExec<'_, '_>,
+        module: &RawModule,
+    ) -> tenferro_tensor::Result<()> {
+        let b = &self.buffers;
+        let m = &self.model;
+        let s = &self.resident.sampler;
+        let w = s.geom.walkers;
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        // SAFETY: derivatives hold 2w x 2np FP64 values, every complex table
+        // two lanes; one stream orders the cofactors before this launch.
+        unsafe {
+            exec.launch(
+                module.function("opt_derivatives_c")?,
+                ((m.np * w).div_ceil(8) as u32, 1, 1),
+                256,
+                0,
+                &[
+                    p(&b.derivatives)?,
+                    p(&b.counts)?,
+                    p(&b.lookup)?,
+                    p(&b.columns)?,
+                    p(&b.xyz)?,
+                    p(&b.coefficients)?,
+                    p(&s.inv)?,
+                    p(&s.pf)?,
+                    p(&s.weights)?,
+                    p(&b.overlaps)?,
+                    i(m.np),
+                    i(m.nproj),
+                    i(m.ns),
+                    i(m.ne),
+                    i(m.nq),
+                    i(w),
+                    p(&self.resident.error)?,
+                    p(&self.resident.valid)?,
+                ],
+            )?;
+            let terms = m.energies.len() / 2;
+            if terms > 0 {
+                self.energy_terms(exec, module, &b.values, &b.operators, terms)?;
+            }
+            exec.launch(
+                module.function("opt_energy_c")?,
+                (w.div_ceil(128) as u32, 1, 1),
+                128,
+                0,
+                &[
+                    p(&b.local_energy)?,
+                    p(&b.values)?,
+                    p(&b.energies)?,
+                    i(terms),
+                    i(w),
+                    p(&self.resident.error)?,
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
     /// Direct SR (Julia GPU contract): Gram moments, masked covariance and a
-    /// native Cholesky solve into `rhs`/`info`.
+    /// native Cholesky solve into `rhs`/`info`. Complex mode solves C's
+    /// `2*NPara` real system on the stacked rows (`2w` Gram rows, `w` samples).
     fn solve_direct(
         &self,
         exec: &RawExec<'_, '_>,
@@ -859,8 +1062,9 @@ impl State {
     ) -> tenferro_tensor::Result<()> {
         let b = &self.buffers;
         let m = &self.model;
-        let np = m.np;
+        let np = m.sr_dimension();
         let w = self.resident.sampler.geom.walkers;
+        let rows = m.lanes() * w;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
         let mp = &m.data.modpara;
         // SAFETY: Gram, workspace and SR vectors were allocated for np parameters.
@@ -883,7 +1087,7 @@ impl State {
                 Op::T,
                 np,
                 np,
-                w,
+                rows,
                 1.,
                 exec.ptr(&b.derivatives)?,
                 np,
@@ -898,12 +1102,12 @@ impl State {
                 Op::N,
                 np,
                 1,
-                w,
+                rows,
                 1.,
                 exec.ptr(&b.derivatives)?,
                 np,
                 exec.ptr(&b.local_energy)?,
-                w,
+                rows,
                 0.,
                 exec.ptr(&b.ho)?,
                 np,
@@ -969,7 +1173,7 @@ impl State {
     ) -> tenferro_tensor::Result<()> {
         let b = &self.buffers;
         let m = &self.model;
-        let np = m.np;
+        let np = m.sr_dimension();
         let s = &self.resident.sampler;
         let w = s.geom.walkers;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
@@ -992,34 +1196,53 @@ impl State {
                     i(np),
                 ],
             )?;
-            exec.launch(
-                module.function("opt_gauge")?,
-                (1, 1, 1),
-                1,
-                0,
-                &[
-                    p(&b.parameters)?,
-                    p(&s.params)?,
-                    i(np),
-                    i(m.ng),
-                    i(m.nj),
-                    i(m.n2),
-                    i(m.n4),
-                    Arg::I(i32::from(m.shift)),
-                    Arg::I(i32::from(m.shift_dh2)),
-                    Arg::I(i32::from(m.shift_dh4)),
-                    p(&self.resident.error)?,
-                    match &self.resident.rbm {
-                        Some(r) => p(&r.weights)?,
-                        None => Arg::P(0),
-                    },
-                    i(m.nrbm),
-                    i(m.nopt),
-                    p(&s.weights)?,
-                    p(&b.fix)?,
-                    i(m.fix.len()),
-                ],
-            )?;
+            if m.complex {
+                exec.launch(
+                    module.function("opt_gauge_c")?,
+                    (1, 1, 1),
+                    1,
+                    0,
+                    &[
+                        p(&b.parameters)?,
+                        p(&s.params)?,
+                        i(m.np),
+                        i(m.ng),
+                        i(m.nj),
+                        i(m.nproj),
+                        Arg::I(i32::from(m.shift)),
+                        p(&self.resident.error)?,
+                    ],
+                )?;
+            } else {
+                exec.launch(
+                    module.function("opt_gauge")?,
+                    (1, 1, 1),
+                    1,
+                    0,
+                    &[
+                        p(&b.parameters)?,
+                        p(&s.params)?,
+                        i(np),
+                        i(m.ng),
+                        i(m.nj),
+                        i(m.n2),
+                        i(m.n4),
+                        Arg::I(i32::from(m.shift)),
+                        Arg::I(i32::from(m.shift_dh2)),
+                        Arg::I(i32::from(m.shift_dh4)),
+                        p(&self.resident.error)?,
+                        match &self.resident.rbm {
+                            Some(r) => p(&r.weights)?,
+                            None => Arg::P(0),
+                        },
+                        i(m.nrbm),
+                        i(m.nopt),
+                        p(&s.weights)?,
+                        p(&b.fix)?,
+                        i(m.fix.len()),
+                    ],
+                )?;
+            }
             // C VMCMakeSample rebuilds rbmCnt with the new coefficients (vmcmake.c:72-79).
             self.rbm_theta(exec, module)?;
             self.slater(exec, module)?;
@@ -1061,11 +1284,22 @@ impl State {
                 return Err(gpu_error(format!("GPU Opt failed: {failure}")));
             }
             let mut energies = vec![0.; self.steps];
-            let mut parameters = vec![0.; self.model.np];
+            let mut values = vec![0.; self.model.sr_dimension()];
             unsafe {
                 exec.download(&mut energies, exec.ptr(&self.buffers.history)?)?;
-                exec.download(&mut parameters, exec.ptr(&self.buffers.parameters)?)?;
+                exec.download(&mut values, exec.ptr(&self.buffers.parameters)?)?;
             }
+            let (parameters, parameters_imag) = if self.model.complex {
+                values
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|z| (z[0], z[1]))
+                    .unzip()
+            } else {
+                let zeros = vec![0.; values.len()];
+                (values, zeros)
+            };
             let mut cg_iterations = vec![];
             if let Some(cg) = &self.buffers.cg {
                 cg_iterations = vec![0; self.steps];
@@ -1077,6 +1311,7 @@ impl State {
             Ok(OptResult {
                 energies,
                 parameters,
+                parameters_imag,
                 cg_iterations,
                 seed: self.model.seed,
                 walkers: self.resident.sampler.geom.walkers,

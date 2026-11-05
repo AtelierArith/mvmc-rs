@@ -49,7 +49,11 @@ output belong to CLI wall time; the warmed API benchmark excludes both.
 Supported inputs are real normal orbitals, Gutzwiller/Jastrow projections,
 operators whose individual pairs conserve spin, `NExUpdatePath` 0, 1 or 2 with optional local spins
 (#660, see [GPU-resident Opt](gpu-resident-opt.md)), optional DH2/DH4 factors (#665), optional real RBM factors (#667), optional real OptTrans weights (#674, fixed at their input values),
-`NSplitSize=1`, and no Lanczos. `NSRCG` is accepted and ignored, as in Julia GPU
+`NSplitSize=1`, and no Lanczos. Complex normal orbitals (#678) follow C's
+complex path with Gutzwiller/Jastrow projections, complex QP weights and
+coefficients and exchanges; `PhysCalResult` then reports the imaginary parts
+in its `*_imag` fields (zeros for real inputs), and TwoBodyGEx is C's
+`G1[idx0] conj(G1[idx1])`. `NSRCG` is accepted and ignored, as in Julia GPU
 PhysCal (`ext/cuda_runners.jl:27`), because PhysCal never runs SR. Unsupported modes fail explicitly,
 before any device allocation; see the
 [support matrix](gpu-resident-model-support.md) (#572).

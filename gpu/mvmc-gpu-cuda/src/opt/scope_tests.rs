@@ -13,7 +13,7 @@ use std::path::PathBuf;
 /// `(file, from, to)` textual edit of a copied baseline input.
 type Edit = (&'static str, &'static str, &'static str);
 
-const SCOPE: &str = "resident GPU requires real normal orbitals";
+const SCOPE: &str = "resident GPU requires normal orbitals";
 
 fn repo(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -82,14 +82,6 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
         (
             "nsplit",
             &[("modpara.def", "NSplitSize     1", "NSplitSize     2")],
-        ),
-        (
-            "complex-orbital",
-            &[(
-                "orbitalidx.def",
-                "ComplexType          0",
-                "ComplexType          1",
-            )],
         ),
     ];
     let mut cases: Vec<(String, PathBuf, bool)> = edits
@@ -635,4 +627,175 @@ NQPOptTrans 2
         assert!(error.contains("finite and real"), "{error}");
     }
     fs::remove_dir_all(complex.parent().unwrap()).unwrap();
+}
+
+const COMPLEX_ORBITAL: Edit = (
+    "orbitalidx.def",
+    "ComplexType          0",
+    "ComplexType          1",
+);
+
+/// Complex normal orbitals (#678): C `AllComplexFlag != 0` selects the
+/// complex path, with interleaved complex parameters, C's 2*NPara component
+/// flags, complex QP weights and complex Hamiltonian coefficients.
+#[test]
+fn resident_scope_accepts_complex_normal_orbitals() {
+    let local = |rel: &str| Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+    let edited_baseline = edited("complex-orbital", &[COMPLEX_ORBITAL]);
+    for (input, complex_weights) in [
+        (edited_baseline.clone(), false),
+        (
+            local("tests/fixtures/complex/hubbard_complex_L16/namelist.def"),
+            true,
+        ),
+        (
+            local("tests/fixtures/complex/hubbard_complex_L128/namelist.def"),
+            true,
+        ),
+    ] {
+        let data = parse(&input);
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+        mvmc_core::validation::validate_phys_cal(&data).unwrap();
+        assert!(mvmc_core::get_all_complex_flag(&data).unwrap());
+        for model in [
+            Model::prepare(&input, &cfg()).unwrap(),
+            Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+        ] {
+            assert!(model.complex, "{input:?}");
+            assert_eq!(model.lanes(), 2);
+            assert_eq!(model.parameters.len(), 2 * model.np);
+            assert_eq!(model.flags.len(), 2 * model.np);
+            assert_eq!(model.weights.len(), 2 * model.nq);
+            assert_eq!(model.energies.len(), 2 * model.operators.len() / 7);
+            assert_eq!(model.sr_dimension(), 2 * model.np);
+            // Packed C parameters, in interleaved (re, im) order.
+            let packed = mvmc_core::pack_parameters(&model.data).unwrap();
+            for (p, z) in packed.iter().enumerate() {
+                assert_eq!(
+                    [model.parameters[2 * p], model.parameters[2 * p + 1]],
+                    [z.re, z.im]
+                );
+            }
+            assert_eq!(
+                model.projection(),
+                (0..model.nproj).map(|p| packed[p].re).collect::<Vec<_>>()
+            );
+            // Random complex Slater initialization (C InitParameter).
+            assert!((model.nproj..model.np).any(|p| model.parameters[2 * p + 1] != 0.0));
+            let imaginary = |v: &[f64]| v.iter().skip(1).step_by(2).any(|&x| x != 0.0);
+            assert_eq!(imaginary(&model.weights), complex_weights, "{input:?}");
+            if complex_weights {
+                assert!(imaginary(&model.energies), "complex Transfer/InterAll");
+            }
+        }
+    }
+    fs::remove_dir_all(edited_baseline.parent().unwrap()).unwrap();
+}
+
+/// Families without complex resident kernels stay rejected before CUDA in
+/// complex mode: RBM, OptTrans, DH2/DH4, local spins and SR-CG for Opt
+/// (PhysCal ignores NSRCG). A complex `ParaQPTrans` weight is still rejected
+/// in real mode, where C takes its real part (qp_real.c).
+#[test]
+fn resident_scope_rejects_complex_mode_families_before_cuda() {
+    const FAMILIES: &str = "resident GPU complex mode does not support";
+    let opttrans: [Edit; 2] = [
+        ("namelist.def", "", "OptTrans opttrans.def\n"),
+        ("opttrans.def", "", OPT_TRANS),
+    ];
+    let rbm: [Edit; 3] = [
+        (
+            "namelist.def",
+            "",
+            "ChargeRBM_PhysLayer chargerbm.def\nInChargeRBM_PhysLayer inchargerbm.def\n",
+        ),
+        ("chargerbm.def", "", CHARGE_RBM),
+        (
+            "inchargerbm.def",
+            "",
+            "===\nNChargeRBM_PhysLayer 1\n===\n===\n===\n0 0.125 0.0\n",
+        ),
+    ];
+    let cases: Vec<(&str, Vec<Edit>)> = vec![
+        (
+            "complex-opttrans",
+            [&[COMPLEX_ORBITAL][..], &opttrans].concat(),
+        ),
+        ("complex-rbm", [&[COMPLEX_ORBITAL][..], &rbm].concat()),
+    ];
+    for (tag, edits) in cases {
+        let input = edited(tag, &edits);
+        let data = parse(&input);
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+        for result in [
+            Model::prepare(&input, &cfg()).map(|_| ()),
+            Model::prepare_physcal(&input, &cfg(), None).map(|_| ()),
+        ] {
+            let error = result.expect_err(&format!("{tag} accepted"));
+            assert!(error.contains(FAMILIES), "{tag}: {error}");
+        }
+        fs::remove_dir_all(input.parent().unwrap()).unwrap();
+    }
+    // DH2 and local spins: complex variants of fixtures the real path accepts.
+    let dh = repo("tests/fixtures/dh2/production_cmp/namelist.def");
+    let data = parse(&dh);
+    assert!(mvmc_core::get_all_complex_flag(&data).unwrap());
+    let error = Model::prepare(&dh, &cfg())
+        .map(|_| ())
+        .expect_err("complex DH2");
+    assert!(error.contains(FAMILIES), "{error}");
+    let local = |rel: &str| Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+    let kondo = local("tests/fixtures/localspin/kondo_chain_L64/namelist.def");
+    let dir = std::env::temp_dir().join(format!("mvmc-scope-678-kondo-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    for entry in fs::read_dir(kondo.parent().unwrap()).unwrap() {
+        let source = entry.unwrap().path();
+        if source.is_file() {
+            fs::copy(&source, dir.join(source.file_name().unwrap())).unwrap();
+        }
+    }
+    let path = dir.join("orbitalidx.def");
+    let text = fs::read_to_string(&path).unwrap();
+    fs::write(
+        &path,
+        text.replacen("ComplexType          0", "ComplexType          1", 1),
+    )
+    .unwrap();
+    let input = dir.join("namelist.def");
+    assert!(mvmc_core::get_all_complex_flag(&parse(&input)).unwrap());
+    let error = Model::prepare(&input, &cfg())
+        .map(|_| ())
+        .expect_err("complex Kondo");
+    assert!(error.contains(FAMILIES), "{error}");
+    fs::remove_dir_all(dir).unwrap();
+    // SR-CG: rejected for complex Opt, ignored by complex PhysCal.
+    let cg = edited(
+        "complex-cg",
+        &[
+            COMPLEX_ORBITAL,
+            ("modpara.def", "NSRCG          0", "NSRCG          1"),
+        ],
+    );
+    let error = Model::prepare(&cg, &cfg())
+        .map(|_| ())
+        .expect_err("complex CG Opt");
+    assert!(error.contains("complex Opt requires direct SR"), "{error}");
+    assert!(Model::prepare_physcal(&cg, &cfg(), None).unwrap().complex);
+    fs::remove_dir_all(cg.parent().unwrap()).unwrap();
+    // Real mode keeps rejecting a complex TransSym weight.
+    let weight = edited(
+        "real-complex-weight",
+        &[("qptransidx.def", "0    1.00000", "0 0.6 0.8")],
+    );
+    let data = parse(&weight);
+    assert!(!mvmc_core::get_all_complex_flag(&data).unwrap());
+    assert!(data.para_qp_trans.iter().any(|w| w.im != 0.0));
+    for result in [
+        Model::prepare(&weight, &cfg()).map(|_| ()),
+        Model::prepare_physcal(&weight, &cfg(), None).map(|_| ()),
+    ] {
+        let error = result.expect_err("real-mode complex weight accepted");
+        assert!(error.contains("complex or nonfinite"), "{error}");
+    }
+    fs::remove_dir_all(weight.parent().unwrap()).unwrap();
 }

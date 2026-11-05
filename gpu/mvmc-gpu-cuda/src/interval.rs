@@ -19,7 +19,7 @@
 use tenferro_ext::raw_exec::{with_raw_exec, Arg, DeviceBuffer};
 use tenferro_tensor::Engine;
 
-mod resident;
+pub(crate) mod resident;
 pub use resident::{ResidentFailure, ResidentInterval};
 
 /// The NVRTC module: the batched Pfaffian (`pfinv_f64`), the interval kernel and the rebuild
@@ -33,6 +33,8 @@ pub const INTERVAL_MODULE: &str = concat!(
     "\n",
     include_str!("resident_rbm.cuh"),
     "\n",
+    include_str!("resident_complex.cuh"),
+    "\n",
     include_str!("pfaffian_batched.cu"),
     "\n",
     include_str!("interval_delayed.cu"),
@@ -44,6 +46,8 @@ pub const INTERVAL_MODULE: &str = concat!(
     include_str!("interval_resident.cu"),
     "\n",
     include_str!("interval_paired.cu"),
+    "\n",
+    include_str!("interval_complex.cu"),
 );
 
 /// Kernels loaded from [`INTERVAL_MODULE`].
@@ -58,6 +62,9 @@ pub const INTERVAL_KERNELS: &[&str] = &[
     "interval_paired_factor",
     "interval_paired_fallback",
     "interval_resident_complete",
+    "interval_complex_hop",
+    "interval_complex_factor",
+    "interval_complex_commit",
 ];
 
 /// Geometry shared by every interval call of one series.
@@ -144,7 +151,7 @@ pub struct IntervalHost<'a> {
 pub struct IntervalResults {
     /// Electron sites `[walkers][n]`.
     pub ele: Vec<i32>,
-    /// Pfaffians `[walkers][nqp]`.
+    /// Pfaffians `[walkers][nqp]` (interleaved re, im pairs for complex tables).
     pub pf: Vec<f64>,
     /// Accepted moves since each walker's last rebuild.
     pub aw: Vec<i32>,
@@ -155,6 +162,9 @@ pub struct IntervalResults {
 /// Resident device state of one interval series.
 pub struct IntervalSampler {
     pub(crate) geom: IntervalGeometry,
+    /// Complex normal-orbital tables (#678): `inv`, `pf`, `slater`, `weights`
+    /// and the factorization scratch hold interleaved (re, im) FP64 pairs.
+    pub(crate) complex: bool,
     pub(crate) total_hops: usize,
     pub(crate) exchange_fraction: f64,
     pub(crate) ele: DeviceBuffer,
@@ -227,17 +237,28 @@ impl IntervalSampler {
         total_hops: usize,
         exchange_fraction: f64,
     ) -> Result<Self, String> {
-        Self::prepare_buffers(backend, geom, host, total_hops, exchange_fraction, true)
+        Self::prepare_buffers(
+            backend,
+            geom,
+            host,
+            total_hops,
+            exchange_fraction,
+            true,
+            false,
+        )
     }
 
     /// Allocate an initial configuration whose tables will be factored on the device.
+    /// `complex` selects interleaved complex tables (`host.slater` and
+    /// `host.weights` then hold (re, im) pairs).
     pub(crate) fn prepare_for_rebuild<B: Engine + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
         host: &IntervalHost<'_>,
         total_hops: usize,
+        complex: bool,
     ) -> Result<Self, String> {
-        Self::prepare_buffers(backend, geom, host, total_hops, 0.0, false)
+        Self::prepare_buffers(backend, geom, host, total_hops, 0.0, false, complex)
     }
 
     fn prepare_buffers<B: Engine + ?Sized>(
@@ -247,6 +268,7 @@ impl IntervalSampler {
         total_hops: usize,
         exchange_fraction: f64,
         upload_tables: bool,
+        complex: bool,
     ) -> Result<Self, String> {
         if exchange_fraction != 0.0 {
             return Err(
@@ -254,7 +276,12 @@ impl IntervalSampler {
                     .to_string(),
             );
         }
+        if complex && upload_tables {
+            return Err("complex interval tables are factored on the device".into());
+        }
         let (w, n, nsite, nqp) = (geom.walkers, geom.n, geom.nsite, geom.nqp);
+        // FP64 values per table scalar.
+        let lanes = 1 + usize::from(complex);
         let n2 = geom.n2();
         let nplanes = w * nqp;
         let occ_host = occupancy(host.ele, &geom);
@@ -270,12 +297,12 @@ impl IntervalSampler {
         with_raw_exec(backend, "mvmc.interval.prepare", |exec| {
             let ele = exec.alloc_bytes(w * n * 4)?;
             let occ = exec.alloc_bytes(w * 2 * nsite * 4)?;
-            let inv = exec.alloc_bytes(w * nqp * n * n * 8)?;
-            let pf = exec.alloc_bytes(w * nqp * 8)?;
+            let inv = exec.alloc_bytes(w * nqp * n * n * 8 * lanes)?;
+            let pf = exec.alloc_bytes(w * nqp * 8 * lanes)?;
             let aw = exec.alloc_bytes(w * 4)?;
             let logip = exec.alloc_bytes(w * 8)?;
-            let slater = exec.alloc_bytes(nqp * n2 * n2 * 8)?;
-            let weights = exec.alloc_bytes(nqp * 8)?;
+            let slater = exec.alloc_bytes(nqp * n2 * n2 * 8 * lanes)?;
+            let weights = exec.alloc_bytes(nqp * 8 * lanes)?;
             let gutz = exec.alloc_bytes(nsite.max(1) * 4)?;
             let jast = exec.alloc_bytes((nsite * nsite).max(1) * 4)?;
             let params = exec.alloc_bytes(geom.nproj.max(1) * 8)?;
@@ -286,10 +313,10 @@ impl IntervalSampler {
             let accepts = exec.alloc_bytes(w.max(1) * 4)?;
             let rec_walker = exec.alloc_bytes(w.max(1) * 4)?;
             let planes_nn = nplanes.max(1) * n * n;
-            let plane_buf = exec.alloc_bytes(planes_nn * 8)?;
-            let pfinv_w = exec.alloc_bytes(planes_nn * 8)?;
-            let pfinv_out = exec.alloc_bytes(planes_nn * 8)?;
-            let pfinv_pf = exec.alloc_bytes(nplanes.max(1) * 8)?;
+            let plane_buf = exec.alloc_bytes(planes_nn * 8 * lanes)?;
+            let pfinv_w = exec.alloc_bytes(planes_nn * 8 * lanes)?;
+            let pfinv_out = exec.alloc_bytes(planes_nn * 8 * lanes)?;
+            let pfinv_pf = exec.alloc_bytes(nplanes.max(1) * 8 * lanes)?;
             let pfinv_st = exec.alloc_bytes(nplanes.max(1) * 4)?;
             unsafe {
                 exec.upload(exec.ptr(&ele)?, host.ele)?;
@@ -298,8 +325,8 @@ impl IntervalSampler {
                     exec.upload(exec.ptr(&inv)?, host.inv)?;
                     exec.upload(exec.ptr(&pf)?, host.pf)?;
                 } else {
-                    exec.zero_bytes(exec.ptr(&inv)?, w * nqp * n * n * 8)?;
-                    exec.zero_bytes(exec.ptr(&pf)?, w * nqp * 8)?;
+                    exec.zero_bytes(exec.ptr(&inv)?, w * nqp * n * n * 8 * lanes)?;
+                    exec.zero_bytes(exec.ptr(&pf)?, w * nqp * 8 * lanes)?;
                 }
                 exec.upload(exec.ptr(&aw)?, &zeros_i32)?;
                 exec.upload(exec.ptr(&logip)?, &logip_host)?;
@@ -315,6 +342,7 @@ impl IntervalSampler {
             }
             Ok(Self {
                 geom,
+                complex,
                 total_hops,
                 exchange_fraction,
                 ele,
@@ -666,7 +694,7 @@ impl IntervalSampler {
         let g = self.geom;
         let mut out = IntervalResults {
             ele: vec![0; g.walkers * g.n],
-            pf: vec![0.0; g.walkers * g.nqp],
+            pf: vec![0.0; g.walkers * g.nqp * (1 + usize::from(self.complex))],
             aw: vec![0; g.walkers],
             logip: vec![0.0; g.walkers],
         };
