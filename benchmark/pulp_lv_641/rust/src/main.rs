@@ -50,18 +50,215 @@ unsafe fn st<S: Simd>(p: *mut f64, v: S::f64s) {
     (p as *mut S::f64s).write_unaligned(v)
 }
 
-fn bits_differ(a: &[f64], b: &[f64]) -> usize {
-    a.iter()
-        .zip(b)
-        .filter(|(x, y)| x.to_bits() != y.to_bits())
-        .count()
+// ---------------------------------------------------------------------------------------
+// Numerical acceptance (#697): finite values within explicit, derived bounds. Computed
+// floating-point results are never compared through their bit patterns.
+// ---------------------------------------------------------------------------------------
+
+/// Unit roundoff `u = eps / 2` of binary64.
+const U: f64 = f64::EPSILON / 2.0;
+
+/// `gamma_k = k u / (1 - k u)`: the forward-error factor of `k` rounded operations along a
+/// dependency chain (Higham, Accuracy and Stability, Lemma 3.1).
+fn gamma(k: usize) -> f64 {
+    let ku = k as f64 * U;
+    assert!(ku < 0.5, "gamma({k}) is not meaningful");
+    ku / (1.0 - ku)
 }
-fn max_rel(a: &[f64], b: &[f64]) -> f64 {
-    let scale = b.iter().fold(0.0f64, |m, x| m.max(x.abs()));
-    a.iter()
-        .zip(b)
-        .fold(0.0f64, |m, (x, y)| m.max((x - y).abs()))
-        / scale
+
+/// Row-major infinity norm `max_i sum_j |a_ij|`.
+fn inf_norm(a: &[f64], n: usize) -> f64 {
+    a.chunks_exact(n)
+        .map(|row| row.iter().map(|x| x.abs()).sum::<f64>())
+        .fold(0.0, f64::max)
+}
+
+/// Componentwise comparison against a bound per entry.
+struct Cmp {
+    max_abs: f64,
+    /// `max |a - b| / bound` over entries with a positive bound; at most 1 passes.
+    max_ratio: f64,
+    /// Entries whose values differ (informational: shows reordering, not acceptance).
+    differing: usize,
+    nonfinite: usize,
+    /// An entry with zero bound must agree exactly; counted here when it does not.
+    zero_bound_violations: usize,
+}
+
+impl Cmp {
+    fn ok(&self) -> bool {
+        self.nonfinite == 0 && self.zero_bound_violations == 0 && self.max_ratio <= 1.0
+    }
+    fn describe(&self, len: usize) -> String {
+        format!(
+            "max_abs={:.3e}\tmax_ratio_to_bound={:.3e}\tdiffering_values={}/{len}\tnonfinite={}",
+            self.max_abs, self.max_ratio, self.differing, self.nonfinite
+        )
+    }
+}
+
+fn compare(a: &[f64], b: &[f64], bound: &dyn Fn(usize) -> f64) -> Cmp {
+    assert_eq!(a.len(), b.len());
+    let mut c = Cmp {
+        max_abs: 0.0,
+        max_ratio: 0.0,
+        differing: 0,
+        nonfinite: 0,
+        zero_bound_violations: 0,
+    };
+    for (k, (&x, &y)) in a.iter().zip(b).enumerate() {
+        let bk = bound(k);
+        if !x.is_finite() || !y.is_finite() || !bk.is_finite() {
+            c.nonfinite += 1;
+            continue;
+        }
+        let d = (x - y).abs();
+        c.max_abs = c.max_abs.max(d);
+        c.differing += usize::from(x != y);
+        if bk > 0.0 {
+            c.max_ratio = c.max_ratio.max(d / bk);
+        } else if d > 0.0 {
+            c.zero_bound_violations += 1;
+        }
+    }
+    c
+}
+
+/// Collects every acceptance decision. Each decision prints one tab-separated
+/// `check ... status=PASS|FAIL` line; `finish` prints the overall verdict and exits with
+/// status 1 if any check failed, so a failing run cannot produce a successful report.
+#[derive(Default)]
+struct Acceptance {
+    checks: usize,
+    failed: Vec<String>,
+}
+
+impl Acceptance {
+    fn record(&mut self, label: &str, ok: bool, detail: &str) {
+        self.checks += 1;
+        let status = if ok { "PASS" } else { "FAIL" };
+        println!("check\t{label}\t{detail}\tstatus={status}");
+        if !ok {
+            self.failed.push(label.to_string());
+        }
+    }
+
+    fn compare(
+        &mut self,
+        label: &str,
+        a: &[f64],
+        b: &[f64],
+        bound: &dyn Fn(usize) -> f64,
+        why: &str,
+    ) {
+        let c = compare(a, b, bound);
+        self.record(
+            label,
+            c.ok(),
+            &format!("{}\tbound={why}", c.describe(a.len())),
+        );
+    }
+
+    fn finish(self) {
+        if self.failed.is_empty() {
+            println!("correctness\tPASS\tchecks={}\tfailed=0", self.checks);
+        } else {
+            println!(
+                "correctness\tFAIL\tchecks={}\tfailed={}\t{}",
+                self.checks,
+                self.failed.len(),
+                self.failed.join(",")
+            );
+            std::process::exit(1);
+        }
+    }
+}
+
+/// The acceptance machinery must reject nonfinite and out-of-bound values (#697).
+fn acceptance_self_test() {
+    let tight = |_: usize| 1e-15;
+    assert!(compare(&[1.0], &[1.0], &tight).ok());
+    assert!(!compare(&[f64::NAN], &[0.0], &tight).ok(), "NaN accepted");
+    assert!(
+        !compare(&[f64::INFINITY], &[f64::INFINITY], &tight).ok(),
+        "infinity accepted"
+    );
+    assert!(
+        !compare(&[1.0 + 1e-12], &[1.0], &tight).ok(),
+        "out-of-bound value accepted"
+    );
+    assert!(
+        !compare(&[1e-300], &[0.0], &|_| 0.0).ok(),
+        "zero bound accepted a difference"
+    );
+    assert!(
+        compare(&[0.0], &[-0.0], &|_| 0.0).ok(),
+        "signed zeros are equal"
+    );
+    println!("check\tacceptance self-test (NaN, infinity, out-of-bound, zero bound)\tstatus=PASS");
+}
+
+/// Componentwise magnitude bound of the K2 sweep: the same sweep on `|a|` with every
+/// subtraction replaced by an addition (`|c| + |x||t1| + |y||t2|`, `t = alpha |col|`).
+/// Every partial result of any evaluation order is bounded by these entries.
+fn k2_magnitude(data: &mut [f64], lda: usize, kk0: usize, k0: usize, alpha: f64) {
+    let (write_cols, col_kk0_data, col_k0_data) = k2_split(data, lda, kk0, k0);
+    for (j, col_j) in write_cols.chunks_exact_mut(lda).take(kk0).enumerate() {
+        let temp1 = alpha * col_kk0_data[j].abs();
+        let temp2 = alpha * col_k0_data[j].abs();
+        let (upper, rest) = col_j.split_at_mut(j);
+        let (x, y) = (&col_k0_data[..j], &col_kk0_data[..j]);
+        for ((c, &xk), &yk) in upper.iter_mut().zip(x).zip(y) {
+            *c = (c.abs() + xk.abs() * temp1) + yk.abs() * temp2;
+        }
+        rest[0] = 0.0;
+    }
+}
+
+/// Componentwise magnitude bound of the K4 recurrences, as `k4_scalar` with `|.|` and
+/// additions: `S[i+1] = (|b_i| + S[i-1] |v|) / |d|`, and the same for the backward sweep.
+fn k4_magnitude(vt: &[f64], b: &[f64], c: &mut [f64], n: usize) {
+    for (bc, cc) in b.chunks_exact(n).zip(c.chunks_exact_mut(n)) {
+        cc[1] = bc[0].abs() / vt[0].abs();
+        for i in (2..n).step_by(2) {
+            cc[i + 1] = (bc[i].abs() + cc[i - 1] * vt[i - 1].abs()) / vt[i].abs();
+        }
+        cc[n - 2] = bc[n - 1].abs() / vt[n - 2].abs();
+        for i in (1..n - 2).rev().step_by(2) {
+            cc[i - 1] = (bc[i].abs() + cc[i + 1] * vt[i].abs()) / vt[i - 1].abs();
+        }
+    }
+}
+
+/// Normalized residual of the K4 skew-tridiagonal relations that `k4_scalar` solves, per
+/// column: forward `-vt[i] c[i+1] + vt[i-1] c[i-1] = b[i]` (i even; `-vt[0] c[1] = b[0]`)
+/// and backward `vt[i-1] c[i-1] - vt[i] c[i+1] = b[i]` (i odd; `vt[n-2] c[n-2] = b[n-1]`).
+/// Each relation's residual is divided by the magnitude sum of its terms.
+fn k4_residual(vt: &[f64], b: &[f64], c: &[f64], n: usize) -> f64 {
+    let mut worst = 0.0f64;
+    let mut rel = |lhs: f64, scale: f64, rhs: f64| {
+        let s = scale + rhs.abs();
+        if s > 0.0 {
+            worst = worst.max((lhs - rhs).abs() / s);
+        }
+    };
+    for (bc, cc) in b.chunks_exact(n).zip(c.chunks_exact(n)) {
+        rel(-vt[0] * cc[1], (vt[0] * cc[1]).abs(), bc[0]);
+        for i in (2..n).step_by(2) {
+            let (p, q) = (-vt[i] * cc[i + 1], vt[i - 1] * cc[i - 1]);
+            rel(p + q, p.abs() + q.abs(), bc[i]);
+        }
+        rel(
+            vt[n - 2] * cc[n - 2],
+            (vt[n - 2] * cc[n - 2]).abs(),
+            bc[n - 1],
+        );
+        for i in (1..n - 2).rev().step_by(2) {
+            let (p, q) = (vt[i - 1] * cc[i - 1], -vt[i] * cc[i + 1]);
+            rel(p + q, p.abs() + q.abs(), bc[i]);
+        }
+    }
+    worst
 }
 
 // ---------------------------------------------------------------------------------------
@@ -994,6 +1191,8 @@ fn main() {
     );
     let best = Arch::Best(best);
     let mut rng = Rng(0x9E3779B97F4A7C15);
+    acceptance_self_test();
+    let mut acc = Acceptance::default();
 
     // --- setup cost of pulp dispatch ---
     {
@@ -1051,11 +1250,21 @@ fn main() {
     };
     let inv0 = inverse(&m);
     println!(
-        "check\tK1 initial inverse residual max|M X - I| = {:.3e}",
+        "info\tK1 initial inverse residual max|M X - I| = {:.3e}",
         residual(&m, &inv0)
     );
 
     // --- K1 correctness: chain of accepted hops on a genuine inverse ---
+    //
+    // Bounds (#697). One hop rounds a length-n dot product (`vec1`), one scale (`vec2`) and
+    // the rank-2 update (three operations per entry): about `b = gamma(n + 4)` of the
+    // stored inverse's magnitude per hop. A relative perturbation `b` of an inverse moves it
+    // by up to `kappa b` with `kappa = |M|_inf |X|_inf`, so after `steps` hops two
+    // evaluation orders differ by at most `2 steps b kappa max|X|`, and the Pfaffian ratio
+    // by `2 steps b kappa`. The residual `max|M X - I|` of any evaluation grows by at most
+    // `b |M|_inf |X|_inf` per hop and its own evaluation, from the measured initial residual.
+    // These are conditioning-scaled envelopes for this fixed input, with the independent
+    // residual and the fresh-inverse comparison as the correctness gates.
     {
         type K1Fn = fn(Arch, usize, &mut [f64], &[f64], &mut [f64], &mut [f64], usize, &mut f64);
         let variants: [(&str, Option<K1Fn>); 5] = [
@@ -1066,14 +1275,18 @@ fn main() {
             ("pulp-v3-fma", Some(k1_pulp::<true>)),
         ];
         let steps = 64;
+        let r0 = residual(&m, &inv0);
+        let b = gamma(n + 4);
         let mut results: Vec<(Vec<f64>, f64, Vec<f64>)> = Vec::new();
+        let mut reference: Vec<Vec<f64>> = Vec::new();
         for (name, f) in variants.iter() {
             let mut rng = Rng(12345);
             let mut mm = m.clone();
             let mut x = inv0.clone();
             let (mut v1, mut v2) = (vec![0.0; n], vec![0.0; n]);
             let mut pf = 1.0;
-            for _ in 0..steps {
+            let mut first_divergence = None;
+            for hop in 0..steps {
                 let msa = (rng.next() % n as u64) as usize;
                 let mut slt = rng.vec(n);
                 slt[msa] = 0.0;
@@ -1099,25 +1312,59 @@ fn main() {
                     mm[msa * n + j] = slt[j];
                     mm[j * n + msa] = -slt[j];
                 }
+                if *name == "scalar" {
+                    reference.push(x.clone());
+                } else if first_divergence.is_none() && x != reference[hop] {
+                    first_divergence = Some(hop);
+                }
             }
             let res = residual(&mm, &x);
-            results.push((x, pf, mm));
-            let (x0, pf0, _) = &results[0];
-            let (x, pf, _) = results.last().unwrap();
-            println!(
-                "check\tK1 {name}\tsteps={steps}\tresidual={res:.3e}\tbits_differ_vs_scalar={}/{}\tmax_rel_vs_scalar={:.3e}\tpf_rel_vs_scalar={:.3e}",
-                bits_differ(x, x0),
-                n * n,
-                max_rel(x, x0),
-                ((pf - pf0) / pf0).abs()
+            let res_bound = r0 + (steps + 1) as f64 * b * inf_norm(&mm, n) * inf_norm(&x, n);
+            acc.record(
+                &format!("K1 {name} residual"),
+                res.is_finite() && res <= res_bound,
+                &format!("steps={steps}\tmax|M X - I|={res:.3e}\tbound={res_bound:.3e}"),
             );
+            results.push((x, pf, mm));
+            if *name != "scalar" {
+                let (x0, pf0, mm) = &results[0];
+                let (x, pf, _) = results.last().unwrap();
+                let kappa = inf_norm(mm, n) * inf_norm(x0, n);
+                let scale = x0.iter().fold(0.0f64, |a, v| a.max(v.abs()));
+                let entry = 2.0 * steps as f64 * b * kappa * scale;
+                let first = first_divergence.map_or("none".to_string(), |h| h.to_string());
+                acc.compare(
+                    &format!("K1 {name} vs scalar"),
+                    x,
+                    x0,
+                    &|_| entry,
+                    &format!(
+                        "2*steps*gamma(n+4)*kappa*max|X|={entry:.3e} (kappa={kappa:.3e})\t\
+                         first_divergent_hop={first}"
+                    ),
+                );
+                let pf_rel = ((pf - pf0) / pf0).abs();
+                let pf_bound = 2.0 * steps as f64 * b * kappa;
+                acc.record(
+                    &format!("K1 {name} Pfaffian ratio vs scalar"),
+                    pf.is_finite() && pf_rel <= pf_bound,
+                    &format!("relative={pf_rel:.3e}\tbound={pf_bound:.3e}"),
+                );
+            }
         }
         // Fresh inverse of the final matrix as an independent reference.
         let fresh = inverse(&results[0].2);
+        let mm = &results[0].2;
+        let kappa = inf_norm(mm, n) * inf_norm(&fresh, n);
+        let scale = fresh.iter().fold(0.0f64, |a, v| a.max(v.abs()));
+        let entry = 2.0 * (steps + 1) as f64 * b * kappa * scale;
         for ((x, _, _), (name, _)) in results.iter().zip(variants.iter()) {
-            println!(
-                "check\tK1 {name}\tmax_rel_vs_fresh_inverse={:.3e}",
-                max_rel(x, &fresh)
+            acc.compare(
+                &format!("K1 {name} vs fresh inverse"),
+                x,
+                &fresh,
+                &|_| entry,
+                &format!("2*(steps+1)*gamma(n+4)*kappa*max|X|={entry:.3e}"),
             );
         }
     }
@@ -1231,6 +1478,18 @@ fn main() {
         let r_ps = sweep(&mut |d, l, kk, k, al| k2_pulp::<false>(Arch::Scalar, d, l, kk, k, al));
         let r_p = sweep(&mut |d, l, kk, k, al| k2_pulp::<false>(best, d, l, kk, k, al));
         let r_pf = sweep(&mut |d, l, kk, k, al| k2_pulp::<true>(best, d, l, kk, k, al));
+        // Bound (#697): each of the n/2 sweeps changes an entry by `(c + x t1) - y t2` with
+        // `t = alpha col`, at most five roundings per sweep along any dependency chain (the
+        // two `t` products, two products and two additions; the chain runs through earlier
+        // columns). With `S` the same sweep on magnitudes (`k2_magnitude`), every
+        // evaluation is within `gamma(5 n / 2 + 1) S` of the exact sweep, so two evaluations
+        // differ by at most `2 gamma(5 n / 2 + 1) S` per entry. The bound is absolute in `S`,
+        // which covers cancellation and the exact zeros on the diagonal.
+        let mut magnitude = a0.clone();
+        k2_sweep(&mut magnitude, n, &mut |d, l, kk, k, al| {
+            k2_magnitude(d, l, kk, k, al)
+        });
+        let factor = 2.0 * gamma(5 * n / 2 + 1);
         for (name, r) in [
             ("avx2", &r_a),
             ("avx2-scalar-tail", &r_at),
@@ -1238,11 +1497,12 @@ fn main() {
             ("pulp-v3", &r_p),
             ("pulp-v3-fma", &r_pf),
         ] {
-            println!(
-                "check\tK2 {name}\tbits_differ_vs_scalar={}/{}\tmax_rel_vs_scalar={:.3e}",
-                bits_differ(r, &r_s),
-                n * n,
-                max_rel(r, &r_s)
+            acc.compare(
+                &format!("K2 {name} vs scalar"),
+                r,
+                &r_s,
+                &|k| factor * magnitude[k],
+                "2*gamma(5n/2+1)*S_ij (S: magnitude sweep)",
             );
         }
         let p = &a0;
@@ -1331,16 +1591,44 @@ fn main() {
         let r_s = k3_scalar(x, n, &a, &b);
         let r_a = unsafe { k3_avx2_rows(x, n, &a, &b) };
         let r_pf = best_dispatch_k3(best, x, n, &a, &b);
-        println!(
-            "check\tK3 avx2-rows\tbitwise_equal={}\trel={:.3e}",
-            r_a.to_bits() == r_s.to_bits(),
-            ((r_a - r_s) / r_s).abs()
-        );
-        println!(
-            "check\tK3 pulp-v3-fma\tbitwise_equal={}\trel={:.3e}",
-            r_pf.to_bits() == r_s.to_bits(),
-            ((r_pf - r_s) / r_s).abs()
-        );
+        // Bound (#697): `b^T M a` sums n row dots of n exact-input products, then n weighted
+        // rows. Any order or blocking of either level (including FMA) rounds at most n
+        // times per level along a chain, so every evaluation is within
+        // `gamma(2n + 1) S`, `S = sum_i |b_i| sum_j |M_ij a_j|`, of the exact value.
+        let magnitude = |b: &[f64], a: &[f64]| -> f64 {
+            (0..n)
+                .map(|i| b[i].abs() * (0..n).map(|j| (x[i * n + j] * a[j]).abs()).sum::<f64>())
+                .sum()
+        };
+        let factor = gamma(2 * n + 1);
+        let s = magnitude(&b, &a);
+        for (name, r) in [("avx2-rows", r_a), ("pulp-v3-fma", r_pf)] {
+            acc.compare(
+                &format!("K3 {name} vs scalar"),
+                &[r],
+                &[r_s],
+                &|_| 2.0 * factor * s,
+                &format!("2*gamma(2n+1)*S={:.3e}", 2.0 * factor * s),
+            );
+        }
+        // Cancellation: `a^T M a = 0` exactly for skew `M` (the inverse is exactly skew:
+        // `utu2inv` fills the lower triangle by negation). Each evaluation must stay within
+        // its own forward-error bound of the exact zero.
+        let s0 = magnitude(&a, &a);
+        let z = [
+            ("scalar", k3_scalar(x, n, &a, &a)),
+            ("avx2-rows", unsafe { k3_avx2_rows(x, n, &a, &a) }),
+            ("pulp-v3-fma", best_dispatch_k3(best, x, n, &a, &a)),
+        ];
+        for (name, r) in z {
+            acc.compare(
+                &format!("K3 {name} cancellation a^T M a vs exact 0"),
+                &[r],
+                &[0.0],
+                &|_| factor * s0,
+                &format!("gamma(2n+1)*S={:.3e}", factor * s0),
+            );
+        }
         let (a, b) = (&a, &b);
         let mut vs: Vec<Variant> = vec![
             (
@@ -1388,11 +1676,40 @@ fn main() {
         k4_avx2(&vt, &bm, &mut c_a, n);
         k4_pulp(Arch::Scalar, &vt, &bm, &mut c_ps, n);
         k4_pulp(best, &vt, &bm, &mut c_p, n);
+        // Bounds (#697). Each column is two independent recurrences of n/2 steps, three
+        // roundings each (product, addition, division; a reciprocal form adds one), so every
+        // evaluation is within `gamma(2n + 1) S` of the exact solution, where `S` is the
+        // same recurrence on magnitudes (`k4_magnitude`); two evaluations differ by at most
+        // `2 gamma(2n + 1) S`. Independently, every computed solution must satisfy the
+        // skew-tridiagonal relations with a relative residual of at most 4 eps: a few
+        // roundings in the solve plus the products and sum of the residual evaluation.
+        let mut magnitude = vec![0.0; n * n];
+        k4_magnitude(&vt, &bm, &mut magnitude, n);
+        let factor = 2.0 * gamma(2 * n + 1);
         for (name, r) in [("avx2", &c_a), ("pulp-scalar", &c_ps), ("pulp-v3", &c_p)] {
-            println!(
-                "check\tK4 {name}\tbits_differ_vs_scalar={}/{}",
-                bits_differ(r, &c_s),
-                n * n
+            acc.compare(
+                &format!("K4 {name} vs scalar"),
+                r,
+                &c_s,
+                &|k| factor * magnitude[k],
+                "2*gamma(2n+1)*S_ij (S: magnitude recurrence)",
+            );
+        }
+        for (name, r) in [
+            ("scalar", &c_s),
+            ("avx2", &c_a),
+            ("pulp-scalar", &c_ps),
+            ("pulp-v3", &c_p),
+        ] {
+            let res = k4_residual(&vt, &bm, r, n);
+            let finite = r.iter().all(|v| v.is_finite());
+            acc.record(
+                &format!("K4 {name} residual"),
+                finite && res <= 4.0 * f64::EPSILON,
+                &format!(
+                    "relative residual={res:.3e}\tbound=4eps={:.3e}",
+                    4.0 * f64::EPSILON
+                ),
             );
         }
         let (vt, bm) = (&vt, &bm);
@@ -1428,6 +1745,7 @@ fn main() {
         ];
         run("K4 solve_sktd", rounds, 2000, &mut vs);
     }
+    acc.finish();
 }
 
 fn best_dispatch_k3(arch: Arch, inv: &[f64], n: usize, a: &[f64], b: &[f64]) -> f64 {
