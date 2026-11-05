@@ -88,7 +88,9 @@ fn enabled_opttrans_optimization_moves_the_real_weights() {
     for (step, system) in systems.iter().enumerate() {
         let active = &system.active_indices;
         assert_eq!(&active[active.len() - 3..], &[tail, tail + 2, tail + 4]);
-        assert!(active.iter().all(|&i| i < tail || (i - tail).is_multiple_of(2)));
+        assert!(active
+            .iter()
+            .all(|&i| i < tail || (i - tail).is_multiple_of(2)));
         let increments = &system.increment[active.len() - 3..];
         assert!(
             increments.iter().all(|d| d.is_finite() && *d != 0.0),
