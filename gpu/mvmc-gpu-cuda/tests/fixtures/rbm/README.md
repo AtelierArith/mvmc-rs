@@ -53,11 +53,12 @@ two-move operator ratio, and the SR derivatives (real part of C `RBMDiff`),
 between projection and Slater. C's real path does not: `vmcmake_real.c` and
 `calham_real.c` contain no RBM code, and `VMCMainCal` then passes
 `RBMCnt`, which `vmcmake_real.c` never fills, to `RBMDiff`
-(`vmccal.c:120,205`; reported upstream as tmisawa/Julia-mVMC#59). The Rust CPU
-real path likewise samples without the RBM factor (`sample_real_c_order`), so
-CPU real-mode RBM trajectories are not a reference for the resident sampler.
-The tests therefore compare per-configuration quantities with the C-order
-kernels and replay the tape with C's RBM ratio.
+(`vmccal.c:120,205`; reported upstream as tmisawa/Julia-mVMC#59). Since #669
+(PR #671) the Rust CPU real path keeps the RBM factor in sampling and in every
+Green kernel, following the same complex-path formulas, so CPU real-mode and
+complex-mode RBM runs agree. The resident tests compare per-configuration
+quantities with the C-order kernels and replay the tape with C's RBM ratio;
+they do not compare long trajectories.
 
 The hidden fields `theta[walker][neuron]` (C `rbmCnt[NRBM_PhysLayerIdx+h]`)
 stay on the device. They are rebuilt by C `MakeRBMCnt` after initialization
