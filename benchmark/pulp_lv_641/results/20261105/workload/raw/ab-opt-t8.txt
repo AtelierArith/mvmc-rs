@@ -1,0 +1,10 @@
+rep0 main: wall=16.350 All=16.322 VMCMakeSample=10.012 CalculateNewPfM2=1.775 UpdateMAll=4.220 recal PfM=1.486 VMCMainCal=6.008 CalculateMAll=4.086 LocEnergyCal=1.450 StochasticOpt=0.148
+rep0 pulp: wall=16.600 All=16.575 VMCMakeSample=10.210 CalculateNewPfM2=1.775 UpdateMAll=4.415 recal PfM=1.509 VMCMainCal=6.074 CalculateMAll=4.165 LocEnergyCal=1.442 StochasticOpt=0.149
+rep1 pulp: wall=16.550 All=16.525 VMCMakeSample=10.157 CalculateNewPfM2=1.802 UpdateMAll=4.278 recal PfM=1.499 VMCMainCal=6.067 CalculateMAll=4.116 LocEnergyCal=1.473 StochasticOpt=0.153
+rep1 main: wall=16.151 All=16.125 VMCMakeSample=9.812 CalculateNewPfM2=1.791 UpdateMAll=4.053 recal PfM=1.464 VMCMainCal=6.014 CalculateMAll=4.083 LocEnergyCal=1.458 StochasticOpt=0.149
+rep2 main: wall=16.209 All=16.184 VMCMakeSample=9.861 CalculateNewPfM2=1.790 UpdateMAll=4.070 recal PfM=1.452 VMCMainCal=6.031 CalculateMAll=4.085 LocEnergyCal=1.473 StochasticOpt=0.149
+rep2 pulp: wall=16.750 All=16.722 VMCMakeSample=10.312 CalculateNewPfM2=1.807 UpdateMAll=4.427 recal PfM=1.511 VMCMainCal=6.113 CalculateMAll=4.134 LocEnergyCal=1.493 StochasticOpt=0.151
+rep3 pulp: wall=16.675 All=16.651 VMCMakeSample=10.268 CalculateNewPfM2=1.802 UpdateMAll=4.397 recal PfM=1.492 VMCMainCal=6.088 CalculateMAll=4.113 LocEnergyCal=1.495 StochasticOpt=0.153
+rep3 main: wall=16.085 All=16.059 VMCMakeSample=9.801 CalculateNewPfM2=1.775 UpdateMAll=4.012 recal PfM=1.464 VMCMainCal=5.971 CalculateMAll=4.026 LocEnergyCal=1.474 StochasticOpt=0.149
+MEDIAN main: wall=16.151 [16.151, 16.209, 16.085] All=16.125 VMCMakeSample=9.812 UpdateMAll=4.053 recal PfM=1.464 VMCMainCal=6.014 CalculateMAll=4.083 LocEnergyCal=1.473 CalculateNewPfM2=1.790 StochasticOpt=0.149
+MEDIAN pulp: wall=16.675 [16.550, 16.750, 16.675] All=16.651 VMCMakeSample=10.268 UpdateMAll=4.397 recal PfM=1.499 VMCMainCal=6.088 CalculateMAll=4.116 LocEnergyCal=1.493 CalculateNewPfM2=1.802 StochasticOpt=0.153

@@ -1,0 +1,14 @@
+rep0 main: wall=0.984 All=0.959 VMCMakeSample=0.565 CalculateNewPfM2=0.091 UpdateMAll=0.238 recal PfM=0.095 VMCMainCal=0.338 CalculateMAll=0.208 LocEnergyCal=0.026
+rep0 pulp: wall=0.989 All=0.967 VMCMakeSample=0.573 CalculateNewPfM2=0.094 UpdateMAll=0.246 recal PfM=0.089 VMCMainCal=0.344 CalculateMAll=0.214 LocEnergyCal=0.026
+rep1 pulp: wall=0.957 All=0.935 VMCMakeSample=0.546 CalculateNewPfM2=0.087 UpdateMAll=0.235 recal PfM=0.082 VMCMainCal=0.340 CalculateMAll=0.211 LocEnergyCal=0.026
+rep1 main: wall=0.950 All=0.927 VMCMakeSample=0.541 CalculateNewPfM2=0.090 UpdateMAll=0.226 recal PfM=0.080 VMCMainCal=0.336 CalculateMAll=0.208 LocEnergyCal=0.026
+rep2 main: wall=0.964 All=0.939 VMCMakeSample=0.547 CalculateNewPfM2=0.091 UpdateMAll=0.228 recal PfM=0.081 VMCMainCal=0.340 CalculateMAll=0.208 LocEnergyCal=0.026
+rep2 pulp: wall=0.996 All=0.970 VMCMakeSample=0.579 CalculateNewPfM2=0.096 UpdateMAll=0.252 recal PfM=0.083 VMCMainCal=0.341 CalculateMAll=0.211 LocEnergyCal=0.026
+rep3 pulp: wall=0.985 All=0.959 VMCMakeSample=0.565 CalculateNewPfM2=0.090 UpdateMAll=0.242 recal PfM=0.088 VMCMainCal=0.339 CalculateMAll=0.210 LocEnergyCal=0.026
+rep3 main: wall=0.938 All=0.915 VMCMakeSample=0.522 CalculateNewPfM2=0.087 UpdateMAll=0.218 recal PfM=0.079 VMCMainCal=0.345 CalculateMAll=0.213 LocEnergyCal=0.026
+rep4 main: wall=0.960 All=0.935 VMCMakeSample=0.541 CalculateNewPfM2=0.086 UpdateMAll=0.235 recal PfM=0.081 VMCMainCal=0.343 CalculateMAll=0.211 LocEnergyCal=0.026
+rep4 pulp: wall=0.970 All=0.949 VMCMakeSample=0.552 CalculateNewPfM2=0.092 UpdateMAll=0.232 recal PfM=0.082 VMCMainCal=0.348 CalculateMAll=0.217 LocEnergyCal=0.026
+rep5 pulp: wall=0.972 All=0.949 VMCMakeSample=0.559 CalculateNewPfM2=0.092 UpdateMAll=0.241 recal PfM=0.081 VMCMainCal=0.341 CalculateMAll=0.210 LocEnergyCal=0.026
+rep5 main: wall=0.965 All=0.940 VMCMakeSample=0.547 CalculateNewPfM2=0.088 UpdateMAll=0.231 recal PfM=0.086 VMCMainCal=0.341 CalculateMAll=0.206 LocEnergyCal=0.027
+MEDIAN main: wall=0.960 [0.950, 0.964, 0.938, 0.960, 0.965] All=0.935 VMCMakeSample=0.541 UpdateMAll=0.228 recal PfM=0.081 VMCMainCal=0.341 CalculateMAll=0.208 LocEnergyCal=0.026 CalculateNewPfM2=0.088 StochasticOpt=0.000
+MEDIAN pulp: wall=0.972 [0.957, 0.996, 0.985, 0.970, 0.972] All=0.949 VMCMakeSample=0.559 UpdateMAll=0.241 recal PfM=0.082 VMCMainCal=0.341 CalculateMAll=0.211 LocEnergyCal=0.026 CalculateNewPfM2=0.092 StochasticOpt=0.000
