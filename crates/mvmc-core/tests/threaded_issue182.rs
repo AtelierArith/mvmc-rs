@@ -2195,7 +2195,7 @@ fn independent_runner_prefixes(output_root: &Path, verify_stage: bool) {
             "extern/Julia-mVMC/test/integration/reference/{input_model}/inputs/namelist.def"
         ));
         let mut data =
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false).unwrap();
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, false).unwrap();
         if model == "general_rbm_cmp_cg" {
             assert_eq!((data.modpara.nsrcg, data.modpara.nstore_o), (0, 1));
             data.modpara.nsrcg = 1;
@@ -3209,7 +3209,7 @@ fn independent_real_fsz(output_root: &Path) {
     let input = root.join("inputs/namelist.def");
     assert!(!root.join("inputs/initial.def").exists());
     let mut data =
-        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false).unwrap();
+        mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, false).unwrap();
     assert!(!mvmc_core::get_all_complex_flag(&data).unwrap());
     assert_ne!(data.i_flg_orbital_general, 0);
     assert_eq!((data.modpara.nsrcg, data.modpara.nstore_o), (0, 0));

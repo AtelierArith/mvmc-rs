@@ -660,7 +660,7 @@ pub fn run_cli() {
         out_dir_arg.unwrap_or_else(|| namelist.parent().unwrap_or(Path::new(".")).join("output"));
 
     // ── peek at modpara to determine defaults and show model info ─────────────
-    let peek = (|| match mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+    let peek = (|| match mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
         &namelist,
         opt_trans_arg,
     ) {
@@ -1191,11 +1191,9 @@ fn run_physcal_with_selected_backend_timed<const TIMED: bool>(
     timer.start(1);
     timer.start(11);
     let parsed = (|| {
-        let parsed = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
-            namelist,
-            enable_opt_trans,
-        )
-        .map_err(|error| error.to_string())?;
+        let parsed =
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(namelist, enable_opt_trans)
+                .map_err(|error| error.to_string())?;
         mvmc_core::validation::validate_phys_cal(&parsed)?;
         if let Some(fixed_params) = fixed_params {
             if !fixed_params.is_file() {

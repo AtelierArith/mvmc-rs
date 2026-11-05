@@ -296,7 +296,7 @@ mod mpi_matrix {
     ) -> Result<(Observed, bool), String> {
         let namelist = prepare(cell, dest, solver);
         let data =
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist, cell.opttrans)
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist, cell.opttrans)
                 .map_err(|e| e.to_string())?;
         let all_complex = mvmc_core::get_all_complex_flag(&data)?;
         let mode = if data.i_flg_orbital_general != 0 {

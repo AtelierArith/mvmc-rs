@@ -1238,20 +1238,48 @@ fn independent_c_definition_component_flags() {
         let written = reference_integers(&fixture.join("optimization-flags-written.txt"));
         assert_eq!(expected.len(), preparation.data.optimization_flags.len());
         assert_eq!(written.len(), expected.len());
-        // GetInfoOpt leaves real-section imaginary cells untouched; native
-        // GetInfoOptTrans writes only a contiguous, non-tail slice. Do not
+        // GetInfoOpt leaves real-section imaginary cells untouched. Do not
         // invent allocation contents for cells the C reader never writes.
-        let actual = preparation
-            .data
+        //
+        // Native GetInfoOptTrans writes undoubled flags at `NProj + NSlater + i`
+        // and never the OptTrans weight components: a C defect (#676,
+        // tmisawa/Julia-mVMC#94) that Rust does not reproduce. Those stray
+        // cells and the OptTrans tail are excluded from the C comparison and
+        // checked against the correct layout instead.
+        let data = &preparation.data;
+        let count = data.count_opt_trans_parameters();
+        let tail = 2 * (data.count_variational_parameters() - count);
+        let stray_start = data.projection_layout().n_proj
+            + mvmc_expert_parsers::utils::parameter_init::n_slater(data);
+        let stray = stray_start..stray_start + count;
+        let excluded = |i: usize| stray.contains(&i) || i >= tail;
+        if count > 0 {
+            let without = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
+                fixture.join("inputs/namelist.def"),
+                false,
+            )
+            .unwrap();
+            assert_eq!(
+                &data.optimization_flags[..tail],
+                &without.optimization_flags[..tail],
+                "{}: OptTrans must not change other component flags",
+                model.name
+            );
+            let expected_tail: Vec<i64> = (0..count).flat_map(|_| [1, 0]).collect();
+            assert_eq!(&data.optimization_flags[tail..], expected_tail.as_slice());
+        }
+        let actual = data
             .optimization_flags
             .iter()
             .zip(&written)
-            .filter_map(|(flag, written)| (*written == 1).then_some(*flag))
+            .enumerate()
+            .filter_map(|(i, (flag, written))| (*written == 1 && !excluded(i)).then_some(*flag))
             .collect::<Vec<_>>();
         let expected = expected
             .iter()
             .zip(&written)
-            .filter_map(|(flag, written)| (*written == 1).then_some(*flag))
+            .enumerate()
+            .filter_map(|(i, (flag, written))| (*written == 1 && !excluded(i)).then_some(*flag))
             .collect::<Vec<_>>();
         assert_discrete(
             &format!("{} C component flags", model.name),
@@ -2367,7 +2395,7 @@ fn fixed_records_overlays_and_normalization_follow_native_c_stages() {
         let native = fixture.join("native-c-stages");
         let namelist = fixture.join("inputs/namelist.def");
         let mut data =
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist, true).unwrap();
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist, true).unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(1);
         init_parameter(&mut data, &mut rng).unwrap();
         for stage in ["initialized", "fixed", "overlaid", "synchronized"] {

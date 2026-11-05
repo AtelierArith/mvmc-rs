@@ -191,7 +191,7 @@ fn resolve_base_seed(cfg: &MultiChainConfig) -> Result<i64, String> {
     let rnd_seed = if cfg.seed.is_some() {
         0
     } else {
-        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+        mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
             &cfg.namelist,
             cfg.enable_opt_trans,
         )

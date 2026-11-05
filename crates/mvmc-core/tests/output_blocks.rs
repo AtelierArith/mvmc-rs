@@ -84,7 +84,7 @@ fn optimization_var_writes_complete_c_parameter_storage_and_truncates_on_first_s
         let fixture = root.join(name);
         let namelist = fixture.join("inputs/namelist.def");
         let mut data =
-            mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist, true).unwrap();
+            mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist, true).unwrap();
         let mut rng = sfmt19937::Sfmt19937Rng::new(1);
         mvmc_expert_parsers::utils::parameter_init::init_parameter(&mut data, &mut rng).unwrap();
         mvmc_core::read_opt_para_file(&mut data, fixture.join("zqp_opt.dat")).unwrap();

@@ -285,7 +285,7 @@ fn setup(cell: &Cell, dest: &Path, steps_override: Option<(i64, i64, i64)>) -> P
         fs::write(&modpara, lines.join("\n") + "\n").unwrap();
     }
     let data =
-        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist, cell.opttrans)
+        mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist, cell.opttrans)
             .unwrap();
     let all_complex = mvmc_core::get_all_complex_flag(&data).unwrap();
     let mode = if data.i_flg_orbital_general != 0 {

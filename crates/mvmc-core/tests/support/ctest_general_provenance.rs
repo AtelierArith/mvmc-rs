@@ -70,7 +70,7 @@ pub fn verify(root: &Path) {
     }
     assert_eq!(names.len(), 63);
     let input = root.join("inputs/general_rbm_cmp");
-    let data = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+    let data = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
         input.join("namelist.def"),
         false,
     )
@@ -280,7 +280,7 @@ fn corrected_general_offline_mutations_fail_closed() {
     fs::write(root.join("archive.sha256"), manifest).unwrap();
     let case = root.join("general_rbm_cmp/step-2");
     let input = root.join("inputs/general_rbm_cmp");
-    let data = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
+    let data = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
         input.join("namelist.def"),
         false,
     )
