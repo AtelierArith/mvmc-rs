@@ -24,6 +24,7 @@ use crate::sampling::metropolis::metropolis_decision;
 use crate::sampling::projection::{
     log_proj_ratio, revert_ele_config, update_ele_config, update_proj_cnt,
 };
+use crate::sampling::rbm::{log_rbm_ratio, make_rbm_cnt, update_rbm_cnt_hopping, RbmConfig};
 use crate::sampling::rng::SamplingRng;
 use crate::sampling::stage::{RealPfStage, StageGeom, StageResult, StageTables};
 use crate::state::{InvMColMajor, SlaterElmFlat, ThreadedPfaPackWorkspace};
@@ -81,6 +82,52 @@ pub struct BlockCtx<'a, G: SamplingRng, R: Reducer + ?Sized> {
     pub n_accept_window: &'a mut usize,
     /// Total accepted moves of this series.
     pub accepted_total: &'a mut usize,
+    /// RBM hidden-field counters of the working configuration; `None` without RBM terms.
+    pub rbm: Option<RbmCounters<'a>>,
+}
+
+/// RBM counters of one walker (C `TmpRBMCnt` and its candidate `rbmCntNew`).
+///
+/// C's real sampler (`vmcmake_real.c`) has no RBM code, a C defect (issue #669,
+/// tmisawa/Julia-mVMC#59). Rust follows C's complex normal sampler (`vmcmake.c`): every
+/// proposal adds `LogRBMRatio` of the `UpdateRBMCnt` counters to the Metropolis exponent, and
+/// an accepted move keeps the candidate counters.
+pub struct RbmCounters<'a> {
+    /// RBM tables and coefficients.
+    pub cfg: &'a RbmConfig<'a>,
+    /// Counters of the working configuration.
+    pub old: &'a mut [Complex64],
+    /// Counters of the candidate.
+    pub new: &'a mut [Complex64],
+    /// Scratch for the first hop of an exchange.
+    pub mid: &'a mut [Complex64],
+}
+
+impl RbmCounters<'_> {
+    /// Candidate counters after the hop `ri -> rj` of `spin`; returns `LogRBMRatio`.
+    fn propose_hop(&mut self, ri: usize, rj: usize, spin: u8) -> Complex64 {
+        update_rbm_cnt_hopping(self.new, self.old, ri as i64, rj as i64, spin, self.cfg);
+        log_rbm_ratio(self.new, self.old, self.cfg)
+    }
+
+    /// Candidate counters after C's two exchange hops; returns `LogRBMRatio`.
+    fn propose_exchange(&mut self, ri: usize, rj: usize, spin: u8, spin_other: u8) -> Complex64 {
+        update_rbm_cnt_hopping(self.mid, self.old, ri as i64, rj as i64, spin, self.cfg);
+        update_rbm_cnt_hopping(
+            self.new, self.mid, rj as i64, ri as i64, spin_other, self.cfg,
+        );
+        log_rbm_ratio(self.new, self.old, self.cfg)
+    }
+
+    fn accept(&mut self) {
+        self.old.copy_from_slice(self.new);
+    }
+
+    /// Rebuild from the occupations after a full Pfaffian recomputation, as the complex
+    /// sampler does.
+    fn rebuild(&mut self, ele_num: &[i64]) {
+        self.old.copy_from_slice(&make_rbm_cnt(ele_num, self.cfg));
+    }
 }
 
 /// One per-walker sampling engine: the per-block iteration seam of the real sampler.
@@ -206,9 +253,12 @@ impl<S: RealPfStage> SamplingEngine for HostEngine<'_, S> {
                     timer.stop(62);
                     let log_proj_delta =
                         log_proj_ratio(ctx.proj_cnt_new, ctx.ele_proj_cnt, ctx.data);
+                    let rbm_delta = ctx.rbm.as_mut().map_or(Complex64::new(0.0, 0.0), |rbm| {
+                        rbm.propose_hop(candidate.ri, candidate.rj, candidate.spin)
+                    });
                     let decision = metropolis_decision(
                         log_proj_delta,
-                        Complex64::new(0.0, 0.0),
+                        rbm_delta,
                         Complex64::new(log_ip_new, 0.0),
                         Complex64::new(*ctx.log_ip_old, 0.0),
                         ctx.rng,
@@ -230,6 +280,9 @@ impl<S: RealPfStage> SamplingEngine for HostEngine<'_, S> {
                         )?;
                         timer.stop(63);
                         ctx.ele_proj_cnt.copy_from_slice(ctx.proj_cnt_new);
+                        if let Some(rbm) = ctx.rbm.as_mut() {
+                            rbm.accept();
+                        }
                         *ctx.log_ip_old = log_ip_new;
                         *ctx.accepted_total += 1;
                         *ctx.n_accept_window += 1;
@@ -332,9 +385,12 @@ impl<S: RealPfStage> SamplingEngine for HostEngine<'_, S> {
                     timer.stop(67);
                     let log_proj_delta =
                         log_proj_ratio(ctx.proj_cnt_new, ctx.ele_proj_cnt, ctx.data);
+                    let rbm_delta = ctx.rbm.as_mut().map_or(Complex64::new(0.0, 0.0), |rbm| {
+                        rbm.propose_exchange(ri_old, rj_old, candidate.spin, candidate.spin_other)
+                    });
                     let decision = metropolis_decision(
                         log_proj_delta,
-                        Complex64::new(0.0, 0.0),
+                        rbm_delta,
                         Complex64::new(log_ip_new, 0.0),
                         Complex64::new(*ctx.log_ip_old, 0.0),
                         ctx.rng,
@@ -358,6 +414,9 @@ impl<S: RealPfStage> SamplingEngine for HostEngine<'_, S> {
                         )?;
                         timer.stop(68);
                         ctx.ele_proj_cnt.copy_from_slice(ctx.proj_cnt_new);
+                        if let Some(rbm) = ctx.rbm.as_mut() {
+                            rbm.accept();
+                        }
                         *ctx.log_ip_old = log_ip_new;
                         *ctx.accepted_total += 1;
                         *ctx.n_accept_window += 1;
@@ -406,6 +465,9 @@ impl<S: RealPfStage> SamplingEngine for HostEngine<'_, S> {
                 )?;
                 if !ctx.reducer.sampling_any_failure(recompute_failed) {
                     *ctx.log_ip_old = sampling_log_ip_real(ctx.pf_m, ctx.data, ctx.reducer);
+                    if let Some(rbm) = ctx.rbm.as_mut() {
+                        rbm.rebuild(ctx.ele_num);
+                    }
                 }
                 *ctx.n_accept_window = 0;
                 timer.stop(34);

@@ -588,8 +588,9 @@ pub fn green_func2(
 }
 
 /// C's `GreenFunc2_real`: scalar Pfaffian reduction and real quotient.
-/// Like the native real kernel, this excludes RBM factors. The historical
-/// Julia helper remains separate for existing Julia kernel comparisons.
+/// Unlike the native real kernel, this includes the RBM factor: C's real path has
+/// no RBM code (a C defect, issue #669). The historical Julia helper remains
+/// separate for existing Julia kernel comparisons.
 #[allow(clippy::too_many_arguments)]
 pub fn green_func2_real(
     ri: usize,
@@ -801,12 +802,11 @@ fn green_func2_impl<const C_KERNEL: bool>(
 
     let log_proj_delta =
         crate::sampling::projection::log_proj_ratio(&proj_final, ele_proj_cnt, data);
+    // C's real kernel omits the RBM factor because its real path has no RBM code (a C
+    // defect, issue #669). Rust applies it in every mode; without RBM terms this is the plain
+    // projection ratio.
     let proj_ratio = if C_KERNEL {
-        if state.slater_matrix.pf_m_real.is_empty() {
-            with_rbm_ratio(log_proj_delta.exp(), &my_ele_num, ele_num, data)
-        } else {
-            Complex64::new(log_proj_delta.exp(), 0.0)
-        }
+        with_rbm_ratio(log_proj_delta.exp(), &my_ele_num, ele_num, data)
     } else {
         with_rbm_ratio(c_exp(log_proj_delta), &my_ele_num, ele_num, data)
     };
@@ -2010,11 +2010,9 @@ fn green_func1_impl<const TIMED: bool, const TRANSFER: bool, const C_KERNEL: boo
         1.0
     };
 
-    let proj_ratio = if C_KERNEL && !state.slater_matrix.pf_m_real.is_empty() {
-        Complex64::new(proj_ratio, 0.0)
-    } else {
-        with_rbm_ratio(proj_ratio, &scratch.ele_num, ele_num, data)
-    };
+    // The real C kernel omits the RBM factor (C defect, issue #669); Rust applies it in every
+    // mode. Without RBM terms this is the plain projection ratio.
+    let proj_ratio = with_rbm_ratio(proj_ratio, &scratch.ele_num, ele_num, data);
     timer.stop_diag(922, diag);
     // The main-calculation state keeps one pad slot per QP; Julia's
     // wrapper compacts the same inverse planes before its Green helper.

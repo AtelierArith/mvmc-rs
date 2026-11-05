@@ -212,9 +212,16 @@ are identical.
   models without a message. On `c_orbital_inputs/namelist_rbm_real.def` (seed 1,
   step 1) C has NPara = 55 (NProj 7, NRBM 36, NSlater 12) and energy
   5.984544891656925, identical for RBM overlay 0.125/-0.25 and for all zeros, and
-  bit-identical to Rust with all RBM values zero. Rust applies the RBM weight
-  (6.228711216019723); initial parameters agree. Rust keeps the correct math and
-  the Julia-derived step-1 energy, sampling and SRinfo checks.
+  bit-identical to Rust with all RBM values zero. Rust applies the RBM factor in
+  real sampling and in every local-energy ratio (#669; 6.224968242401510);
+  initial parameters agree. The Julia-derived `rbm_real` prefix checks come from
+  a real sampler without the RBM factor, so they switch it off with the
+  unit-test hook also used for `rbm_fsz` (#403). The real path is checked
+  against the complex normal path (`Orbital ComplexType 1`) instead:
+  `crates/mvmc-core/tests/issue669_real_rbm_sampler.rs` (identical saved
+  configurations, counters and RNG state; smallest decision margin 8.1e-4) and
+  `issue669_real_rbm_runner.rs` (step energies within 1e-10 relative, observed
+  1 ulp).
 - `opt_real`: C's real-mode OptTrans derivatives are written through a complex
   pointer offset (`vmccal.c`, `calculateOptTransDiff(SROptO + 2*NProj + ...)`),
   so for `NQPOptTrans > 1` derivative 1 is dropped, derivative 2 lands in
