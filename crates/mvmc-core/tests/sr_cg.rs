@@ -317,11 +317,17 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
             CgVariant::DiagScale,
         ),
     ] {
-        let fixture = julia_fixture::read_text(julia_fixture::fixture_path(
-            &fixtures,
-            format!("sr_cg/c_refresh/{file}"),
-        ))
-        .unwrap();
+        let path = julia_fixture::fixture_path(&fixtures, format!("sr_cg/c_refresh/{file}"));
+        // The oracle runs on Linux x86_64 OpenBLAS (Haswell lineage). Hosts without a
+        // platform-specific C 1.4.0 copy (the 1.3.0 Apple Silicon copies were removed in
+        // #682) keep exact statuses and the backward-error check at every limit but
+        // compare forward iterates only through limit 5, like other unverified kernels.
+        let fallback = cfg!(not(all(
+            target_os = "linux",
+            target_env = "gnu",
+            target_arch = "x86_64"
+        ))) && path == fixtures.join(format!("sr_cg/c_refresh/{file}"));
+        let fixture = julia_fixture::read_text(path).unwrap();
         let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
         let shape: Vec<usize> = lines
             .next()
@@ -484,8 +490,8 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
             // meaningful forward comparison there. The explicit-residual (backward error)
             // check above holds at every limit on every kernel.
             let forward_limit = match julia_fixture::kernel_class(&fixtures) {
-                julia_fixture::KernelClass::Reference => usize::MAX,
-                julia_fixture::KernelClass::Unverified => 5,
+                julia_fixture::KernelClass::Reference if !fallback => usize::MAX,
+                _ => 5,
             };
             if limit > forward_limit {
                 continue;
