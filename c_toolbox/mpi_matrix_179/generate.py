@@ -33,7 +33,10 @@ MODELS = {
     "ot": ("hubbard_chain_dh_opttrans", {}, True),
 }
 SOLVERS = {"d0": {"NStore": 0, "NSRCG": 0}, "d1": {"NStore": 1, "NSRCG": 0},
-           "cg": {"NStore": 0, "NSRCG": 1}}
+           # C 1.4.0 aborts SR-CG at its breakdown guard on these 7-sample inputs
+           # (stcopt_cg_impl.c, "numerically unstable at iter=1"); the 1.4.0 option
+           # NSRCGAbortOnFail 0 lets the step finish so its state can be recorded.
+           "cg": {"NStore": 0, "NSRCG": 1, "NSRCGAbortOnFail": 0}}
 
 
 def cells():
@@ -63,7 +66,7 @@ def write_modpara(path, overrides):
                 lines[i] = f"{key} {value}"
                 break
         else:
-            raise SystemExit(f"{key} missing from {path}")
+            lines.append(f"{key} {value}")
     open(path, "w").write("\n".join(lines) + "\n")
 
 

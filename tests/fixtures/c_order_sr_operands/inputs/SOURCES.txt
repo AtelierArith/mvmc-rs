@@ -1,0 +1,8 @@
+# case source namelist (files copied unchanged, namelist paths flattened)
+real extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def
+hubbard extern/Julia-mVMC/examples/inputs/hubbard_chain_real/namelist.def
+dh2_real tests/fixtures/dh2/production_real/namelist.def
+dh4_real tests/fixtures/dh4/production_dh4_real/namelist.def
+dh24_real tests/fixtures/dh4/production_dh24_real/namelist.def
+pairhop_real extern/Julia-mVMC/test/integration/reference/hubbard_chain_pairhop_real/inputs/namelist.def
+opt_real tests/fixtures/opttrans/run_opt_real/namelist.def

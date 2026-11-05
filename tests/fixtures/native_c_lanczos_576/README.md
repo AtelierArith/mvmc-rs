@@ -1,7 +1,7 @@
 # C Lanczos InterAll references
 
 `interall_real1` and `interall_real2` are independent unmodified C mVMC
-1.3.0 PhysCal executions using `NLanczosMode=1` and `2`. The base inputs and
+1.4.0 PhysCal executions using `NLanczosMode=1` and `2`. The base inputs and
 fixed parameters are copied from `native_c_physcal_181/all_terms_lanczos1_real`
 and `all_terms_lanczos2_real`, respectively; `InterAll` is added using the
 12-row input from `complex_uhf/uhf_interall_exchange/input/interall.def`,
@@ -17,55 +17,42 @@ records exactly.
 `interall_complex1` and `interall_complex2` use the same inputs with
 `ComplexType=1` in the orbital header and a deterministic 0.005 perturbation
 of the fixed complex parameters by the generator. The stored parameter files
-are the resulting values.
+are the resulting values (the 1.4.0 regeneration reran C on these stored files
+with no further perturbation, so `provenance.txt` records `zqp_perturb 0`).
 
 `interall_nodal1` and `interall_nodal2` add the same InterAll file to the
 real `nodal_neel` scenarios described in `c_toolbox/nodal_481/README.md`.
 The selected input exercises C's zero-overlap expansions; it does not assert
 that every added InterAll row reaches a nodal branch.
 
-The reference was built in the Linux x86_64 Dev Container image
-`vsc-mvmc-rs-741feed754ed4827a429135e5fcc0e7623f1f847d228698b066da094a8819e32-uid:latest`,
-with GCC 13.3.0, MPICH 4.2.0, OpenBLAS 0.3.26 and CMake Release; executable
+The reference was regenerated from `extern/mVMC-1.4.0` (`e83aa6cb`) for #695 in the
+Linux x86_64 Dev Container image `503e36a6615e`
+(`vsc-mvmc-rs-741feed754ed4827a429135e5fcc0e7623f1f847d228698b066da094a8819e32`),
+with GCC 13.3.0, MPICH 4.2.0, OpenBLAS 0.3.26 and CMake 3.28.3 Release; executable
 SHA-256 and source commit are in `provenance.txt`. C ran with one MPI rank,
 one OpenMP thread and one OpenBLAS thread. These are end-to-end sampled runs,
 not standalone kernel results.
 
 On the Linux x86_64 host, with the generated inputs and exact C/Rust RNG and
-saved-state agreement, the largest observed absolute difference in the 16
-Lanczos moments is `4.55e-13`, and the largest in the alpha-dependent energy
-output is `1.36e-12`; the largest Green-output difference is `2.22e-14`.
-Differences are measured at the formatted output precision. Lanczos regression
-outputs use an absolute bound of `1e-10`, leaving room for accumulation and
-alpha sensitivity across supported BLAS platforms; exact integer state checks
-are independent of this bound. See the issue #181 Lanczos sensitivity audit
-for the conditioning of the alpha solve. The macOS CI result must be recorded
+saved-state agreement, the largest observed absolute difference against these
+1.4.0 references is `9.1e-13` in the 16 Lanczos moments (`zvo_ls_qqqq`) and
+`7.8e-11` (`1.1e-13` relative, `interall_real1`/`2`, `zvo_ls_out_001.dat`,
+value `7.17e2`) in the alpha-dependent energy output. Both C 1.4.0 and Rust use
+`rsbOld = rbOld + t*Nsite` in the real two-electron update; the exchange
+updates of the real InterAll runs accumulate its roundoff into the Lanczos
+energy. Differences are measured at the formatted output precision. Lanczos
+outputs use `max(1e-10, 1e-12 |value|)`; exact integer state checks are
+independent of this bound. See the issue #181 Lanczos sensitivity audit for the
+conditioning of the alpha solve. The macOS CI result must be recorded
 separately; these Linux differences are not a macOS measurement.
 
-Since #682 Rust follows mVMC 1.4.0 and uses `rsbOld = rbOld + t*Nsite` in the
-real two-electron update; this 1.3.0 reference used `raOld`. The two agree to
-roundoff (`crates/mvmc-core/tests/two_electron_rsbold.rs`), and the exchange
-updates of the real interall runs accumulate that roundoff: with `raOld` Rust
-reproduces the differences above, with `rbOld` the largest Lanczos-output
-difference is `2.45e-10` absolute, `3.4e-13` relative (`interall_real1`,
-`zvo_ls_out_001.dat`, value `7.17e2`); the moments stay below `6.3e-13`. The
-Lanczos outputs therefore use `max(1e-10, 1e-12 |value|)`.
-
-Grouped follow-up on the same Linux Dev Container: copy the real mode 1/2
-inputs, set `NSplitSize 2`, and run both the unmodified C executable and Rust
-CLI with `mpiexec -n 2`, one OpenMP and OpenBLAS thread. With identical
-fixed parameters, the maximum absolute formatted Lanczos differences were
-`1.71e-13` for moments, `7.84e-12` for the energy output and `7.77e-16` for
-mode 2 Green outputs. This is an explicit two-rank experiment, not a checked-in
-MPI fixture or an assertion about other group widths.
-
-SHA-256 of relevant vendored sources (paths under `src/mVMC/`):
+SHA-256 of relevant vendored 1.4.0 sources (paths under `src/mVMC/`):
 
 | File | SHA-256 |
 | --- | --- |
 | `lslocgrn.c` | `cb255a8929a03b37e0d98575828c348a893fccd30f182a07770d79c2ef9efeaf` |
 | `lslocgrn_real.c` | `175210aa915e25e50b3ca6362b0e7268133e0f70f5cb4cf6691fac6163526445` |
-| `readdef.c` | `6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9` |
+| `readdef.c` | `9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3` |
 | `calham.c` | `94e3053a1c05ccee6e1c4359c94f24ce1d86cc07cbe4036231a37cd9622819b4` |
 | `calham_real.c` | `aea8517ee6e0c637c1dd24ec08b516b0d2f87edab5763928d2845b4ae4eee705` |
 

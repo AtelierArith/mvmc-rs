@@ -1,9 +1,14 @@
 # Durable native acquisition provenance and reproduction
 
-> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
-> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `vmcmain.c` changed in mVMC 1.4.0, so the
-> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
-> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
+> **mVMC 1.4.0 reacquisition (#695).** `reproduce-native-init.sh` was run against
+> `extern/mVMC-1.4.0` (`e83aa6cb`, vmcmain.c SHA-256 `da14885d...`) in the dev container
+> (image `503e36a6615e`) on a `c_toolbox/physcal_native/build.sh` build, with the
+> extraction pins updated to 1.4.0 and `initial.def` passed as the positional initial
+> parameter file when a model has one (the historical acquisition did so; the script
+> previously omitted it). All 78 checkpoint captures are byte-identical to the 1.3.0
+> acquisition, so the model JSON fixtures are unchanged; the new bindings are in
+> `tests/fixtures/native13_initialization/provenance.json`. The text below describes the
+> original 1.3.0 acquisition; `generate-fixtures.pl` still pins its 1.3.0 archives.
 
 All commands below are optional developer commands, NOT run while preparing this
 candidate. Ordinary Cargo tests require none of these sources/programs/libraries.

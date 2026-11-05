@@ -1,17 +1,12 @@
 # Issue #347: C `vmc.out -b` varbin layout probe
 
-> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
-> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `vmcmain.c` and `initfile.c` changed in mVMC 1.4.0, so the
-> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
-> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
-
 Full-executable validation (not a standalone kernel): builds the unmodified `extern/mVMC-1.4.0`
 `vmc.out` and runs it with `-b` on the tiny Heisenberg-chain inputs to produce
 `tests/fixtures/issue347_varbin/c_expected/`. The Rust build and tests never read this directory.
 
-Origin: `extern/mVMC-1.3.0` (no patch), `src/mVMC/vmcmain.c` SHA-256
-`fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63`, `src/mVMC/initfile.c`
-`8a7b20d54ab495cfac4df42646a30102aebaa228311ca3b17c1e29af5d0581f8`. Extraction boundary: none
+Origin: `extern/mVMC-1.4.0` (`e83aa6cb`, no patch), `src/mVMC/vmcmain.c` SHA-256
+`da14885da14fd5b98feb27f7c53efd6fa229a4a33d27c30fe44848e6514394f0`, `src/mVMC/initfile.c`
+`def6d4aa57f1ccdb238df0ea64b93ea7037681bc50da445c303b4b9c2b13f87e`. Extraction boundary: none
 (whole executable). Compiler: gcc 13.3.0, MPICH, CMake Release,
 `-DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF`.
 

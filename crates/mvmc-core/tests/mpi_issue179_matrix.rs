@@ -276,11 +276,15 @@ mod mpi_matrix {
             }
         }
         for (key, value) in overrides {
-            let line = lines
+            // Keys absent from the input (NSRCGAbortOnFail of the CG cells) are
+            // appended, as the generator does.
+            match lines
                 .iter_mut()
                 .find(|line| line.split_whitespace().next() == Some(key.as_str()))
-                .unwrap_or_else(|| panic!("{key} missing from modpara.def"));
-            *line = format!("{key} {value}");
+            {
+                Some(line) => *line = format!("{key} {value}"),
+                None => lines.push(format!("{key} {value}")),
+            }
         }
         fs::write(&modpara, lines.join("\n") + "\n").unwrap();
         dest.join("namelist.def")
@@ -529,6 +533,13 @@ mod mpi_matrix {
                 "NSRCG" => *v = if solver == "cg" { "1" } else { "0" }.into(),
                 _ => {}
             }
+        }
+        // The CG steps of these inputs meet the C 1.4.0 breakdown guard, which
+        // aborts by default; NSRCGAbortOnFail 0 (a 1.4.0 option) continues, so
+        // the multi-step run can be checked for repeatability.
+        if solver == "cg" && !c.overrides.iter().any(|(k, _)| k == "NSRCGAbortOnFail") {
+            c.overrides
+                .push(("NSRCGAbortOnFail".to_owned(), "0".to_owned()));
         }
         c
     }

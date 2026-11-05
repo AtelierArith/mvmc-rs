@@ -12,6 +12,8 @@ typedef int MPI_Comm;
 #define MPI_MAX 2
 #define MPI_COMM_WORLD 0
 static const int Nsize=2,Nsite=2,Nsite2=4,Ne=1;
+/* mVMC 1.4.0 global; 0 keeps the doublon-only and NExUpdatePath 4/5 branches inactive. */
+static const int NExUpdatePath=0;
 static int LocSpn[2]={0,0};
 static int calls,words,mode;
 static uint32_t gen_rand32(void) { ++words;return 0; }
