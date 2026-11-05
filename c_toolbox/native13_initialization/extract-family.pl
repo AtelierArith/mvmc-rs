@@ -5,7 +5,7 @@ use Digest::SHA qw(sha256_hex);
 use Fcntl qw(O_CREAT O_EXCL O_WRONLY);
 my($path,$dest)=@ARGV;die "args\n" unless defined $dest;
 open my $in,'<:raw',$path or die $!;local $/;my $original=<$in>;close $in;
-die "source SHA\n" unless sha256_hex($original) eq 'fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63';
+die "source SHA\n" unless sha256_hex($original) eq 'da14885da14fd5b98feb27f7c53efd6fa229a4a33d27c30fe44848e6514394f0';
 my $text=$original;
 sub insert_after {my($anchor,$add)=@_;my $n=()=$text=~/\Q$anchor\E/g;die "ambiguous $anchor\n" unless $n==1;$text=~s/\Q$anchor\E/$anchor$add/}
 insert_after('#include "physcal_lanczos.h"',"\n#include \"family_hook.h\"");

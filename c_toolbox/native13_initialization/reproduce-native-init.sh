@@ -10,7 +10,7 @@ packet=$(cd "$(dirname "$0")";pwd)
 test ! -e "$root";mkdir "$root";root=$(realpath "$root")
 export TMPDIR="$root"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-printf '%s  %s\n' fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63 "$source_tree/src/mVMC/vmcmain.c" b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a "$source_tree/src/sfmt/SFMT.c" > "$root/original.sha256"
+printf '%s  %s\n' da14885da14fd5b98feb27f7c53efd6fa229a4a33d27c30fe44848e6514394f0 "$source_tree/src/mVMC/vmcmain.c" b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a "$source_tree/src/sfmt/SFMT.c" > "$root/original.sha256"
 sha256sum -c "$root/original.sha256"
 perl "$packet/extract-family.pl" "$source_tree/src/mVMC/vmcmain.c" "$root/vmcmain.family.c" > "$root/extraction-family.log"
 perl "$packet/extract-init-stop.pl" "$root/vmcmain.family.c" "$root/vmcmain.stop.c" > "$root/extraction-stop.log"
@@ -27,11 +27,11 @@ done
  "$build/src/StdFace/src/libStdFace_mvmc.a" -lm "$build/src/pfapack/fortran/libpfapack.a" \
  "$build/src/ltl2inv/libltl2inv.a" "$build/lib/libblis.a" -lpthread -lopenblas -lm -ldl -lgfortran -lquadmath
 sha256sum "$root/vmc-init-stop" > "$root/binary.sha256"
-ldd "$root/vmc-init-stop" > "$root/runtime.ldd";! rg 'not found' "$root/runtime.ldd"
+ldd "$root/vmc-init-stop" > "$root/runtime.ldd";! grep "not found" "$root/runtime.ldd"
 for model in HeisenbergChain HubbardChain HubbardTetragonal HubbardTetragonal_MomentumProjection KondoChain HeisenbergChain_cmp HubbardChain_cmp KondoChain_cmp KondoChain_Stot1_cmp GeneralRBM_cmp HeisenbergChain_fsz HubbardChain_fsz KondoChain_fsz;do
  mkdir "$root/$model" "$root/$model/checkpoints"
  cp "$inputs/$model/"*.def "$root/$model/"
- (cd "$root/$model";export MVMC_NATIVE13_INIT_OBSERVER_ROOT="$root/$model/checkpoints";timeout -k 5 120 "$root/vmc-init-stop" -e namelist.def) > "$root/$model.stdout" 2> "$root/$model.stderr"
+ (cd "$root/$model";export MVMC_NATIVE13_INIT_OBSERVER_ROOT="$root/$model/checkpoints";init=();[[ -f initial.def ]] && init=(initial.def);timeout -k 5 120 "$root/vmc-init-stop" -e namelist.def "${init[@]}") > "$root/$model.stdout" 2> "$root/$model.stderr"
 done
 sha256sum -c "$root/original.sha256"
 # NEW outputs require NEW independently recorded build/runtime/source bindings.
