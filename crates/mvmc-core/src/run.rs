@@ -5469,9 +5469,9 @@ mod callback_tests {
     /// Operands depend only on the initial parameters and sampling, so they do
     /// not pass through the amplified CG solve. `rbm_real` has no native C
     /// reference: C ignores RBM in real mode (`vmcmake_real.c` has no RBM code),
-    /// so its step-1 energy 5.9845 equals Rust's with RBM zeroed, versus 6.2287
-    /// with RBM applied. See docs/NUMERICAL_COMPARISONS.md (#379) and
-    /// tmisawa/Julia-mVMC#59.
+    /// so its step-1 energy 5.9845 equals Rust's with RBM zeroed, versus 6.2250
+    /// with RBM applied in sampling and measurement (#669). See
+    /// docs/NUMERICAL_COMPARISONS.md (#379) and tmisawa/Julia-mVMC#59.
     fn assert_c_step_one_operands(case: &str, cg: bool, store: i64, state: &VmcOptimizationState) {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
             "../../tests/fixtures/c_order_sr_operands/{case}-{}-store{store}.txt",
@@ -5596,10 +5596,11 @@ mod callback_tests {
         // ... and Julia's libm (exp, log, sin, cos, ...) in the Metropolis weights, projection and
         // RBM ratios (issue #457).
         let _julia_libm = mvmc_expert_parsers::utils::c_math::use_julia_libm();
-        // The `rbm_fsz` references come from Julia/C samplers that omit the RBM factor
-        // (issue #403); validate their other kernels with the factor switched off.
-        crate::sampling::driver::LEGACY_FSZ_SAMPLER_WITHOUT_RBM
-            .with(|flag| flag.set(case == "rbm_fsz"));
+        // The `rbm_fsz` and `rbm_real` references come from Julia/C samplers that omit the
+        // RBM factor (issues #403, #669); validate their other kernels with the factor
+        // switched off.
+        crate::sampling::driver::LEGACY_SAMPLER_WITHOUT_RBM
+            .with(|flag| flag.set(matches!(case, "rbm_fsz" | "rbm_real")));
         // Kernels outside the reference lineages (no FMA, AVX512, other ARM cores,
         // Accelerate) differ by one ulp per GEMV; the SR solve amplifies that to the
         // step-1 parameters (docs/NUMERICAL_COMPARISONS.md, "BLAS provider matrix",
