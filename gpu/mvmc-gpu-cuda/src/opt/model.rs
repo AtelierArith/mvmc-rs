@@ -101,17 +101,16 @@ impl Model {
         // Julia GPU accepts NExUpdatePath 0..2 with local spins
         // (`cuda_state.jl:47`); path 3 needs general orbitals. DH2/DH4 follow
         // the C counters (#665) and RBM the C complex-normal factors (#667);
-        // Julia GPU supports neither.
+        // Julia GPU supports neither. NSRCG is accepted: PhysCal ignores it as
+        // Julia GPU does (`cuda_runners.jl:27`); Opt runs C SR-CG (#670).
         if data.i_flg_orbital_general != 0
             || m.two_sz != 0
             || !(0..=2).contains(&m.nex_update_path)
-            // Julia GPU PhysCal accepts and ignores NSRCG (`cuda_runners.jl:27`).
-            || (!physcal && m.nsrcg != 0)
             || m.nsplit_size != 1
             || !data.opt_trans.is_empty()
             || mvmc_core::get_all_complex_flag(&data)?
         {
-            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no OptTrans, NSRCG=0 (Opt) and serial execution".into());
+            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no OptTrans and serial execution".into());
         }
         let seed = mvmc_core::resolve_rnd_seed(m.rnd_seed, config.seed, 0, &SingleProcessReducer)?;
         data.modpara.rnd_seed = seed;

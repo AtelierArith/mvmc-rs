@@ -86,7 +86,8 @@ inverse residual, supplied-tape and complete Opt numerical checks under #550.
 
 The current runner requires real normal orbitals, conserved spin in each
 operator pair, Gutzwiller/Jastrow projection, `NExUpdatePath` 0, 1 or 2,
-direct SR (`NSRCG=0`) and serial execution. Local spins (#660), DH2/DH4
+and serial execution. SR is direct (`NSRCG=0`) or C's conjugate gradient
+(`NSRCG≠0`, #670). Local spins (#660), DH2/DH4
 doublon-holon factors (#665) and real RBM factors (#667) are supported.
 OptTrans, complex/general orbitals, `NExUpdatePath=3` and grouped execution
 return errors.
@@ -145,6 +146,108 @@ the local energy, and its `RBMDiff` reads unsaved counters
   as C `SyncModifiedParameter` does, then refreshes the device coefficients.
 
 See `gpu/mvmc-gpu-cuda/tests/fixtures/rbm/README.md` for inputs, bounds and timings.
+
+### SR-CG (`NSRCG≠0`, #670)
+
+Julia GPU Opt rejects CG SR (`ext/cuda_runners.jl:27-28`), so this is new
+functionality. C `StochasticOptCG_real` (`stcopt_cg_impl.c`) defines the
+algorithm, and the Rust CPU `mvmc_core::sr_cg::SampledSrOperator` ports it.
+The kernels are in `src/opt/cg.cu`:
+
+- `cg_moments` forms `<O>`, `<OO>_ii`, `<HO>` and `<H>`. One thread per
+  parameter sums the samples in order, then divides by `Wc` (one sample per
+  walker, `w=1`).
+- `cg_prepare` applies C's diagonal cut. The maximum is non-absolute and
+  starts at `S_00`; a parameter is cut when `S_ii < max * DSROptRedCut`, and
+  `OptFlag` also applies. It then forms `g = -(2 dt)(<HO> - <H><O>)` and sets
+  `x = 0`, `d = r = g`, `delta = r.r`. The threshold is
+  `DSROptCGTol^2 nSmat^2` and `max_iter` is `NSROptCGMaxIter` or `nSmat`.
+- Each iteration forms `q = S d` with `cg_ty` (`y = O^T d`, one block per
+  walker, plus `<O>.d`) and `cg_oy` (`z = y O / Wc - (<O>.d)<O> +
+  DSROptStaDel S_ii d`). It then runs `cg_iterate` (`alpha`, `x`, `r`,
+  `beta`, `delta = beta*delta`, `d`).
+- Every 20th iteration, `cg_alpha` runs instead, followed by `r = g - S x`
+  (`cg_refresh`), as in C.
+- The active set is a mask instead of C's compacted index arrays. Masked
+  entries add exact zeros, and elementwise updates use `_rn` intrinsics
+  without FMA.
+
+**Residency.** The stop test runs on the device: the kernel that ends an
+iteration sets a stop flag when `iter >= max_iter` or `delta < threshold`.
+The host enqueues an upper bound, `NSROptCGMaxIter` or `NPara >= nSmat`
+iterations. Once the flag is set, the remaining kernels return at once, so
+there is no per-iteration host read.
+
+- A 20-step run keeps 0 explicit transfers and 1 synchronization.
+- CG never forms the `np x np` Gram matrix or the Cholesky workspace.
+- The extra memory is `6 np + Wc` doubles, plus a `delta` trace and the
+  per-step iteration counts.
+- The no-op tail costs about 3 launches per iteration. At L128
+  (`nSmat = 772`, about 470 iterations) a solve takes 12 ms.
+
+**Results and failures.** `OptResult::cg_iterations` returns C's iteration
+count for each step, the last `zqp_SRinfo.dat` column. A nonfinite
+increment is C's `info=1`, after which C stops (`vmcmain.c:501-504`). The
+device latches `RESIDENT_CG` (status 7) and publishes nothing.
+
+**Validation** (`opt::cg_tests`). The references are the CPU CG on the GPU's
+own derivatives and energies, and a second CPU run with the samples in
+reverse order. The reordered run is the same operator with a different
+summation order, so it measures CG's own rounding sensitivity.
+
+- **Moments and gradient.** These match the host C-order sums within 4-8 ulp
+  (same operations in the same order). The active set and `nSmat` are exact;
+  the cut margin is reported.
+- **Stopping rule.** It is checked exactly on the device's own `delta`
+  trace: every completed iteration started at `delta >= threshold`, and the
+  loop ended at `max_iter` or below the threshold.
+- **Iteration count.** It equals the CPU count whenever the stop falls in
+  the deterministic regime. This holds for `NSROptCGMaxIter` 7, 25 and 40,
+  for tolerances 1e-4 and 2e-5 (3 and 10 iterations), and for 1e-3
+  (0 iterations).
+- **Deterministic regime.** The two runs differ only in reduction order, a
+  relative perturbation of at most `(W + nSmat) eps` per operation. The
+  per-iteration `delta` must agree within `8 k kappa (W + nSmat) eps`. Here
+  `kappa <= 2 lambda_max / (DSROptStaDel min S_ii)`; the lower eigenvalue
+  bound is rigorous because the covariance is positive semidefinite, and
+  `lambda_max` comes from power iteration. Observed: L16 3e-9 against a
+  budget of 7e-7 through iteration 21, and L128 4e-5 against 1e-4 through
+  iteration 33.
+- **First divergence.** Once `||r||` has fallen well below `||g||`, CG
+  amplifies rounding about 10x per iteration. The CPU's reordered run then
+  diverges from the CPU run as much as the GPU does: from iteration 22-23
+  (L16), 12 (DH L16), 17 (RBM L16) and 34-35 (L128). The first jump comes
+  from the explicit residual refresh at iteration 20. Iterates are compared
+  only before the reordered run reaches 1/64 of the budget.
+- **After the divergence.** Counts that end inside the amplifying regime
+  differ legitimately. With the default tolerance at L128 they are GPU 440
+  and CPU 473 (the reordered CPU run also differs), and both runs satisfy
+  C's stopping rule.
+- **Solution.** With true residuals `r = g - S x` evaluated on the host,
+  `||x_gpu - x_cpu|| <= (||r_gpu|| + ||r_cpu||) / lambda_min`. Observed
+  relative differences are 1.5e-3 (L16, 100 iterations) and 7.6e-4 (L128)
+  after the divergence, and below 6e-15 when the run ends first.
+- **Residual drift.** The device's true residual stays within its
+  recurrence residual plus `8 k (W + nSmat) eps (||S|| ||x|| + ||g||)`.
+- **Failure and repeatability.** A NaN local energy gives a NaN `delta`,
+  which never passes C's stop test. The run reaches `max_iter`, the device
+  latches status 7, and the parameters are unchanged. 20-step runs repeat
+  exactly after an interleaved run.
+
+**Timing** (RTX 3060, CUDA 12.9 image `b129bd583bbe`). The workload is seed
+79, 64 walkers, warmup and interval of 128 proposals per walker, and 20 steps.
+GPU times are warm complete namelist API calls
+(`resident_cg_opt_repeats_twenty_steps`). The CPU time is the release `mvmc`
+CLI (C-order runner, one thread, wall time including output). It runs with
+`NVMCSample 64`, `NVMCWarmUp 1`, and `NVMCInterval 8` (L16) or `1` (L128).
+
+| Workload | GPU CG | GPU direct | CPU CG | CPU direct |
+|---|---|---|---|---|
+| L16 (`nSmat` 100) | 0.14 s | 0.11 s | 0.45 s | 0.45 s |
+| L128 (`nSmat` 772) | 1.49 s | 1.36 s | 14.7 s | 14.1 s |
+
+At L128, the GPU runs 444-537 iterations per step and the CPU 509-684. The
+counts differ because the samples differ.
 
 ### Local spins and exchange proposals (#660)
 

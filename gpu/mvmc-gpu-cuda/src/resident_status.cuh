@@ -11,5 +11,6 @@ enum {
   RESIDENT_PARAMETERS = 4,   // nonfinite parameter update
   RESIDENT_SCHEDULE = 5,     // a walker did not finish its scheduled hops
   RESIDENT_DERIVATIVES = 6,  // nonfinite log-derivative
+  RESIDENT_CG = 7,           // nonfinite SR-CG increment (C StcOpt info=1)
 };
 #endif
