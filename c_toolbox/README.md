@@ -208,6 +208,20 @@ not establish complex transcendental arithmetic, parameter normalization,
 full executable/MPI execution or production sampling trajectories. The older
 Julia RBM definitions and numerical fixture bytes remain historical evidence.
 
+`rbm_complete_inputs.c` reuses the same verbatim reader extract
+(`rbm_contracts_upstream.inc`, `readdef.c` SHA-256 recorded in its header) at
+production sizes. For one section file it requires reader status 0, every
+mapping cell assigned with an index inside the declared width, and every
+flag present. It checks the complete resident GPU RBM inputs of #667
+(`gpu/mvmc-gpu-cuda/tests/fixtures/rbm/`), which the 8-site contract oracle
+cannot hold. It reads definition files only and does not run C sampling:
+
+```sh
+cc -O0 c_toolbox/rbm_complete_inputs.c -o /tmp/rbm_complete
+# section 0-8 (Charge/Spin/General PhysLayer, HiddenLayer, PhysHidden), Nsite, neurons, file
+/tmp/rbm_complete 6 16 4 gpu/mvmc-gpu-cuda/tests/fixtures/rbm/hubbard_rbm_L16/rbm_charge_phys_hidden.def
+```
+
 ## GNU runtime reference
 
 `gcc_divdc3_reference.inc` preserves the GCC 13.3.0 double-mode macro branch and

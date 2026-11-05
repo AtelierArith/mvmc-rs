@@ -11,6 +11,8 @@ mod localspin_tests;
 mod model;
 pub mod physcal;
 #[cfg(test)]
+mod rbm_tests;
+#[cfg(test)]
 mod scope_tests;
 #[cfg(test)]
 mod tests;
@@ -34,6 +36,8 @@ const SOURCE: &str = concat!(
     "\n",
     include_str!("resident_dh.cuh"),
     "\n",
+    include_str!("resident_rbm.cuh"),
+    "\n",
     include_str!("opt/kernels.cu")
 );
 const KERNELS: &[&str] = &[
@@ -53,6 +57,8 @@ const KERNELS: &[&str] = &[
     "opt_system",
     "opt_update",
     "opt_gauge",
+    "opt_rbm_theta",
+    "opt_rbm_diff",
 ];
 
 thread_local! {
@@ -118,7 +124,7 @@ pub struct OptResult {
 }
 
 /// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including DH2/DH4
-/// factors, local spins and `NExUpdatePath` 1/2 exchanges, with direct SR. Unsupported modes fail before allocating CUDA state.
+/// and real RBM factors, local spins and `NExUpdatePath` 1/2 exchanges, with direct SR. Unsupported modes fail before allocating CUDA state.
 pub fn run_gpu_para_opt_from_namelist(
     path: impl AsRef<Path>,
     config: OptConfig,
@@ -297,6 +303,12 @@ impl State {
         let mut resident = ResidentInterval::from_sampler(backend, sampler, model.seed)?;
         resident.set_moves(backend, &model.localspins, model.exchange)?;
         resident.set_doublon_holon(backend, &model.dh, model.n2, model.n4)?;
+        resident.set_rbm(
+            backend,
+            &model.rbm,
+            &model.parameters[model.nproj..model.nproj + model.nrbm],
+            model.nneuron,
+        )?;
         let buffers = with_raw_exec(backend, "mvmc.opt.prepare", |exec| {
             let np = model.np;
             let alloc = |count: usize, size: usize| exec.alloc_bytes((count * size).max(1));
@@ -420,6 +432,39 @@ impl State {
         }
     }
 
+    /// C MakeRBMCnt hidden fields of every walker from its current occupation.
+    /// No-op without RBM terms.
+    fn rbm_theta(&self, exec: &RawExec<'_, '_>, module: &RawModule) -> tenferro_tensor::Result<()> {
+        let Some(r) = &self.resident.rbm else {
+            return Ok(());
+        };
+        let s = &self.resident.sampler;
+        let items = s.geom.walkers * r.nneuron;
+        if items == 0 {
+            return Ok(());
+        }
+        let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        // SAFETY: theta holds walkers*nneuron FP64 values, occ walkers*2*ns i32.
+        unsafe {
+            exec.launch(
+                module.function("opt_rbm_theta")?,
+                (items.div_ceil(128) as u32, 1, 1),
+                128,
+                0,
+                &[
+                    p(&r.theta)?,
+                    p(&s.occ)?,
+                    p(&r.tables)?,
+                    p(&r.weights)?,
+                    i(self.model.ns),
+                    i(r.nneuron),
+                    i(s.geom.walkers),
+                    p(&self.resident.error)?,
+                ],
+            )
+        }
+    }
+
     fn initialize<B: Engine + ?Sized>(&mut self, backend: &mut B) -> Result<(), String> {
         let w = self.resident.sampler.geom.walkers;
         with_raw_exec(backend, "mvmc.opt.initial_model", |exec| {
@@ -475,6 +520,7 @@ impl State {
                         ],
                     )?;
                     self.counts(exec, &module)?;
+                    self.rbm_theta(exec, &module)?;
                     exec.launch(
                         interval.function("interval_resident_factor")?,
                         ((w * m.nq) as u32, 1, 1),
@@ -613,7 +659,10 @@ impl State {
                     self.resident.dh_ptr(exec)?,
                     i(m.n2),
                     i(m.n4),
-                ],
+                ]
+                .into_iter()
+                .chain(self.resident.rbm_args(exec)?)
+                .collect::<Vec<_>>(),
             )
         }
     }
@@ -667,7 +716,10 @@ impl State {
                     self.resident.dh_ptr(exec)?,
                     i(m.n2),
                     i(m.n4),
-                ],
+                ]
+                .into_iter()
+                .chain(self.resident.rbm_args(exec)?)
+                .collect::<Vec<_>>(),
             )?;
         }
         self.energy_fallback(exec, module, values, operators, terms)
@@ -706,8 +758,30 @@ impl State {
                     i(w),
                     p(&self.resident.error)?,
                     p(&self.resident.valid)?,
+                    i(m.nrbm),
                 ],
             )?;
+            if let Some(r) = &self.resident.rbm {
+                exec.launch(
+                    module.function("opt_rbm_diff")?,
+                    (w.div_ceil(64) as u32, 1, 1),
+                    64,
+                    0,
+                    &[
+                        p(&b.derivatives)?,
+                        p(&s.occ)?,
+                        p(&r.theta)?,
+                        p(&r.tables)?,
+                        i(m.np),
+                        i(m.nproj),
+                        i(m.nrbm),
+                        i(m.ns),
+                        i(r.nneuron),
+                        i(w),
+                        p(&self.resident.error)?,
+                    ],
+                )?;
+            }
             let terms = m.energies.len();
             if terms > 0 {
                 self.energy_terms(exec, module, &b.values, &b.operators, terms)?;
@@ -866,8 +940,15 @@ impl State {
                     Arg::I(i32::from(m.shift_dh2)),
                     Arg::I(i32::from(m.shift_dh4)),
                     p(&self.resident.error)?,
+                    match &self.resident.rbm {
+                        Some(r) => p(&r.weights)?,
+                        None => Arg::P(0),
+                    },
+                    i(m.nrbm),
                 ],
             )?;
+            // C VMCMakeSample rebuilds rbmCnt with the new coefficients (vmcmake.c:72-79).
+            self.rbm_theta(exec, module)?;
             self.slater(exec, module)?;
             exec.launch(
                 module.function("opt_fill")?,

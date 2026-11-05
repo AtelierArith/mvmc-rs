@@ -86,9 +86,10 @@ inverse residual, supplied-tape and complete Opt numerical checks under #550.
 
 The current runner requires real normal orbitals, conserved spin in each
 operator pair, Gutzwiller/Jastrow projection, `NExUpdatePath` 0, 1 or 2,
-direct SR (`NSRCG=0`) and serial execution. Local spins (#660) and DH2/DH4
-doublon-holon factors (#665) are supported. RBM, OptTrans, complex/general
-orbitals, `NExUpdatePath=3` and grouped execution return errors.
+direct SR (`NSRCG=0`) and serial execution. Local spins (#660), DH2/DH4
+doublon-holon factors (#665) and real RBM factors (#667) are supported.
+OptTrans, complex/general orbitals, `NExUpdatePath=3` and grouped execution
+return errors.
 
 ### Doublon-holon factors DH2/DH4 (#665)
 
@@ -110,6 +111,40 @@ tape contract; the physics follows C `projection.c` and `parameter.c`:
   `shiftGJ`, with the flags of C `SetFlagShift`.
 
 See `gpu/mvmc-gpu-cuda/tests/fixtures/dh/README.md` for inputs, bounds and timings.
+
+### RBM correlation factors (#667)
+
+Julia GPU rejects RBM (`ext/cuda_state.jl:40`), so this is new functionality
+validated against the Rust CPU C-order kernels. The sampler keeps the Julia GPU
+tape contract. The physics is C `rbm.c` on the complex normal path
+(`vmcmake.c`, `calham.c`, `calgrn.c`, `vmccal.c`) with real coefficients, where
+every quantity is real. C's real path omits the RBM factor from sampling and
+the local energy, and its `RBMDiff` reads unsaved counters
+(tmisawa/Julia-mVMC#59); the resident path does not reproduce that.
+
+- The parameter layout is C's: projection, RBM (`NRBM`, nine sections in C
+  order), Slater. Complex coefficients and `Nneuron≠0` are rejected; every
+  present section must be completely mapped, as the C readers require.
+- Index tables (physical counters per site, family, hidden coefficient and
+  couplings per neuron) and the coefficients are uploaded once at setup
+  (`src/resident_rbm.cuh`). Each walker keeps its hidden fields
+  `theta[w][h]` on the device.
+- `opt_rbm_theta` evaluates C `MakeRBMCnt` after initialization and after
+  every SR update (C rebuilds at each `VMCMakeSample`); an accepted hop or
+  exchange applies C `UpdateRBMCnt` (an exchange is two hops). Both use C's
+  operation order without FMA, so the fields equal the CPU C-order values bit
+  for bit.
+- A proposal adds C `LogRBMRatio` to the projection log-ratio: the physical
+  layer in counter order, and per neuron `|θ'|-|θ|+log((1+e^{-2|θ'|})/(1+e^{-2|θ|}))`,
+  reduced over the block. C takes one `log` per block product instead; the
+  difference is rounding only. `opt_delta` adds the same ratio for one- and
+  two-move operators (right pair first), so energies, Green functions and the
+  full-Pfaffian fallback include it.
+- `opt_rbm_diff` writes the real part of C `RBMDiff` between the projection
+  and Slater columns. The gauge leaves RBM unchanged and rescales Slater only,
+  as C `SyncModifiedParameter` does, then refreshes the device coefficients.
+
+See `gpu/mvmc-gpu-cuda/tests/fixtures/rbm/README.md` for inputs, bounds and timings.
 
 ### Local spins and exchange proposals (#660)
 

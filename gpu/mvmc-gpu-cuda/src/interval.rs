@@ -31,6 +31,8 @@ pub const INTERVAL_MODULE: &str = concat!(
     "\n",
     include_str!("resident_dh.cuh"),
     "\n",
+    include_str!("resident_rbm.cuh"),
+    "\n",
     include_str!("pfaffian_batched.cu"),
     "\n",
     include_str!("interval_delayed.cu"),

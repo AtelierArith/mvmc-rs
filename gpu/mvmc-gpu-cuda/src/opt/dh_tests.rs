@@ -13,6 +13,7 @@ use super::tests::{close, sr_backward_error};
 use super::*;
 use mvmc_core::observables::{calculate_ip_real, calculate_local_energy, slater_elm_diff};
 use mvmc_core::sampling::projection::{log_proj_ratio, make_proj_cnt, update_proj_cnt};
+use mvmc_core::sampling::rbm::{make_rbm_cnt, set_rbm_diff, RbmConfig};
 use mvmc_core::{ThreadedPfaPackWorkspace, VmcOptimizationState};
 use num_complex::Complex64;
 use tenferro_ext::raw_exec::raw_exec_counters;
@@ -75,6 +76,8 @@ pub(crate) struct Evaluation {
     pub kappa: f64,
     pub energy: f64,
     pub derivatives: Vec<f64>,
+    /// C MakeRBMCnt hidden fields (empty without RBM).
+    pub theta: Vec<f64>,
 }
 
 /// The Rust CPU C-order model with the given (real) parameters.
@@ -86,6 +89,7 @@ pub(crate) struct Cpu {
     ne: usize,
     nq: usize,
     nproj: usize,
+    nrbm: usize,
     np: usize,
 }
 
@@ -106,6 +110,7 @@ impl Cpu {
             ne,
             nq,
             nproj,
+            nrbm: model.nrbm,
             np,
         }
     }
@@ -135,7 +140,7 @@ impl Cpu {
     }
 
     /// Frobenius condition of the factored planes of `idx` (after `factor`).
-    fn kappa(&self, idx: &[i64]) -> f64 {
+    pub fn kappa(&self, idx: &[i64]) -> f64 {
         let m = &self.state.slater_matrix;
         let n = idx.len();
         let site = |i: usize| idx[i] as usize + if i >= self.ne { self.ns } else { 0 };
@@ -155,6 +160,12 @@ impl Cpu {
     }
 
     pub fn evaluate(&mut self, cfg: &[i32]) -> Evaluation {
+        self.evaluate_with(cfg, None)
+    }
+
+    /// As [`Self::evaluate`]; RBM derivatives use the given hidden fields
+    /// (C RBMDiff reads the sampled rbmCnt) instead of a fresh MakeRBMCnt.
+    pub fn evaluate_with(&mut self, cfg: &[i32], theta: Option<&[f64]>) -> Evaluation {
         let (idx, ele_cfg, num) = arrays(cfg, self.ns, self.ne);
         let counts = self.counts(&num);
         let ip = self.factor(&idx);
@@ -194,8 +205,26 @@ impl Cpu {
         }
         let mut o = vec![Complex64::new(0., 0.); 2 * (1 + self.np)];
         mvmc_core::observables::set_projection_diff(&mut o, &counts, self.nproj);
+        // Normal C VMCMainCal: RBMDiff between projection and Slater.
+        let mut fresh = vec![];
+        if self.nrbm > 0 {
+            let config = RbmConfig::from(&self.data);
+            let mut cnt = make_rbm_cnt(&num, &config);
+            let nphys = cnt.len()
+                - self.data.modpara.nneuron_charge as usize
+                - self.data.modpara.nneuron_spin as usize
+                - self.data.modpara.nneuron_general as usize;
+            fresh = cnt[nphys..].iter().map(|z| z.re).collect();
+            if let Some(theta) = theta {
+                for (dst, &t) in cnt[nphys..].iter_mut().zip(theta) {
+                    *dst = Complex64::new(t, 0.);
+                }
+            }
+            let offset = 2 * (1 + self.nproj);
+            set_rbm_diff(&mut o[offset..offset + 2 * self.nrbm], &cnt, &num, &config);
+        }
         slater_elm_diff(
-            &mut o[2 * (1 + self.nproj)..],
+            &mut o[2 * (1 + self.nproj + self.nrbm)..],
             z,
             &idx,
             &self.data,
@@ -208,6 +237,7 @@ impl Cpu {
             kappa,
             energy: energy.re,
             derivatives,
+            theta: fresh,
         }
     }
 }

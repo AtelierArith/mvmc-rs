@@ -159,7 +159,9 @@ __device__ __forceinline__ void interval_hop_impl(
     int n, int ne, int nsite, int nqp, int qp_groups, int ngutz, int nproj, double exchange_fraction,
     int* hops_done, int* rebuild, int* accepts, double* delayed = nullptr, double* flush = nullptr,
     int* valid = nullptr, double* fac = nullptr, double* work = nullptr, int* error = nullptr,
-    const int* loc = nullptr, const int* dh = nullptr, int n2dh = 0, int n4dh = 0) {
+    const int* loc = nullptr, const int* dh = nullptr, int n2dh = 0, int n4dh = 0,
+    const int* rbm = nullptr, const double* rbmw = nullptr, double* theta = nullptr,
+    int nneuron = 0) {
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   double* sh = reinterpret_cast<double*>(rs + ((n + 1) & ~1));
@@ -336,13 +338,35 @@ __device__ __forceinline__ void interval_hop_impl(
       if (tid == 0) for (int i = 0; i < nwarp; ++i) dh_delta += scratch[i];
     }
 
+    // RBM log-ratio of the move (resident only): C UpdateRBMCnt applied to
+    // the cached hidden fields, then LogRBMRatio. An exchange is C's two hops
+    // (ri -> rj with spin s, then rj -> ri with 1-s, vmcmake.c:241-251).
+    const bool use_rbm = resident && rbm != nullptr;
+    double* theta_w = use_rbm ? theta + (size_t)w * nneuron : nullptr;
+    const int hops = exchange ? 2 : 1;
+    const int hop_i[2] = {ri, rj}, hop_j[2] = {rj, ri}, hop_s[2] = {spin, 1 - spin};
+    double rbm_delta = 0.0;
+    if (use_rbm) {
+      __syncthreads();  // the DH reduction above may still be reading scratch
+      double part = resident_rbm_hidden_delta(rbm, rbmw, theta_w, nsite, nneuron, hop_i, hop_j,
+                                              hop_s, hops, tid, nt);
+      for (int d = 16; d; d >>= 1) part += __shfl_down_sync(0xffffffff, part, d);
+      if ((tid & 31) == 0) scratch[tid >> 5] = part;
+      __syncthreads();
+      if (tid == 0) {
+        rbm_delta = resident_rbm_phys_delta(rbm, rbmw, nsite, hop_i, hop_j, hop_s, hops);
+        for (int i = 0; i < nwarp; ++i) rbm_delta += scratch[i];
+      }
+    }
+
     if (tid == 0) {
       double ip_new = 0.0;
       for (int q = 0; q < nqp; ++q) ip_new = __dadd_rn(ip_new, __dmul_rn(weights[q], pfnew[q]));
       const double log_new = log(fabs(ip_new) + 1e-100);
       // An exchange keeps every site's charge and doublon count.
-      const double proj = exchange ? 0.0
-          : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj) + dh_delta;
+      const double proj = (exchange ? 0.0
+          : interval_proj_delta(occ_w, nsite, ngutz, nproj, gutz, jast, params, ri, rj) + dh_delta)
+          + rbm_delta;
       const double logratio = 2.0 * (proj + log_new - log_old);
       const double u = (double)t[4] / 4294967296.0;
       // Keep log-space decisions for finite overlaps (including u == 0 and
@@ -375,6 +399,16 @@ __device__ __forceinline__ void interval_hop_impl(
       }
     }
     __syncthreads();
+    // An accepted move advances every hidden field (C copies rbmCntNew).
+    // Each thread rewrites the neurons it read above.
+    if (use_rbm && mvw[5]) {
+      for (int h = tid; h < nneuron; h += nt) {
+        double t = theta_w[h];
+        for (int k = 0; k < hops; ++k)
+          t = resident_rbm_hop(rbm, rbmw, nsite, nneuron, h, t, hop_i[k], hop_j[k], hop_s[k]);
+        theta_w[h] = t;
+      }
+    }
     if (mvw[5] && mvw[7] && recover) {
       // Queued updates belong to the replaced inverse; discard, do not flush.
       pending = 0;
