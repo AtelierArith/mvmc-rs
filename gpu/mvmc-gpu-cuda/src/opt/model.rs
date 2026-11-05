@@ -29,6 +29,12 @@ pub(super) struct Model {
     pub shift_dh4: bool,
     /// DH2 neighbors `[n2][nsite][2]`, then DH4 neighbors `[n4][nsite][4]`.
     pub dh: Vec<i32>,
+    /// RBM coefficients (C `NRBM`), stored between projection and Slater.
+    pub nrbm: usize,
+    /// Hidden neurons: charge, then spin, then general (C `Nneuron`).
+    pub nneuron: usize,
+    /// Device RBM index tables (`resident_rbm.cuh`); empty without RBM.
+    pub rbm: Vec<i32>,
     pub gutz: Vec<i32>,
     pub jast: Vec<i32>,
     pub weights: Vec<f64>,
@@ -94,18 +100,18 @@ impl Model {
         let m = &data.modpara;
         // Julia GPU accepts NExUpdatePath 0..2 with local spins
         // (`cuda_state.jl:47`); path 3 needs general orbitals. DH2/DH4 follow
-        // the C counters (#665); Julia GPU has no DH support.
+        // the C counters (#665) and RBM the C complex-normal factors (#667);
+        // Julia GPU supports neither.
         if data.i_flg_orbital_general != 0
             || m.two_sz != 0
             || !(0..=2).contains(&m.nex_update_path)
             // Julia GPU PhysCal accepts and ignores NSRCG (`cuda_runners.jl:27`).
             || (!physcal && m.nsrcg != 0)
             || m.nsplit_size != 1
-            || data.count_rbm_parameters() != 0
             || !data.opt_trans.is_empty()
             || mvmc_core::get_all_complex_flag(&data)?
         {
-            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no RBM/OptTrans, NSRCG=0 (Opt) and serial execution".into());
+            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no OptTrans, NSRCG=0 (Opt) and serial execution".into());
         }
         let seed = mvmc_core::resolve_rnd_seed(m.rnd_seed, config.seed, 0, &SingleProcessReducer)?;
         data.modpara.rnd_seed = seed;
@@ -195,10 +201,11 @@ impl Model {
             layout.n_dh4,
         );
         let nproj = ng + nj + 6 * n2 + 10 * n4;
+        let nrbm = data.count_rbm_parameters();
         if layout.n_proj != nproj
             || layout.dh2_offset != ng + nj
             || layout.dh4_offset != ng + nj + 6 * n2
-            || nproj > np
+            || nproj + nrbm > np
         {
             return Err("resident GPU projection supports Gutzwiller/Jastrow/DH2/DH4".into());
         }
@@ -243,6 +250,7 @@ impl Model {
                 dh.push(site(r)?);
             }
         }
+        let (rbm, nneuron) = rbm_tables(&data)?;
         data.ensure_orbital_idx_matrix();
         let nsp = data.modpara.nsp_gauss_leg.max(1) as usize;
         let nmp = data.modpara.nmp_trans.unsigned_abs().max(1) as usize;
@@ -296,8 +304,9 @@ impl Model {
                     if i >= ns || j >= ns || oi[i][j] < 0 || oi[j][i] < 0 {
                         return Err("invalid orbital/translation mapping".into());
                     }
-                    let a = nproj + oi[i][j] as usize;
-                    let b = nproj + oi[j][i] as usize;
+                    // C setmemory.c: Slater = Para + NProj + NRBM.
+                    let a = nproj + nrbm + oi[i][j] as usize;
+                    let b = nproj + nrbm + oi[j][i] as usize;
                     if a >= np || b >= np {
                         return Err("orbital parameter outside declared layout".into());
                     }
@@ -457,6 +466,9 @@ impl Model {
             shift_dh2,
             shift_dh4,
             dh,
+            nrbm,
+            nneuron,
+            rbm,
             gutz,
             jast,
             weights: qw,
@@ -476,4 +488,146 @@ impl Model {
             exchange,
         })
     }
+}
+
+/// Device RBM tables in the layout of `resident_rbm.cuh`, and the neuron count.
+///
+/// Indices are relative to the RBM block (C `RBM = Para + NProj`), in C
+/// section order: physical layers (charge, spin, general), hidden layers, then
+/// physical-hidden couplings. Every present section must map each of its
+/// cells exactly once, as the C readers require (`readdef.c` GetInfoRBM_*).
+/// An absent section leaves its cells at -1, which C skips
+/// (`if(NChargeRBM_PhysHiddenIdx>0)`, `rbm.c` MakeRBMCnt/UpdateRBMCnt).
+fn rbm_tables(data: &ExpertModeData) -> Result<(Vec<i32>, usize), String> {
+    if !data.has_rbm_terms() {
+        return if data.count_rbm_parameters() == 0 {
+            Ok((vec![], 0))
+        } else {
+            Err("resident GPU RBM requires complete section mappings".into())
+        };
+    }
+    let m = &data.modpara;
+    if m.nneuron != 0 {
+        return Err("resident GPU RBM requires Nneuron=0 (family neuron counts only)".into());
+    }
+    let ns = m.nsite as usize;
+    let neurons = [m.nneuron_charge, m.nneuron_spin, m.nneuron_general]
+        .map(|n| usize::try_from(n).unwrap_or(usize::MAX));
+    if neurons.iter().any(|&n| n > 4096) {
+        return Err("invalid RBM neuron count".into());
+    }
+    let h_total: usize = neurons.iter().sum();
+    let w = data.rbm_section_sizes();
+    let mut offset = [0usize; 9];
+    for k in 1..9 {
+        offset[k] = offset[k - 1] + w[k - 1];
+    }
+    let first = [0, neurons[0], neurons[0] + neurons[1]];
+    let mut tab = vec![-1i32; 4 * ns + 2 * h_total + 2 * ns * h_total];
+    let fail = |what: &str| format!("resident GPU RBM requires a complete {what} mapping");
+    // One assignment per cell; `section` gives the relative index offset.
+    let mut put = |cell: usize, section: usize, idx: i64, what: &str| -> Result<(), String> {
+        if idx < 0 || idx as usize >= w[section] || tab[cell] != -1 {
+            return Err(fail(what));
+        }
+        tab[cell] = (offset[section] + idx as usize) as i32;
+        Ok(())
+    };
+    let site = |r: i64, n: usize| (r >= 0 && (r as usize) < n).then_some(r as usize);
+    let spin = |s: i64| (0..=1).contains(&s).then_some(s as usize);
+    for t in &data.charge_rbm_phys_layer_terms {
+        let r = site(t.site, ns).ok_or_else(|| fail("ChargeRBM_PhysLayer"))?;
+        put(r, 0, t.idx, "ChargeRBM_PhysLayer")?;
+    }
+    for t in &data.spin_rbm_phys_layer_terms {
+        let r = site(t.site, ns).ok_or_else(|| fail("SpinRBM_PhysLayer"))?;
+        put(ns + r, 1, t.idx, "SpinRBM_PhysLayer")?;
+    }
+    for t in &data.general_rbm_phys_layer_terms {
+        let r = site(t.site, ns).ok_or_else(|| fail("GeneralRBM_PhysLayer"))?;
+        let s = spin(t.spin).ok_or_else(|| fail("GeneralRBM_PhysLayer"))?;
+        put(2 * ns + r + s * ns, 2, t.idx, "GeneralRBM_PhysLayer")?;
+    }
+    let bias = 4 * ns + h_total;
+    for (family, terms) in [
+        (
+            0,
+            data.charge_rbm_hidden_layer_terms
+                .iter()
+                .map(|t| (t.site, t.idx))
+                .collect::<Vec<_>>(),
+        ),
+        (
+            1,
+            data.spin_rbm_hidden_layer_terms
+                .iter()
+                .map(|t| (t.site, t.idx))
+                .collect(),
+        ),
+        (
+            2,
+            data.general_rbm_hidden_layer_terms
+                .iter()
+                .map(|t| (t.site, t.idx))
+                .collect(),
+        ),
+    ] {
+        for (h, idx) in terms {
+            let h = site(h, neurons[family]).ok_or_else(|| fail("RBM_HiddenLayer"))?;
+            put(bias + first[family] + h, 3 + family, idx, "RBM_HiddenLayer")?;
+        }
+    }
+    let coupling = |h: usize, rs: usize| 4 * ns + 2 * h_total + h * 2 * ns + rs;
+    for t in &data.charge_rbm_phys_hidden_terms {
+        let r = site(t.site1, ns).ok_or_else(|| fail("ChargeRBM_PhysHidden"))?;
+        let h = site(t.site2, neurons[0]).ok_or_else(|| fail("ChargeRBM_PhysHidden"))?;
+        put(coupling(h, r), 6, t.idx, "ChargeRBM_PhysHidden")?;
+    }
+    for t in &data.spin_rbm_phys_hidden_terms {
+        let r = site(t.site1, ns).ok_or_else(|| fail("SpinRBM_PhysHidden"))?;
+        let h = site(t.site2, neurons[1]).ok_or_else(|| fail("SpinRBM_PhysHidden"))?;
+        put(coupling(first[1] + h, r), 7, t.idx, "SpinRBM_PhysHidden")?;
+    }
+    for t in &data.general_rbm_phys_hidden_terms {
+        let r = site(t.site1, ns).ok_or_else(|| fail("GeneralRBM_PhysHidden"))?;
+        let s = spin(t.spin).ok_or_else(|| fail("GeneralRBM_PhysHidden"))?;
+        let h = site(t.site2, neurons[2]).ok_or_else(|| fail("GeneralRBM_PhysHidden"))?;
+        put(
+            coupling(first[2] + h, r + s * ns),
+            8,
+            t.idx,
+            "GeneralRBM_PhysHidden",
+        )?;
+    }
+    // Completeness of every present section (C rejects partial mappings).
+    let complete =
+        |cells: Vec<usize>, section: usize| w[section] == 0 || cells.iter().all(|&c| tab[c] >= 0);
+    let phys_hidden = |family: usize, width: usize| -> Vec<usize> {
+        (0..neurons[family])
+            .flat_map(|h| (0..width).map(move |rs| coupling(first[family] + h, rs)))
+            .collect()
+    };
+    let hidden = |family: usize| -> Vec<usize> {
+        (0..neurons[family])
+            .map(|h| bias + first[family] + h)
+            .collect()
+    };
+    if !complete((0..ns).collect(), 0)
+        || !complete((ns..2 * ns).collect(), 1)
+        || !complete((2 * ns..4 * ns).collect(), 2)
+        || !complete(hidden(0), 3)
+        || !complete(hidden(1), 4)
+        || !complete(hidden(2), 5)
+        || !complete(phys_hidden(0, ns), 6)
+        || !complete(phys_hidden(1, ns), 7)
+        || !complete(phys_hidden(2, 2 * ns), 8)
+    {
+        return Err("resident GPU RBM requires complete section mappings".into());
+    }
+    for (family, &count) in neurons.iter().enumerate() {
+        for h in 0..count {
+            tab[4 * ns + first[family] + h] = family as i32;
+        }
+    }
+    Ok((tab, h_total))
 }

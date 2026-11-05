@@ -144,12 +144,13 @@ extern "C" __global__ void opt_counts(const int* cfg, int* occ, int* lookup,
 extern "C" __global__ void opt_derivatives(double* O, const int* counts,
     const int* lookup, const int* columns, const int* xyz, const double* coeff,
     const double* inv, const double* pf, const double* weights, const double* overlaps,
-    int np, int nproj, int ns, int ne, int nq, int batch, int* error, const int* valid) {
+    int np, int nproj, int ns, int ne, int nq, int batch, int* error, const int* valid, int nrbm) {
   int lane=threadIdx.x%32;
   unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
   if (index>=np*batch || *error) return;
   int w=index%batch, p=index/batch, n=2*ne, output=w*np+p;
   if (p<nproj) { if (!lane) O[output]=counts[w*nproj+p]; return; }
+  if (p<nproj+nrbm) return;  // opt_rbm_diff writes the RBM block
   double sum=0, reciprocal=1.0/overlaps[w];
   for (int k=columns[p]+lane;k<columns[p+1];k+=32) {
     // Julia CSC rows decode to (C column, C row) in its column-major view.
@@ -180,7 +181,7 @@ __device__ int opt_site(const int* e,int i,int a,int k,int da,int dk) {
 // include each touched/untouched and touched/touched Jastrow pair exactly once.
 __device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
     const double* params,const int* op,int ns,int ng,int nj,int lane,
-    const int* dh,int n2,int n4) {
+    const int* dh,int n2,int n4,const int* rbm,const double* rbmw,const double* theta_w,int nh) {
   int sites[4]={op[0],op[1],op[3],op[4]}, spins[4]={op[2],op[2],op[5],op[5]};
   int change[4]={1,-1,op[6]==2?1:0,op[6]==2?-1:0};
   int s[4],du[4],dd[4],count=0;
@@ -213,6 +214,15 @@ __device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
     const ResidentOcc before{occ,ns};
     const ResidentOccMoved after{occ,ns,count,s,du,dd};
     result+=resident_dh_delta(before,after,dh,n2,n4,ns,ng+nj,params,lane,32);
+  }
+  // C calham.c/calgrn.c: UpdateRBMCnt for the right pair, then the left pair,
+  // and the RBM ratio of the moved configuration (LogRBMRatio).
+  if(rbm!=nullptr) {
+    const int two=op[6]==2;
+    const int ri[2]={two?op[4]:op[1],op[1]},rj[2]={two?op[3]:op[0],op[0]};
+    const int sp[2]={two?op[5]:op[2],op[2]};
+    result+=resident_rbm_hidden_delta(rbm,rbmw,theta_w,ns,nh,ri,rj,sp,two+1,lane,32);
+    if(!lane) result+=resident_rbm_phys_delta(rbm,rbmw,ns,ri,rj,sp,two+1);
   }
   return opt_warp_sum(result);
 }
@@ -257,7 +267,8 @@ extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
     const int* gutz,const int* jast,const double* params,const double* slater,
     const double* weights,const double* inv,const double* pf,
     int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error,
-    const int* valid,const int* dh,int n2dh,int n4dh) {
+    const int* valid,const int* dh,int n2dh,int n4dh,const int* rbm,const double* rbmw,
+    const double* theta,int nh) {
   int lane=threadIdx.x%32;
   unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
   if(index>=terms*batch || *error) return;
@@ -267,7 +278,8 @@ extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
   int a,k,da,dk;
   int resolved=opt_resolve(op,map,e,ne,ns,a,k,da,dk);
   if(resolved) {if(!lane) values[index]=resolved>0?1:0;return;}
-  double delta=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane,dh,n2dh,n4dh),newip=0;
+  double delta=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane,dh,n2dh,n4dh,
+      rbm,rbmw,rbm?theta+(size_t)w*nh:nullptr,nh),newip=0;
   for(int q=0;q<nq;++q) {
     const double* S=slater+(size_t)q*n2*n2;
     const double* M=inv+((size_t)w*nq+q)*n*n;
@@ -307,7 +319,7 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
     const int* gutz,const int* jast,const double* params,const double* slater,
     const double* weights,const int* valid,double* fac,
     int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error,
-    const int* dh,int n2dh,int n4dh) {
+    const int* dh,int n2dh,int n4dh,const int* rbm,const double* rbmw,const double* theta,int nh) {
   int w=blockIdx.x,tid=threadIdx.x,n=2*ne,n2=2*ns;
   if(w>=batch || *error || opt_all_valid(valid,w,nq)) return;
   extern __shared__ char fallback_mem[];
@@ -332,7 +344,8 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
       continue;
     }
     if(tid<32) {
-      double d=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid,dh,n2dh,n4dh);
+      double d=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid,dh,n2dh,n4dh,
+          rbm,rbmw,rbm?theta+(size_t)w*nh:nullptr,nh);
       if(!tid) s_delta=d;
     }
     for(int i=tid;i<n;i+=blockDim.x)
@@ -449,9 +462,10 @@ extern "C" __global__ void opt_update(double* params,const double* update,
 // d/h generator's mean into the Gutzwiller factors, then shiftGJ. The flags
 // follow C SetFlagShift; the Rust C-order sync_modified_parameter matches.
 extern "C" __global__ void opt_gauge(double* params,double* projection,
-    int np,int ng,int nj,int n2,int n4,int shift,int shift2,int shift4,const int* error) {
+    int np,int ng,int nj,int n2,int n4,int shift,int shift2,int shift4,const int* error,
+    double* rbmw,int nrbm) {
   if(threadIdx.x || blockIdx.x || *error) return;
-  const int gj=ng+nj,nproj=gj+6*n2+10*n4;
+  const int gj=ng+nj,nproj=gj+6*n2+10*n4,slater=nproj+nrbm;
   double g=0;
   if(shift2) for(int x=0;x<2*n2;++x) {
     double* d=params+gj+x;
@@ -474,9 +488,52 @@ extern "C" __global__ void opt_gauge(double* params,double* projection,
   if(g!=0) for(int p=0;p<ng;++p) params[p]=__dadd_rn(params[p],g);
   double average=0,largest=0;
   if(shift) {for(int p=0;p<gj;++p) average=__dadd_rn(average,params[p]);average/=gj;}
-  for(int p=nproj;p<np;++p) largest=fmax(largest,fabs(params[p]));
+  // C rescales only Slater (Para + NProj + NRBM); RBM is left unchanged.
+  for(int p=slater;p<np;++p) largest=fmax(largest,fabs(params[p]));
   double scale=largest>0?4.0/largest:1.0;
   for(int p=0;p<gj;++p) params[p]=__dsub_rn(params[p],average);
   for(int p=0;p<nproj;++p) projection[p]=params[p];
-  for(int p=nproj;p<np;++p) params[p]=__dmul_rn(params[p],scale);
+  if(rbmw) for(int p=0;p<nrbm;++p) rbmw[p]=params[nproj+p];
+  for(int p=slater;p<np;++p) params[p]=__dmul_rn(params[p],scale);
+}
+
+// C MakeRBMCnt hidden fields of every walker from its occupation table: one
+// thread per (walker, neuron), in C operation order (resident_rbm_make).
+extern "C" __global__ void opt_rbm_theta(double* theta,const int* occ,const int* rbm,
+    const double* rbmw,int ns,int nh,int batch,const int* error) {
+  int k=blockIdx.x*blockDim.x+threadIdx.x;
+  if(k>=batch*nh || *error) return;
+  int w=k/nh,h=k%nh;
+  theta[k]=resident_rbm_make(rbm,rbmw,occ+(size_t)w*2*ns,ns,nh,h);
+}
+
+// Real part of C RBMDiff (rbm.c:325-385) into the RBM columns of O, one
+// thread per walker in C order: physical counters (C MakeRBMCnt sums), then
+// per neuron tanh(theta) into its hidden coefficient and x_r tanh(theta)
+// into its couplings. Tied indices accumulate in that order.
+extern "C" __global__ void opt_rbm_diff(double* O,const int* occ,const double* theta,
+    const int* rbm,int np,int nproj,int nrbm,int ns,int nh,int batch,int* error) {
+  int w=blockIdx.x*blockDim.x+threadIdx.x;
+  if(w>=batch || *error) return;
+  double* o=O+(size_t)w*np+nproj;
+  const int* x=occ+(size_t)w*2*ns;
+  for(int p=0;p<nrbm;++p) o[p]=0.0;
+  for(int r=0;r<ns;++r) {
+    if(rbm[r]>=0) o[rbm[r]]+=(double)(x[r]+x[r+ns]-1);
+    if(rbm[ns+r]>=0) o[rbm[ns+r]]+=(double)(x[r]-x[r+ns]);
+  }
+  for(int rs=0;rs<2*ns;++rs) if(rbm[2*ns+rs]>=0) o[rbm[2*ns+rs]]+=(double)(2*x[rs]-1);
+  for(int h=0;h<nh;++h) {
+    const int family=resident_rbm_family(rbm,ns,h),b=rbm[4*ns+nh+h];
+    const int* c=resident_rbm_coupling(rbm,ns,nh,h);
+    const double t=tanh(theta[(size_t)w*nh+h]);
+    if(b>=0) o[b]=__dadd_rn(o[b],t);
+    if(c[0]<0) continue;
+    const int width=family==2?2*ns:ns;
+    for(int rs=0;rs<width;++rs) {
+      const int xi=family==0?x[rs]+x[rs+ns]-1:family==1?x[rs]-x[rs+ns]:2*x[rs]-1;
+      o[c[rs]]=__dadd_rn(o[c[rs]],__dmul_rn((double)xi,t));
+    }
+  }
+  for(int p=0;p<nrbm;++p) if(!isfinite(o[p])) atomicCAS(error,0,RESIDENT_DERIVATIVES);
 }

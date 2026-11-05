@@ -11,6 +11,8 @@ mod dh_tests;
 #[cfg(test)]
 mod localspin_tests;
 #[cfg(test)]
+mod rbm_tests;
+#[cfg(test)]
 mod tests;
 
 const PHYS_SOURCE: &str = concat!(
@@ -46,7 +48,7 @@ pub struct PhysCalResult {
     pub nsamples: usize,
 }
 
-/// Run real normal-orbital Gutzwiller/Jastrow(/DH2/DH4) PhysCal without Lanczos or SR.
+/// Run real normal-orbital Gutzwiller/Jastrow(/DH2/DH4/RBM) PhysCal without Lanczos or SR.
 /// Input parsing, fresh initialization, sampling and final host results belong
 /// to this call. RNG and intermediate configurations/observables stay on CUDA.
 pub fn run_gpu_phys_cal_from_namelist(

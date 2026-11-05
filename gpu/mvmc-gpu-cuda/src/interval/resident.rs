@@ -114,6 +114,20 @@ pub struct ResidentInterval {
     pub(crate) dh: Option<DeviceBuffer>,
     /// DH2 and DH4 table counts.
     pub(crate) dh_tables: (usize, usize),
+    /// RBM tables, coefficients and per-walker hidden fields (#667).
+    pub(crate) rbm: Option<ResidentRbm>,
+}
+
+/// Device RBM state of one ensemble (`resident_rbm.cuh`). The tables and the
+/// neuron count are immutable; `weights` mirrors the RBM block of the
+/// parameter vector (refreshed by the Opt gauge), and `theta[w][h]` is each
+/// walker's hidden field (C `rbmCnt[NRBM_PhysLayerIdx + h]`), rebuilt from the
+/// configuration by C MakeRBMCnt and advanced by C UpdateRBMCnt on accepts.
+pub(crate) struct ResidentRbm {
+    pub tables: DeviceBuffer,
+    pub weights: DeviceBuffer,
+    pub theta: DeviceBuffer,
+    pub nneuron: usize,
 }
 
 impl ResidentInterval {
@@ -167,6 +181,7 @@ impl ResidentInterval {
                 exchange_fraction: 0.0,
                 dh: None,
                 dh_tables: (0, 0),
+                rbm: None,
             })
         })
         .map_err(|e| e.to_string())
@@ -236,6 +251,67 @@ impl ResidentInterval {
             )
         };
         Ok(())
+    }
+
+    /// Upload the RBM index tables and coefficients once at setup and allocate
+    /// the per-walker hidden fields. Without RBM terms nothing is allocated and
+    /// the sampler keeps its projection-only path.
+    pub(crate) fn set_rbm<B: Engine + ?Sized>(
+        &mut self,
+        backend: &mut B,
+        tables: &[i32],
+        weights: &[f64],
+        nneuron: usize,
+    ) -> Result<(), String> {
+        let g = self.sampler.geom;
+        if tables.is_empty() {
+            self.rbm = None;
+            return Ok(());
+        }
+        if tables.len() != 4 * g.nsite + 2 * nneuron + 2 * g.nsite * nneuron
+            || weights.is_empty()
+            || weights.iter().any(|x| !x.is_finite())
+            || tables.iter().any(|&i| i < -1 || i >= weights.len() as i32)
+            || g.walkers.checked_mul(nneuron.max(1)).is_none()
+        {
+            return Err("invalid resident RBM tables".into());
+        }
+        self.rbm = Some(
+            with_raw_exec(backend, "mvmc.resident.rbm", |exec| {
+                let t = exec.alloc_bytes(tables.len() * 4)?;
+                let w = exec.alloc_bytes(weights.len() * 8)?;
+                let theta = exec.alloc_bytes(g.walkers * nneuron.max(1) * 8)?;
+                // SAFETY: allocated with exactly the table/coefficient sizes;
+                // theta is written by the MakeRBMCnt kernel before any read.
+                unsafe {
+                    exec.upload(exec.ptr(&t)?, tables)?;
+                    exec.upload(exec.ptr(&w)?, weights)?;
+                    exec.zero_bytes(exec.ptr(&theta)?, g.walkers * nneuron.max(1) * 8)?;
+                }
+                Ok(ResidentRbm {
+                    tables: t,
+                    weights: w,
+                    theta,
+                    nneuron,
+                })
+            })
+            .map_err(|e| e.to_string())?,
+        );
+        Ok(())
+    }
+
+    /// RBM kernel arguments: tables, coefficients, hidden fields (null
+    /// without RBM) and the neuron count.
+    pub(crate) fn rbm_args(&self, exec: &RawExec<'_, '_>) -> tenferro_tensor::Result<[Arg; 4]> {
+        Ok(match &self.rbm {
+            Some(r) => [
+                Arg::P(exec.ptr(&r.tables)?),
+                Arg::P(exec.ptr(&r.weights)?),
+                Arg::P(exec.ptr(&r.theta)?),
+                Arg::I(r.nneuron as i32),
+            ],
+            None => [Arg::P(0), Arg::P(0), Arg::P(0), Arg::I(0)],
+        })
     }
 
     /// Device address of the DH tables, or null when there are none.
@@ -364,7 +440,10 @@ impl ResidentInterval {
                         self.dh_ptr(exec)?,
                         i(self.dh_tables.0),
                         i(self.dh_tables.1),
-                    ],
+                    ]
+                    .into_iter()
+                    .chain(self.rbm_args(exec)?)
+                    .collect::<Vec<_>>(),
                 )?;
                 self.enqueue_rebuild(exec, &module)?;
             }

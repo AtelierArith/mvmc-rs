@@ -84,18 +84,6 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
             &[("modpara.def", "NSplitSize     1", "NSplitSize     2")],
         ),
         (
-            "rbm",
-            &[
-                ("namelist.def", "", "ChargeRBM_PhysLayer chargerbm.def\n"),
-                (
-                    "chargerbm.def",
-                    "",
-                    "===\nNChargeRBM_PhysLayer 1\nComplexType 0\n===\n===\n\
-                     0 0\n1 0\n2 0\n3 0\n4 0\n5 0\n0 1\n",
-                ),
-            ],
-        ),
-        (
             "complex-orbital",
             &[(
                 "orbitalidx.def",
@@ -360,4 +348,158 @@ fn resident_scope_accepts_doublon_holon_factors() {
                 .all(|&p| p as usize >= model.nproj));
         }
     }
+}
+
+const CHARGE_RBM: &str = "===\nNChargeRBM_PhysLayer 1\nComplexType 0\n===\n===\n\
+                          0 0\n1 0\n2 0\n3 0\n4 0\n5 0\n0 1\n";
+
+/// Host emulation of `resident_rbm_make` (C MakeRBMCnt) from the device tables.
+fn table_theta(model: &Model, num: &[i64]) -> Vec<f64> {
+    let (ns, h) = (model.ns, model.nneuron);
+    let t = &model.rbm;
+    let w = &model.parameters[model.nproj..model.nproj + model.nrbm];
+    (0..h)
+        .map(|k| {
+            let family = t[4 * ns + k];
+            let bias = t[4 * ns + h + k];
+            let c = &t[4 * ns + 2 * h + k * 2 * ns..][..2 * ns];
+            let mut theta = 0.0;
+            if bias >= 0 {
+                theta += w[bias as usize];
+            }
+            if c[0] >= 0 {
+                let width = if family == 2 { 2 * ns } else { ns };
+                let mut sum = 0.0;
+                for rs in 0..width {
+                    let x = match family {
+                        0 => num[rs] + num[rs + ns] - 1,
+                        1 => num[rs] - num[rs + ns],
+                        _ => 2 * num[rs] - 1,
+                    };
+                    sum += w[c[rs] as usize] * x as f64;
+                }
+                theta += sum;
+            }
+            theta
+        })
+        .collect()
+}
+
+/// #667: RBM factors keep the C parameter layout (projection, RBM, Slater).
+/// The device tables reproduce C MakeRBMCnt exactly on random occupations,
+/// and the In*RBM overlays reach the uploaded coefficients.
+#[test]
+fn resident_scope_accepts_rbm_factors() {
+    let local = |rel: &str| Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+    // Only a physical layer and one charge neuron without hidden or coupling
+    // sections: its field stays 0. (C's real initializer divides by Nneuron,
+    // so zero neurons give nonfinite coefficients, which are rejected.)
+    let minimal = edited(
+        "rbm-minimal",
+        &[
+            ("namelist.def", "", "ChargeRBM_PhysLayer chargerbm.def\n"),
+            ("chargerbm.def", "", CHARGE_RBM),
+            ("modpara.def", "", "\nNneuronCharge  1\n"),
+        ],
+    );
+    for (input, nrbm, nneuron, overlays) in [
+        (
+            local("tests/fixtures/rbm/hubbard_rbm_L16/namelist.def"),
+            76,
+            10,
+            true,
+        ),
+        (
+            local("tests/fixtures/rbm/hubbard_rbm_L128/namelist.def"),
+            524,
+            10,
+            true,
+        ),
+        (minimal.clone(), 1, 1, false),
+    ] {
+        for model in [
+            Model::prepare(&input, &cfg()).unwrap(),
+            Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+        ] {
+            let data = &model.data;
+            assert_eq!((model.nrbm, model.nneuron), (nrbm, nneuron), "{input:?}");
+            assert_eq!(model.nrbm, data.count_rbm_parameters());
+            assert_eq!(
+                model.rbm.len(),
+                4 * model.ns + 2 * nneuron + 2 * model.ns * nneuron
+            );
+            // Slater parameter indices start after the RBM block.
+            assert!(model
+                .pa
+                .iter()
+                .chain(&model.pb)
+                .all(|&p| p as usize >= model.nproj + model.nrbm));
+            let rbm: Vec<f64> = data.rbm_parameters().iter().map(|p| p.re).collect();
+            assert_eq!(
+                model.parameters[model.nproj..model.nproj + model.nrbm],
+                rbm[..]
+            );
+            assert!(
+                !overlays || rbm.iter().all(|&p| p != 0.0),
+                "In*RBM overlays"
+            );
+            let config = mvmc_core::sampling::rbm::RbmConfig::from(data);
+            let mut state = 0x9e3779b97f4a7c15u64;
+            for _ in 0..16 {
+                let mut num = vec![0i64; 2 * model.ns];
+                for x in &mut num {
+                    state = state
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
+                    *x = (state >> 63) as i64;
+                }
+                let cnt = mvmc_core::sampling::rbm::make_rbm_cnt(&num, &config);
+                let expected: Vec<u64> = cnt[cnt.len() - nneuron..]
+                    .iter()
+                    .map(|z| z.re.to_bits())
+                    .collect();
+                let actual: Vec<u64> = table_theta(&model, &num)
+                    .iter()
+                    .map(|x| x.to_bits())
+                    .collect();
+                assert_eq!(
+                    actual, expected,
+                    "{input:?}: MakeRBMCnt from the device tables"
+                );
+            }
+        }
+    }
+    fs::remove_dir_all(minimal.parent().unwrap()).unwrap();
+}
+
+/// Complex RBM coefficients are rejected before CUDA, as other complex parameters.
+#[test]
+fn resident_scope_rejects_complex_rbm_coefficients() {
+    let input = edited(
+        "rbm-complex",
+        &[
+            (
+                "namelist.def",
+                "",
+                "ChargeRBM_PhysLayer chargerbm.def\nInChargeRBM_PhysLayer inchargerbm.def\n",
+            ),
+            ("chargerbm.def", "", CHARGE_RBM),
+            ("chargerbm.def", "ComplexType 0", "ComplexType 1"),
+            (
+                "inchargerbm.def",
+                "",
+                "===\nNChargeRBM_PhysLayer 1\n===\n===\n===\n0 0.125 0.0625\n",
+            ),
+        ],
+    );
+    let data = parse(&input);
+    mvmc_core::validation::validate_para_opt(&data).unwrap();
+    for result in [
+        Model::prepare(&input, &cfg()).map(|_| ()),
+        Model::prepare_physcal(&input, &cfg(), None).map(|_| ()),
+    ] {
+        let error = result.expect_err("complex RBM accepted");
+        assert!(error.contains("finite and real"), "{error}");
+    }
+    fs::remove_dir_all(input.parent().unwrap()).unwrap();
 }
