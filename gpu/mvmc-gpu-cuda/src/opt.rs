@@ -12,6 +12,8 @@ mod dh_tests;
 #[cfg(test)]
 mod localspin_tests;
 mod model;
+#[cfg(test)]
+mod opttrans_tests;
 pub mod physcal;
 #[cfg(test)]
 mod rbm_tests;
@@ -139,9 +141,10 @@ pub struct OptResult {
     pub cg_iterations: Vec<i32>,
 }
 
-/// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including DH2/DH4
-/// and real RBM factors, local spins and `NExUpdatePath` 1/2 exchanges, with direct
-/// SR or, for `NSRCG != 0`, the C SR-CG algorithm. Unsupported modes fail before allocating CUDA state.
+/// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including DH2/DH4,
+/// real RBM factors, real OptTrans weights, local spins and `NExUpdatePath`
+/// 1/2 exchanges, with direct SR or, for `NSRCG != 0`, the C SR-CG algorithm.
+/// Unsupported modes fail before allocating CUDA state.
 pub fn run_gpu_para_opt_from_namelist(
     path: impl AsRef<Path>,
     config: OptConfig,
@@ -170,6 +173,8 @@ struct Buffers {
     coefficients: DeviceBuffer,
     operators: DeviceBuffer,
     energies: DeviceBuffer,
+    /// Fixed QP weights for the OptTrans weight refresh (#674).
+    fix: DeviceBuffer,
     lookup: DeviceBuffer,
     counts: DeviceBuffer,
     overlaps: DeviceBuffer,
@@ -365,6 +370,7 @@ impl State {
                 coefficients: upload(exec, &model.coefficients)?,
                 operators: upload(exec, &model.operators)?,
                 energies: upload(exec, &model.energies)?,
+                fix: upload(exec, &model.fix)?,
                 lookup: alloc(w * 2 * model.ns, 4)?,
                 counts: alloc(w * geom.nproj, 4)?,
                 overlaps: alloc(w, 8)?,
@@ -795,6 +801,9 @@ impl State {
                     p(&self.resident.error)?,
                     p(&self.resident.valid)?,
                     i(m.nrbm),
+                    p(&b.fix)?,
+                    i(m.fix.len()),
+                    i(m.nopt),
                 ],
             )?;
             if let Some(r) = &self.resident.rbm {
@@ -1005,6 +1014,10 @@ impl State {
                         None => Arg::P(0),
                     },
                     i(m.nrbm),
+                    i(m.nopt),
+                    p(&s.weights)?,
+                    p(&b.fix)?,
+                    i(m.fix.len()),
                 ],
             )?;
             // C VMCMakeSample rebuilds rbmCnt with the new coefficients (vmcmake.c:72-79).

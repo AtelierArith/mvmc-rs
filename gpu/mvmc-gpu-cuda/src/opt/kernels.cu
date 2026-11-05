@@ -144,13 +144,28 @@ extern "C" __global__ void opt_counts(const int* cfg, int* occ, int* lookup,
 extern "C" __global__ void opt_derivatives(double* O, const int* counts,
     const int* lookup, const int* columns, const int* xyz, const double* coeff,
     const double* inv, const double* pf, const double* weights, const double* overlaps,
-    int np, int nproj, int ns, int ne, int nq, int batch, int* error, const int* valid, int nrbm) {
+    int np, int nproj, int ns, int ne, int nq, int batch, int* error, const int* valid, int nrbm,
+    const double* fix, int nfix, int nopt) {
   int lane=threadIdx.x%32;
   unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
   if (index>=np*batch || *error) return;
   int w=index%batch, p=index/batch, n=2*ne, output=w*np+p;
   if (p<nproj) { if (!lane) O[output]=counts[w*nproj+p]; return; }
   if (p<nproj+nrbm) return;  // opt_rbm_diff writes the RBM block
+  if (p>=np-nopt) {
+    // C calculateOptTransDiff (vmccal.c:639-652): the sector's fixed-weight
+    // overlap over the total, O_i = sum_j QPFixWeight[j] PfM[i*NQPFix+j] / ip.
+    // An invalid plane publishes Pf = 0, its exact value.
+    if (!lane) {
+      const double* pf_w=pf+(size_t)w*nq+(size_t)(p-(np-nopt))*nfix;
+      double ip=0;
+      for (int j=0;j<nfix;++j) ip=__dadd_rn(ip,__dmul_rn(fix[j],pf_w[j]));
+      const double value=ip/overlaps[w];
+      O[output]=value;
+      if (!isfinite(value)) atomicCAS(error,0,RESIDENT_DERIVATIVES);
+    }
+    return;
+  }
   double sum=0, reciprocal=1.0/overlaps[w];
   for (int k=columns[p]+lane;k<columns[p+1];k+=32) {
     // Julia CSC rows decode to (C column, C row) in its column-major view.
@@ -461,11 +476,14 @@ extern "C" __global__ void opt_update(double* params,const double* update,
 // C SyncModifiedParameter (parameter.c:134-176): shiftDH2/shiftDH4 move each
 // d/h generator's mean into the Gutzwiller factors, then shiftGJ. The flags
 // follow C SetFlagShift; the Rust C-order sync_modified_parameter matches.
+// Slater is rescaled, then OptTrans is normalized to maximum amplitude one,
+// and C UpdateQPWeight (qp.c:130-148) rebuilds the full QP weights for the
+// next rebuild and sampling interval.
 extern "C" __global__ void opt_gauge(double* params,double* projection,
     int np,int ng,int nj,int n2,int n4,int shift,int shift2,int shift4,const int* error,
-    double* rbmw,int nrbm) {
+    double* rbmw,int nrbm,int nopt,double* weights,const double* fix,int nfix) {
   if(threadIdx.x || blockIdx.x || *error) return;
-  const int gj=ng+nj,nproj=gj+6*n2+10*n4,slater=nproj+nrbm;
+  const int gj=ng+nj,nproj=gj+6*n2+10*n4,slater=nproj+nrbm,trans=np-nopt;
   double g=0;
   if(shift2) for(int x=0;x<2*n2;++x) {
     double* d=params+gj+x;
@@ -489,12 +507,24 @@ extern "C" __global__ void opt_gauge(double* params,double* projection,
   double average=0,largest=0;
   if(shift) {for(int p=0;p<gj;++p) average=__dadd_rn(average,params[p]);average/=gj;}
   // C rescales only Slater (Para + NProj + NRBM); RBM is left unchanged.
-  for(int p=slater;p<np;++p) largest=fmax(largest,fabs(params[p]));
+  for(int p=slater;p<trans;++p) largest=fmax(largest,fabs(params[p]));
   double scale=largest>0?4.0/largest:1.0;
   for(int p=0;p<gj;++p) params[p]=__dsub_rn(params[p],average);
   for(int p=0;p<nproj;++p) projection[p]=params[p];
   if(rbmw) for(int p=0;p<nrbm;++p) rbmw[p]=params[nproj+p];
-  for(int p=slater;p<np;++p) params[p]=__dmul_rn(params[p],scale);
+  for(int p=slater;p<trans;++p) params[p]=__dmul_rn(params[p],scale);
+  if(nopt) {
+    // OptTrans *= 1/max|OptTrans|; a zero maximum is left unscaled, as the
+    // Rust C-order sync does (C would divide by zero).
+    double xmax=0;
+    for(int i=0;i<nopt;++i) xmax=fmax(xmax,fabs(params[trans+i]));
+    if(xmax>0) {
+      const double ratio=__ddiv_rn(1.0,xmax);
+      for(int i=0;i<nopt;++i) params[trans+i]=__dmul_rn(params[trans+i],ratio);
+    }
+    for(int i=0;i<nopt;++i) for(int j=0;j<nfix;++j)
+      weights[i*nfix+j]=__dmul_rn(params[trans+i],fix[j]);
+  }
 }
 
 // C MakeRBMCnt hidden fields of every walker from its occupation table: one

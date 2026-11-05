@@ -35,6 +35,11 @@ pub(super) struct Model {
     pub nneuron: usize,
     /// Device RBM index tables (`resident_rbm.cuh`); empty without RBM.
     pub rbm: Vec<i32>,
+    /// OptTrans sectors (C `NOptTrans`), the last parameter block (#674).
+    pub nopt: usize,
+    /// Fixed QP weights (C `QPFixWeight`, `NSPGaussLeg*NMPTrans`); empty
+    /// without OptTrans, whose full weights never change.
+    pub fix: Vec<f64>,
     pub gutz: Vec<i32>,
     pub jast: Vec<i32>,
     pub weights: Vec<f64>,
@@ -103,14 +108,17 @@ impl Model {
         // the C counters (#665) and RBM the C complex-normal factors (#667);
         // Julia GPU supports neither. NSRCG is accepted: PhysCal ignores it as
         // Julia GPU does (`cuda_runners.jl:27`); Opt runs C SR-CG (#670).
+        // OptTrans follows C `qp.c`/`vmccal.c` (#674); Julia GPU rejects it.
         if data.i_flg_orbital_general != 0
             || m.two_sz != 0
             || !(0..=2).contains(&m.nex_update_path)
             || m.nsplit_size != 1
-            || !data.opt_trans.is_empty()
             || mvmc_core::get_all_complex_flag(&data)?
         {
-            return Err("resident GPU requires real normal orbitals, NExUpdatePath<=2, no OptTrans and serial execution".into());
+            return Err(
+                "resident GPU requires real normal orbitals, NExUpdatePath<=2 and serial execution"
+                    .into(),
+            );
         }
         let seed = mvmc_core::resolve_rnd_seed(m.rnd_seed, config.seed, 0, &SingleProcessReducer)?;
         data.modpara.rnd_seed = seed;
@@ -208,6 +216,16 @@ impl Model {
         {
             return Err("resident GPU projection supports Gutzwiller/Jastrow/DH2/DH4".into());
         }
+        // C setmemory.c: OptTrans = Para + NProj + NRBM + NSlater, one weight
+        // per sector of NQPFull = NQPFix * NQPOptTrans (readdef.c:763-779).
+        let nopt = data.count_opt_trans_parameters();
+        let slater_end = np - nopt.min(np);
+        if nopt > 0
+            && (data.n_qp_opt_trans.max(1) as usize != nopt
+                || nproj + nrbm + data.slater_params.len() + nopt != np)
+        {
+            return Err("resident GPU OptTrans requires one weight per NQPOptTrans sector".into());
+        }
         let flags: Vec<i32> = (0..np)
             .map(|p| i32::from(data.optimization_flags.get(2 * p).copied().unwrap_or(1) != 0))
             .collect();
@@ -253,8 +271,8 @@ impl Model {
         data.ensure_orbital_idx_matrix();
         let nsp = data.modpara.nsp_gauss_leg.max(1) as usize;
         let nmp = data.modpara.nmp_trans.unsigned_abs().max(1) as usize;
-        let nopt = data.n_qp_opt_trans.max(1) as usize;
-        let nq = nsp * nmp * nopt;
+        let nsector = data.n_qp_opt_trans.max(1) as usize;
+        let nq = nsp * nmp * nsector;
         let weights = data.qp_weights.as_ref().ok_or("missing QP weights")?;
         if weights.qp_full_weight.len() != nq {
             return Err("QP weight geometry mismatch".into());
@@ -272,6 +290,21 @@ impl Model {
             .copied()
             .map(real)
             .collect::<Result<Vec<_>, _>>()?;
+        // C UpdateQPWeight rebuilds the full weights from these after every
+        // parameter update (qp.c:130-148).
+        let fix = if nopt > 0 {
+            if weights.qp_fix_weight.len() * nopt != nq {
+                return Err("QP weight geometry mismatch".into());
+            }
+            weights
+                .qp_fix_weight
+                .iter()
+                .copied()
+                .map(real)
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            vec![]
+        };
         let cs = (0..nq)
             .map(|q| real(weights.spgl_cos_sin[q % nsp]))
             .collect::<Result<Vec<_>, _>>()?;
@@ -306,7 +339,7 @@ impl Model {
                     // C setmemory.c: Slater = Para + NProj + NRBM.
                     let a = nproj + nrbm + oi[i][j] as usize;
                     let b = nproj + nrbm + oi[j][i] as usize;
-                    if a >= np || b >= np {
+                    if a >= slater_end || b >= slater_end {
                         return Err("orbital parameter outside declared layout".into());
                     }
                     pa.push(a as i32);
@@ -468,6 +501,8 @@ impl Model {
             nrbm,
             nneuron,
             rbm,
+            nopt,
+            fix,
             gutz,
             jast,
             weights: qw,

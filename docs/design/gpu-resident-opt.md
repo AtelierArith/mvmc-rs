@@ -88,9 +88,9 @@ The current runner requires real normal orbitals, conserved spin in each
 operator pair, Gutzwiller/Jastrow projection, `NExUpdatePath` 0, 1 or 2,
 and serial execution. SR is direct (`NSRCG=0`) or C's conjugate gradient
 (`NSRCG≠0`, #670). Local spins (#660), DH2/DH4
-doublon-holon factors (#665) and real RBM factors (#667) are supported.
-OptTrans, complex/general orbitals, `NExUpdatePath=3` and grouped execution
-return errors.
+doublon-holon factors (#665), real RBM factors (#667) and real OptTrans
+weights (#674) are supported. Complex/general orbitals, `NExUpdatePath=3`
+and grouped execution return errors.
 
 ### Doublon-holon factors DH2/DH4 (#665)
 
@@ -146,6 +146,48 @@ the local energy, and its `RBMDiff` reads unsaved counters
   as C `SyncModifiedParameter` does, then refreshes the device coefficients.
 
 See `gpu/mvmc-gpu-cuda/tests/fixtures/rbm/README.md` for inputs, bounds and timings.
+
+### OptTrans weights (#674)
+
+Julia GPU rejects variational OptTrans (`ext/cuda_state.jl:43`), so this is
+new functionality validated against the Rust CPU C-order kernels. The sampler
+keeps the Julia GPU tape contract; the physics follows C `qp.c`, `slater.c`,
+`vmccal.c` and `parameter.c`:
+
+- **Layout.** The `NQPOptTrans` weights are the last parameter block, after
+  projection, RBM and Slater (C `setmemory.c:302`). The planes are
+  `NQPFull = NQPFix * NQPOptTrans` with `q = opt*NQPFix + NSPGaussLeg*mp + sp`.
+  Each Slater table composes the OptTrans map before QPTrans, with both signs
+  (C `slater.c:52-90`); setup builds the plane index tables once.
+- **Weights.** The fixed weights `QPFixWeight` are uploaded once at setup.
+  `opt_gauge` applies C `UpdateQPWeight` (`qp.c:130-148`),
+  `QPFullWeight[i*NQPFix+j] = OptTrans[i] * QPFixWeight[j]`, after every SR
+  update and before the rebuild, so sampling, energies and derivatives always
+  use the current weights. There are no new transfers.
+- **Derivatives.** `opt_derivatives` writes C `calculateOptTransDiff`
+  (`vmccal.c:639-652`), `O_i = sum_j QPFixWeight[j] Pf[i*NQPFix+j] / ip`,
+  summed in C's order and divided as C does. An invalid plane publishes
+  `Pf = 0` (#573). The Slater derivatives sum every plane with its full
+  weight, as C `SlaterElmDiff_fcmp` does. The resident path keeps the
+  mathematically correct real-mode slots; C's real path shifts them (#370,
+  tmisawa/Julia-mVMC#55).
+- **Gauge.** As C `SyncModifiedParameter` (`parameter.c:163-176`), the Slater
+  rescale covers the Slater block only, and then
+  `OptTrans *= 1/max|OptTrans|`. If the maximum is zero, the weights are not
+  scaled, as in the Rust C-order sync (C would divide by zero).
+- **Activation and flags.** The resident parser activates OptTrans from an
+  `OptTrans` definition and optimizes every real component, as Julia does.
+  C activates OptTrans only with `-o`. Its `GetInfoOptTrans` writes
+  `OptFlag[fidx]` with an undoubled index (`readdef.c:2400`), so the OptTrans
+  component flags are never written. The Rust C-order CLI keeps them inactive,
+  so its weights stay at their normalized input values. A resident model with
+  those flags cleared reproduces that behaviour
+  (`resident_opt_opttrans_repeats_twenty_steps`).
+
+PhysCal uses the normalized input weights (C normalizes them at setup for both
+modes, `vmcmain.c:276`) and never changes them. See
+`gpu/mvmc-gpu-cuda/tests/fixtures/opttrans/README.md` for inputs, bounds and
+timings.
 
 ### SR-CG (`NSRCG≠0`, #670)
 

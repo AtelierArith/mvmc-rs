@@ -230,6 +230,18 @@ impl Cpu {
             &self.data,
             &self.state,
         );
+        // C calculateOptTransDiff after Slater (vmccal.c:214-216), in the
+        // mathematically correct real-mode slots (#370).
+        let nopt = self.data.count_opt_trans_parameters();
+        if nopt > 0 {
+            let offset = 2 * (1 + self.np - nopt);
+            mvmc_core::observables::opt_trans_diff(
+                &mut o[offset..offset + 2 * nopt],
+                z,
+                &self.data,
+                &self.state.slater_matrix.pf_m,
+            );
+        }
         let derivatives = (0..self.np).map(|p| o[2 * (1 + p)].re).collect();
         Evaluation {
             counts,
