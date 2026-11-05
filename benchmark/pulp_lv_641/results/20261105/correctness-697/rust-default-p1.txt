@@ -1,0 +1,69 @@
+n=128 rounds=1
+pulp::Arch::new() = V3(V3 { sse: Sse, sse2: Sse2, fxsr: Fxsr, sse3: Sse3, ssse3: Ssse3, sse4_1: Sse4_1, sse4_2: Sse4_2, popcnt: Popcnt, avx: Avx, avx2: Avx2, bmi1: Bmi1, bmi2: Bmi2, fma: Fma, lzcnt: Lzcnt })  (x86-v3 feature enabled in this crate)
+cpu: avx2=true fma=true avx512f=false
+check	acceptance self-test (NaN, infinity, out-of-bound, zero bound)	status=PASS
+setup	pulp::Arch::new	ns_per_call=0.70
+setup	is_x86_feature_detected(avx2)	ns_per_call=0.65
+info	K1 initial inverse residual max|M X - I| = 2.169e-14
+check	K1 scalar residual	steps=64	max|M X - I|=7.575e-12	bound=1.140e-8	status=PASS
+check	K1 avx2 residual	steps=64	max|M X - I|=7.575e-12	bound=1.140e-8	status=PASS
+check	K1 avx2 vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*steps*gamma(n+4)*kappa*max|X|=9.021e-8 (kappa=1.197e4)	first_divergent_hop=none	status=PASS
+check	K1 avx2 Pfaffian ratio vs scalar	relative=0.000e0	bound=2.246e-8	status=PASS
+check	K1 pulp-scalar residual	steps=64	max|M X - I|=7.575e-12	bound=1.140e-8	status=PASS
+check	K1 pulp-scalar vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*steps*gamma(n+4)*kappa*max|X|=9.021e-8 (kappa=1.197e4)	first_divergent_hop=none	status=PASS
+check	K1 pulp-scalar Pfaffian ratio vs scalar	relative=0.000e0	bound=2.246e-8	status=PASS
+check	K1 pulp-v3 residual	steps=64	max|M X - I|=7.575e-12	bound=1.140e-8	status=PASS
+check	K1 pulp-v3 vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*steps*gamma(n+4)*kappa*max|X|=9.021e-8 (kappa=1.197e4)	first_divergent_hop=none	status=PASS
+check	K1 pulp-v3 Pfaffian ratio vs scalar	relative=0.000e0	bound=2.246e-8	status=PASS
+check	K1 pulp-v3-fma residual	steps=64	max|M X - I|=7.050e-12	bound=1.140e-8	status=PASS
+check	K1 pulp-v3-fma vs scalar	max_abs=1.333e-11	max_ratio_to_bound=1.478e-4	differing_values=16384/16384	nonfinite=0	bound=2*steps*gamma(n+4)*kappa*max|X|=9.021e-8 (kappa=1.197e4)	first_divergent_hop=0	status=PASS
+check	K1 pulp-v3-fma Pfaffian ratio vs scalar	relative=3.438e-12	bound=2.246e-8	status=PASS
+check	K1 scalar vs fresh inverse	max_abs=6.931e-12	max_ratio_to_bound=7.565e-5	differing_values=16256/16384	nonfinite=0	bound=2*(steps+1)*gamma(n+4)*kappa*max|X|=9.162e-8	status=PASS
+check	K1 avx2 vs fresh inverse	max_abs=6.931e-12	max_ratio_to_bound=7.565e-5	differing_values=16256/16384	nonfinite=0	bound=2*(steps+1)*gamma(n+4)*kappa*max|X|=9.162e-8	status=PASS
+check	K1 pulp-scalar vs fresh inverse	max_abs=6.931e-12	max_ratio_to_bound=7.565e-5	differing_values=16256/16384	nonfinite=0	bound=2*(steps+1)*gamma(n+4)*kappa*max|X|=9.162e-8	status=PASS
+check	K1 pulp-v3 vs fresh inverse	max_abs=6.931e-12	max_ratio_to_bound=7.565e-5	differing_values=16256/16384	nonfinite=0	bound=2*(steps+1)*gamma(n+4)*kappa*max|X|=9.162e-8	status=PASS
+check	K1 pulp-v3-fma vs fresh inverse	max_abs=6.549e-12	max_ratio_to_bound=7.147e-5	differing_values=16384/16384	nonfinite=0	bound=2*(steps+1)*gamma(n+4)*kappa*max|X|=9.162e-8	status=PASS
+## K1 update_one_real (copy+kernel)
+K1 update_one_real (copy+kernel)	copy-only	median_ns=7516.7	min_ns=7516.7	rounds=1
+K1 update_one_real (copy+kernel)	scalar	median_ns=20244.6	min_ns=20244.6	rounds=1
+K1 update_one_real (copy+kernel)	avx2	median_ns=16324.7	min_ns=16324.7	rounds=1
+K1 update_one_real (copy+kernel)	pulp-scalar	median_ns=18679.2	min_ns=18679.2	rounds=1
+K1 update_one_real (copy+kernel)	pulp-v3	median_ns=14611.0	min_ns=14611.0	rounds=1
+K1 update_one_real (copy+kernel)	pulp-v3-fma	median_ns=14728.0	min_ns=14728.0	rounds=1
+K1 update_one_real (copy+kernel)	pulp-v3+Arch::new/call	median_ns=16476.2	min_ns=16476.2	rounds=1
+check	K2 avx2 vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*gamma(5n/2+1)*S_ij (S: magnitude sweep)	status=PASS
+check	K2 avx2-scalar-tail vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*gamma(5n/2+1)*S_ij (S: magnitude sweep)	status=PASS
+check	K2 pulp-scalar vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*gamma(5n/2+1)*S_ij (S: magnitude sweep)	status=PASS
+check	K2 pulp-v3 vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*gamma(5n/2+1)*S_ij (S: magnitude sweep)	status=PASS
+check	K2 pulp-v3-fma vs scalar	max_abs=3.331e-16	max_ratio_to_bound=6.314e-3	differing_values=1040/16384	nonfinite=0	bound=2*gamma(5n/2+1)*S_ij (S: magnitude sweep)	status=PASS
+## K2 dsktf2 rank-2 sweep (copy+kernel)
+K2 dsktf2 rank-2 sweep (copy+kernel)	copy-only	median_ns=5385.5	min_ns=5385.5	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	scalar	median_ns=92611.1	min_ns=92611.1	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	avx2	median_ns=82458.2	min_ns=82458.2	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	avx2-scalar-tail	median_ns=60727.4	min_ns=60727.4	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	pulp-scalar	median_ns=92785.1	min_ns=92785.1	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	pulp-v3	median_ns=89511.9	min_ns=89511.9	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	pulp-v3-fma	median_ns=63620.6	min_ns=63620.6	rounds=1
+check	K3 avx2-rows vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/1	nonfinite=0	bound=2*gamma(2n+1)*S=2.821e-11	status=PASS
+check	K3 pulp-v3-fma vs scalar	max_abs=1.776e-15	max_ratio_to_bound=6.296e-5	differing_values=1/1	nonfinite=0	bound=2*gamma(2n+1)*S=2.821e-11	status=PASS
+check	K3 scalar cancellation a^T M a vs exact 0	max_abs=5.773e-15	max_ratio_to_bound=4.236e-4	differing_values=1/1	nonfinite=0	bound=gamma(2n+1)*S=1.363e-11	status=PASS
+check	K3 avx2-rows cancellation a^T M a vs exact 0	max_abs=5.773e-15	max_ratio_to_bound=4.236e-4	differing_values=1/1	nonfinite=0	bound=gamma(2n+1)*S=1.363e-11	status=PASS
+check	K3 pulp-v3-fma cancellation a^T M a vs exact 0	max_abs=1.806e-15	max_ratio_to_bound=1.325e-4	differing_values=1/1	nonfinite=0	bound=gamma(2n+1)*S=1.363e-11	status=PASS
+## K3 two_hop_bilinear
+K3 two_hop_bilinear	scalar	median_ns=4872.0	min_ns=4872.0	rounds=1
+K3 two_hop_bilinear	avx2-rows(exact,new)	median_ns=4717.9	min_ns=4717.9	rounds=1
+K3 two_hop_bilinear	pulp-scalar-fma	median_ns=7633.1	min_ns=7633.1	rounds=1
+K3 two_hop_bilinear	pulp-v3-fma	median_ns=3781.4	min_ns=3781.4	rounds=1
+check	K4 avx2 vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*gamma(2n+1)*S_ij (S: magnitude recurrence)	status=PASS
+check	K4 pulp-scalar vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*gamma(2n+1)*S_ij (S: magnitude recurrence)	status=PASS
+check	K4 pulp-v3 vs scalar	max_abs=0.000e0	max_ratio_to_bound=0.000e0	differing_values=0/16384	nonfinite=0	bound=2*gamma(2n+1)*S_ij (S: magnitude recurrence)	status=PASS
+check	K4 scalar residual	relative residual=1.599e-16	bound=4eps=8.882e-16	status=PASS
+check	K4 avx2 residual	relative residual=1.599e-16	bound=4eps=8.882e-16	status=PASS
+check	K4 pulp-scalar residual	relative residual=1.599e-16	bound=4eps=8.882e-16	status=PASS
+check	K4 pulp-v3 residual	relative residual=1.599e-16	bound=4eps=8.882e-16	status=PASS
+## K4 solve_sktd
+K4 solve_sktd	scalar	median_ns=60870.4	min_ns=60870.4	rounds=1
+K4 solve_sktd	avx2	median_ns=37951.5	min_ns=37951.5	rounds=1
+K4 solve_sktd	pulp-scalar	median_ns=110301.2	min_ns=110301.2	rounds=1
+K4 solve_sktd	pulp-v3	median_ns=144727.8	min_ns=144727.8	rounds=1
+correctness	PASS	checks=35	failed=0

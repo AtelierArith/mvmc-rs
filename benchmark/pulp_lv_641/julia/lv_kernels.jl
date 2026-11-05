@@ -178,9 +178,143 @@ function k4_turbo!(vt, B, C, n)
     return C
 end
 
+# ---------------------------------------------------------------- numerical acceptance (#697)
+# Finite values within explicit, derived bounds; computed results are never compared through
+# their bit patterns. The bounds mirror ../rust/src/main.rs (see the README).
+const U = eps(Float64) / 2
+gamma(k) = (k * U < 0.5 || error("gamma($k) is not meaningful"); k * U / (1 - k * U))
+inf_norm_rowmajor(a, n) = maximum(sum(abs, @view a[i*n+1:(i+1)*n]) for i in 0:(n-1))
+
+struct Cmp
+    max_abs::Float64
+    max_ratio::Float64
+    differing::Int
+    nonfinite::Int
+    zero_bound_violations::Int
+end
+ok(c::Cmp) = c.nonfinite == 0 && c.zero_bound_violations == 0 && c.max_ratio <= 1
+
+function compare(a, b, bound)
+    length(a) == length(b) || error("length mismatch")
+    max_abs = 0.0; max_ratio = 0.0; differing = 0; nonfinite = 0; zb = 0
+    for k in eachindex(a, b)
+        x, y, bk = a[k], b[k], bound(k)
+        if !(isfinite(x) && isfinite(y) && isfinite(bk))
+            nonfinite += 1
+            continue
+        end
+        d = abs(x - y)
+        max_abs = max(max_abs, d)
+        differing += x != y
+        if bk > 0
+            max_ratio = max(max_ratio, d / bk)
+        elseif d > 0
+            zb += 1
+        end
+    end
+    return Cmp(max_abs, max_ratio, differing, nonfinite, zb)
+end
+
+fmt(x) = string(round(x; sigdigits=4))
+
+mutable struct Acceptance
+    checks::Int
+    failed::Vector{String}
+end
+Acceptance() = Acceptance(0, String[])
+
+function record!(acc::Acceptance, label, passed::Bool, detail)
+    acc.checks += 1
+    println("check\t", label, "\t", detail, "\tstatus=", passed ? "PASS" : "FAIL")
+    passed || push!(acc.failed, label)
+    return passed
+end
+
+function compare!(acc::Acceptance, label, a, b, bound, why)
+    c = compare(a, b, bound)
+    record!(acc, label, ok(c),
+            "max_abs=$(fmt(c.max_abs))\tmax_ratio_to_bound=$(fmt(c.max_ratio))\t" *
+            "differing_values=$(c.differing)/$(length(a))\tnonfinite=$(c.nonfinite)\tbound=$why")
+end
+
+function finish!(acc::Acceptance)
+    if isempty(acc.failed)
+        println("correctness\tPASS\tchecks=$(acc.checks)\tfailed=0")
+    else
+        println("correctness\tFAIL\tchecks=$(acc.checks)\tfailed=$(length(acc.failed))\t",
+                join(acc.failed, ","))
+        exit(1)
+    end
+end
+
+function acceptance_self_test()
+    tight = _ -> 1e-15
+    @assert ok(compare([1.0], [1.0], tight))
+    @assert !ok(compare([NaN], [0.0], tight)) "NaN accepted"
+    @assert !ok(compare([Inf], [Inf], tight)) "infinity accepted"
+    @assert !ok(compare([1.0 + 1e-12], [1.0], tight)) "out-of-bound value accepted"
+    @assert !ok(compare([1e-300], [0.0], _ -> 0.0)) "zero bound accepted a difference"
+    @assert ok(compare([0.0], [-0.0], _ -> 0.0)) "signed zeros are equal"
+    println("check\tacceptance self-test (NaN, infinity, out-of-bound, zero bound)\tstatus=PASS")
+end
+
+# K2 sweep on magnitudes (subtractions become additions): bounds every partial result.
+function k2_magnitude!(A::Matrix{Float64}, n)
+    alpha = 1.0 / n
+    A .= abs.(A)
+    k = n
+    while k >= 3
+        kk = k - 1
+        for j in 1:k-2
+            t1 = alpha * A[j, kk]
+            t2 = alpha * A[j, k]
+            for i in 1:j-1
+                A[i, j] = (A[i, j] + A[i, k] * t1) + A[i, kk] * t2
+            end
+            A[j, j] = 0.0
+        end
+        k -= 2
+    end
+    return A
+end
+
+# K4 recurrences on magnitudes.
+function k4_magnitude!(vt, B, S, n)
+    for w in 1:n
+        S[2, w] = abs(B[1, w]) / abs(vt[1])
+        for i in 3:2:n
+            S[i+1, w] = (abs(B[i, w]) + S[i-1, w] * abs(vt[i-1])) / abs(vt[i])
+        end
+        S[n-1, w] = abs(B[n, w]) / abs(vt[n-1])
+        for i in (n-2):-2:2
+            S[i-1, w] = (abs(B[i, w]) + S[i+1, w] * abs(vt[i])) / abs(vt[i-1])
+        end
+    end
+    return S
+end
+
+# Relative residual of the skew-tridiagonal relations that k4_plain! solves (1-based):
+# forward -vt[i] C[i+1] + vt[i-1] C[i-1] = B[i] (i odd; -vt[1] C[2] = B[1]),
+# backward vt[i-1] C[i-1] - vt[i] C[i+1] = B[i] (i even; vt[n-1] C[n-1] = B[n]).
+function k4_residual(vt, B, C, n)
+    worst = 0.0
+    rel(lhs, scale, rhs) = (s = scale + abs(rhs); s > 0 ? abs(lhs - rhs) / s : 0.0)
+    for w in 1:n
+        worst = max(worst, rel(-vt[1] * C[2, w], abs(vt[1] * C[2, w]), B[1, w]))
+        for i in 3:2:n
+            p = -vt[i] * C[i+1, w]; q = vt[i-1] * C[i-1, w]
+            worst = max(worst, rel(p + q, abs(p) + abs(q), B[i, w]))
+        end
+        worst = max(worst, rel(vt[n-1] * C[n-1, w], abs(vt[n-1] * C[n-1, w]), B[n, w]))
+        for i in (n-2):-2:2
+            p = vt[i-1] * C[i-1, w]; q = -vt[i] * C[i+1, w]
+            worst = max(worst, rel(p + q, abs(p) + abs(q), B[i, w]))
+        end
+    end
+    return worst
+end
+
 # ---------------------------------------------------------------- harness
-bits_differ(a, b) = count(i -> reinterpret(UInt64, a[i]) != reinterpret(UInt64, b[i]), eachindex(a))
-max_rel(a, b) = maximum(abs.(a .- b)) / maximum(abs.(b))
 
 function run_bench(title, rounds, iters, variants)
     for (_, f) in variants
@@ -216,6 +350,8 @@ function main()
             "register_size=$(VB.register_size()) bytes, pick_vector_width(Float64)=$(VB.pick_vector_width(Float64)), ",
             "fma=$(VB.fma_fast()) avx512f=$(VB.has_feature(Val(:x86_64_avx512f)))")
     println("BLAS: ", BLAS.get_config())
+    acceptance_self_test()
+    acc = Acceptance()
     rng_state = Ref(UInt64(0x9E3779B97F4A7C15))
     function rnd()
         x = rng_state[]
@@ -224,7 +360,8 @@ function main()
         return Float64(x >> 11) / Float64(UInt64(1) << 53) * 2 - 1
     end
 
-    # K1: genuine inverse, chain of 64 hops, residual check
+    # K1: genuine inverse, chain of 64 hops. Bounds as ../rust (README "Correctness"):
+    # residual r0 + (steps+1) gamma(n+4) |M| |X|, orders 2 steps gamma(n+4) kappa max|X|.
     M = zeros(n, n)
     for i in 1:n, j in (i+1):n
         v = rnd(); M[i, j] = v; M[j, i] = -v
@@ -233,23 +370,57 @@ function main()
     rowmajor(A) = vec(permutedims(A))
     inv0 = rowmajor(X0)
     resid(Mr, x) = maximum(abs.(reshape(Mr, n, n)' * reshape(x, n, n)' - I))
-    results = Dict{String,Vector{Float64}}()
+    steps = 64
+    b = gamma(n + 4)
+    r0 = resid(rowmajor(M), inv0)
+    println("info\tK1 initial inverse residual max|M X - I| = ", fmt(r0))
+    results = Dict{String,Tuple{Vector{Float64},Float64,Vector{Float64}}}()
+    reference = Vector{Vector{Float64}}()
     for (name, f) in (("simd", k1_simd!), ("turbo", k1_turbo!))
         st = Ref(UInt64(12345))
         nxt() = (y = st[]; y ⊻= y << 13; y ⊻= y >> 7; y ⊻= y << 17; st[] = y; y)
         unif() = Float64(nxt() >> 11) / Float64(UInt64(1) << 53) * 2 - 1
         mr = rowmajor(M); xw = copy(inv0); v1 = zeros(n); v2 = zeros(n); pf = 1.0
-        for _ in 1:64
+        first_divergence = "none"
+        for hop in 1:steps
             msa = Int(nxt() % UInt64(n))
             slt = [unif() for _ in 1:n]; slt[msa+1] = 0.0
             pf = f(xw, slt, v1, v2, n, msa, pf)
             for j in 0:(n-1)
                 mr[msa*n+j+1] = slt[j+1]; mr[j*n+msa+1] = -slt[j+1]
             end
+            if name == "simd"
+                push!(reference, copy(xw))
+            elseif first_divergence == "none" && xw != reference[hop]
+                first_divergence = string(hop - 1)
+            end
         end
-        results[name] = xw
-        println("check\tK1 $name\tsteps=64\tresidual=", resid(mr, xw),
-                name == "turbo" ? "\tbits_differ_vs_simd=$(bits_differ(xw, results["simd"]))/$(n*n)\tmax_rel_vs_simd=$(max_rel(xw, results["simd"]))" : "")
+        results[name] = (xw, pf, mr)
+        res = resid(mr, xw)
+        res_bound = r0 + (steps + 1) * b * inf_norm_rowmajor(mr, n) * inf_norm_rowmajor(xw, n)
+        record!(acc, "K1 $name residual", isfinite(res) && res <= res_bound,
+                "steps=$steps\tmax|M X - I|=$(fmt(res))\tbound=$(fmt(res_bound))")
+        if name == "turbo"
+            x0, pf0, _ = results["simd"]
+            kappa = inf_norm_rowmajor(mr, n) * inf_norm_rowmajor(x0, n)
+            entry = 2 * steps * b * kappa * maximum(abs, x0)
+            compare!(acc, "K1 turbo vs simd", xw, x0, _ -> entry,
+                     "2*steps*gamma(n+4)*kappa*max|X|=$(fmt(entry)) (kappa=$(fmt(kappa)))\t" *
+                     "first_divergent_hop=$first_divergence")
+            pf_rel = abs((pf - pf0) / pf0)
+            pf_bound = 2 * steps * b * kappa
+            record!(acc, "K1 turbo Pfaffian ratio vs simd", isfinite(pf) && pf_rel <= pf_bound,
+                    "relative=$(fmt(pf_rel))\tbound=$(fmt(pf_bound))")
+        end
+    end
+    let mr = results["simd"][3]
+        fresh = rowmajor(inv(Matrix(reshape(mr, n, n)')))
+        kappa = inf_norm_rowmajor(mr, n) * inf_norm_rowmajor(fresh, n)
+        entry = 2 * (steps + 1) * b * kappa * maximum(abs, fresh)
+        for name in ("simd", "turbo")
+            compare!(acc, "K1 $name vs fresh inverse", results[name][1], fresh, _ -> entry,
+                     "2*(steps+1)*gamma(n+4)*kappa*max|X|=$(fmt(entry))")
+        end
     end
     let msa = 37, slt = [rnd() for _ in 1:n]
         slt[msa+1] = 0.0
@@ -268,7 +439,11 @@ function main()
         v = rnd(); A0[i, j] = v; A0[j, i] = -v
     end
     rs = k2_simd!(copy(A0), n); rt = k2_turbo!(copy(A0), n)
-    println("check\tK2 turbo\tbits_differ_vs_simd=$(bits_differ(rt, rs))/$(n*n)\tmax_rel_vs_simd=$(max_rel(rt, rs))")
+    # Two evaluations differ by at most 2 gamma(5n/2+1) S_ij, S the magnitude sweep.
+    let S = k2_magnitude!(copy(A0), n), factor = 2 * gamma(5 * div(n, 2) + 1)
+        compare!(acc, "K2 turbo vs simd", rt, rs, k -> factor * S[k],
+                 "2*gamma(5n/2+1)*S_ij (S: magnitude sweep)")
+    end
     let w0 = copy(A0), w1 = copy(A0), w2 = copy(A0)
         run_bench("K2 dsktf2 rank-2 sweep (copy+kernel)", rounds, 1000, [
             "copy-only" => () -> copyto!(w0, A0),
@@ -280,7 +455,20 @@ function main()
     # K3
     a = [rnd() for _ in 1:n]; b = [rnd() for _ in 1:n]
     r0 = k3_plain(inv0, n, a, b); r1 = k3_turbo(inv0, n, a, b)
-    println("check\tK3 turbo\tbitwise_equal=$(r0 === r1)\trel=$(abs((r1 - r0) / r0))")
+    # Any order of either summation level: within gamma(2n+1) S of the exact value,
+    # S = sum_i |b_i| sum_j |M_ij a_j|. a^T X a = 0 exactly only for an exactly skew X; the
+    # LAPACK inverse is not, so the cancellation case uses (X - X^T)/2, exactly skew because
+    # fl(x - y) = -fl(y - x).
+    k3_scale(X, bv, av) = sum(abs(bv[i+1]) * sum(abs(X[i*n+j+1] * av[j+1]) for j in 0:(n-1)) for i in 0:(n-1))
+    skew0 = rowmajor((X0 .- X0') ./ 2)
+    let s3 = k3_scale(inv0, b, a), s0 = k3_scale(skew0, a, a), g = gamma(2 * n + 1)
+        compare!(acc, "K3 turbo vs plain", [r1], [r0], _ -> 2 * g * s3,
+                 "2*gamma(2n+1)*S=$(fmt(2 * g * s3))")
+        for (name, f) in (("plain", k3_plain), ("turbo", k3_turbo))
+            compare!(acc, "K3 $name cancellation a^T M a vs exact 0", [f(skew0, n, a, a)], [0.0],
+                     _ -> g * s0, "gamma(2n+1)*S=$(fmt(g * s0))")
+        end
+    end
     sink = Ref(0.0)
     run_bench("K3 two_hop_bilinear", rounds, 5000, [
         "julia-plain(C order)" => () -> (sink[] += k3_plain(inv0, n, a, b)),
@@ -292,11 +480,22 @@ function main()
     B = reshape([rnd() for _ in 1:n*n], n, n)
     C0 = zeros(n, n); C1 = zeros(n, n)
     k4_plain!(vt, B, C0, n); k4_turbo!(vt, B, C1, n)
-    println("check\tK4 turbo\tbits_differ_vs_plain=$(bits_differ(C1, C0))/$(n*n)")
+    # Two evaluations differ by at most 2 gamma(2n+1) S_ij (S: magnitude recurrence); each
+    # solution satisfies the relations with relative residual <= 4 eps.
+    let S = k4_magnitude!(vt, B, zeros(n, n), n), factor = 2 * gamma(2 * n + 1)
+        compare!(acc, "K4 turbo vs plain", C1, C0, k -> factor * S[k],
+                 "2*gamma(2n+1)*S_ij (S: magnitude recurrence)")
+        for (name, C) in (("plain", C0), ("turbo", C1))
+            res = k4_residual(vt, B, C, n)
+            record!(acc, "K4 $name residual", all(isfinite, C) && res <= 4 * eps(Float64),
+                    "relative residual=$(fmt(res))\tbound=4eps=$(fmt(4 * eps(Float64)))")
+        end
+    end
     run_bench("K4 solve_sktd", rounds, 2000, [
         "julia-plain(per column)" => () -> k4_plain!(vt, B, C0, n),
         "julia-turbo(across columns)" => () -> k4_turbo!(vt, B, C1, n),
     ])
+    finish!(acc)
 end
 
 main()

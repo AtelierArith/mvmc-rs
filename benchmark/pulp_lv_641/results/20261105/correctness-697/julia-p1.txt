@@ -1,0 +1,33 @@
+n=128 rounds=1 julia=1.13.1 cpu=haswell threads=1
+LoopVectorization=0.12.174 VectorizationBase=0.21.74 register_size=static(32) bytes, pick_vector_width(Float64)=static(4), fma=static(true) avx512f=static(false)
+BLAS: LBTConfig([ILP64] libopenblas64_.so)
+check	acceptance self-test (NaN, infinity, out-of-bound, zero bound)	status=PASS
+info	K1 initial inverse residual max|M X - I| = 1.263e-14
+check	K1 simd residual	steps=64	max|M X - I|=8.072e-12	bound=1.14e-8	status=PASS
+check	K1 turbo residual	steps=64	max|M X - I|=6.571e-12	bound=1.14e-8	status=PASS
+check	K1 turbo vs simd	max_abs=3.4e-12	max_ratio_to_bound=3.769e-5	differing_values=16384/16384	nonfinite=0	bound=2*steps*gamma(n+4)*kappa*max|X|=9.021e-8 (kappa=11970.0)	first_divergent_hop=0	status=PASS
+check	K1 turbo Pfaffian ratio vs simd	relative=1.74e-13	bound=2.246e-8	status=PASS
+check	K1 simd vs fresh inverse	max_abs=7.68e-12	max_ratio_to_bound=8.382e-5	differing_values=16384/16384	nonfinite=0	bound=2*(steps+1)*gamma(n+4)*kappa*max|X|=9.162e-8	status=PASS
+check	K1 turbo vs fresh inverse	max_abs=5.318e-12	max_ratio_to_bound=5.804e-5	differing_values=16383/16384	nonfinite=0	bound=2*(steps+1)*gamma(n+4)*kappa*max|X|=9.162e-8	status=PASS
+## K1 update_one_real (copy+kernel)
+K1 update_one_real (copy+kernel)	copy-only	median_ns=5271.6	min_ns=5271.6	rounds=1
+K1 update_one_real (copy+kernel)	julia-simd(mVMC form)	median_ns=14973.9	min_ns=14973.9	rounds=1
+K1 update_one_real (copy+kernel)	julia-turbo	median_ns=14007.5	min_ns=14007.5	rounds=1
+check	K2 turbo vs simd	max_abs=6.661e-16	max_ratio_to_bound=0.008511	differing_values=1414/16384	nonfinite=0	bound=2*gamma(5n/2+1)*S_ij (S: magnitude sweep)	status=PASS
+## K2 dsktf2 rank-2 sweep (copy+kernel)
+K2 dsktf2 rank-2 sweep (copy+kernel)	copy-only	median_ns=5422.9	min_ns=5422.9	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	julia-simd(PfaPack form)	median_ns=79497.5	min_ns=79497.5	rounds=1
+K2 dsktf2 rank-2 sweep (copy+kernel)	julia-turbo	median_ns=67436.0	min_ns=67436.0	rounds=1
+check	K3 turbo vs plain	max_abs=3.553e-15	max_ratio_to_bound=0.0001259	differing_values=1/1	nonfinite=0	bound=2*gamma(2n+1)*S=2.821e-11	status=PASS
+check	K3 plain cancellation a^T M a vs exact 0	max_abs=7.772e-16	max_ratio_to_bound=5.702e-5	differing_values=1/1	nonfinite=0	bound=gamma(2n+1)*S=1.363e-11	status=PASS
+check	K3 turbo cancellation a^T M a vs exact 0	max_abs=6.661e-16	max_ratio_to_bound=4.888e-5	differing_values=1/1	nonfinite=0	bound=gamma(2n+1)*S=1.363e-11	status=PASS
+## K3 two_hop_bilinear
+K3 two_hop_bilinear	julia-plain(C order)	median_ns=13400.9	min_ns=13400.9	rounds=1
+K3 two_hop_bilinear	julia-turbo	median_ns=2115.7	min_ns=2115.7	rounds=1
+check	K4 turbo vs plain	max_abs=3.553e-14	max_ratio_to_bound=0.01387	differing_values=13263/16384	nonfinite=0	bound=2*gamma(2n+1)*S_ij (S: magnitude recurrence)	status=PASS
+check	K4 plain residual	relative residual=1.599e-16	bound=4eps=8.882e-16	status=PASS
+check	K4 turbo residual	relative residual=1.962e-16	bound=4eps=8.882e-16	status=PASS
+## K4 solve_sktd
+K4 solve_sktd	julia-plain(per column)	median_ns=138380.5	min_ns=138380.5	rounds=1
+K4 solve_sktd	julia-turbo(across columns)	median_ns=70076.8	min_ns=70076.8	rounds=1
+correctness	PASS	checks=13	failed=0
