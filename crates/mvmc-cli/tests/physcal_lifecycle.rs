@@ -1,6 +1,7 @@
-//! Actual CLI-process observation against immutable, independently generated
-//! C parameter stages and Julia sampling records. No Rust expected generator,
-//! C/Julia invocation or toolbox access. C stage replay is not full C sampling.
+//! Actual CLI-process observation against independently generated C 1.4.0
+//! parameter stages. No Rust expected generator, C invocation or toolbox access.
+//! C stage replay is not full C sampling; the former Julia sampling records were
+//! removed with the Julia CPU references (#695).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -59,14 +60,6 @@ fn success(result: Output) {
 }
 
 fn integers(path: &Path) -> Vec<u128> {
-    fs::read_to_string(path)
-        .unwrap()
-        .split_whitespace()
-        .map(|x| x.parse().unwrap())
-        .collect()
-}
-
-fn configuration(path: &Path) -> Vec<i64> {
     fs::read_to_string(path)
         .unwrap()
         .split_whitespace()
@@ -149,8 +142,6 @@ fn check(model: &str) {
     assert!(provenance.contains(
         "source_readdef_sha256=9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3"
     ));
-    let julia = fs::read_to_string(root.join("provenance.txt")).unwrap();
-    assert!(julia.contains("julia=1.13.1\n") && julia.contains("seed=1\n"));
     // Direct fixture paths: unchanged input files, seed and sampling settings.
     let directory = OwnedDir::new();
     let off = directory.0.join("off");
@@ -206,39 +197,15 @@ fn check(model: &str) {
         );
     }
     assert_rng(
-        &trace.join("seeded"),
-        &root.join("seeded/next624.txt"),
-        &root.join("seeded/draw-count.txt"),
-    );
-    assert_rng(
         &trace.join("initialized-clone"),
         &native.join("initialized-next624.txt"),
         &native.join("initialized-draw-count.txt"),
-    );
-    assert_rng(
-        &trace.join("sample-0"),
-        &root.join("sample-0/next624.txt"),
-        &root.join("sample-0/draw-count.txt"),
     );
     assert_parameters(
         &trace.join("sample-0/parameters.txt"),
         &native.join("synchronized-parameters.txt"),
         false,
     );
-    for name in [
-        "ele_idx",
-        "ele_cfg",
-        "ele_num",
-        "ele_proj_cnt",
-        "ele_spn",
-        "counter",
-    ] {
-        assert_eq!(
-            configuration(&trace.join("sample-0").join(format!("{name}.txt"))),
-            configuration(&root.join("sample-0").join(format!("{name}.txt"))),
-            "{model} independent {name}"
-        );
-    }
     for stage in ["fixed-loaded", "overlaid", "synchronized"] {
         assert!(
             !trace.join(stage).join("next624.txt").exists(),
@@ -275,12 +242,12 @@ fn check(model: &str) {
 }
 
 #[test]
-fn cli_dh_overlays_match_independent_c_stages_and_julia_rng_config() {
+fn cli_dh_overlays_match_independent_c_stages() {
     check("hubbard_chain_dh_overlays");
 }
 
 #[test]
-fn cli_dh_opttrans_match_independent_c_stages_and_julia_rng_config() {
+fn cli_dh_opttrans_match_independent_c_stages() {
     check("hubbard_chain_dh_opttrans");
 }
 

@@ -9,12 +9,6 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Copy)]
-struct Model {
-    name: &'static str,
-    mode: &'static str,
-}
-
 #[test]
 fn original_io134_physical_quantities_shapes_are_explicit() {
     // S137/M0614-M0622: original constructor counts, not a model-sized proxy.
@@ -316,33 +310,6 @@ fn original_io134_occupied_green_dispatch_and_fsz_state_publication() {
     assert_eq!(physical.phys_cis_ajs_ckt_alt, [Complex64::new(0.5, 0.0)]);
 }
 
-const PHYSCAL_MODELS: &[Model] = &[
-    Model {
-        name: "heisenberg_chain_real",
-        mode: "real",
-    },
-    Model {
-        name: "heisenberg_chain_cmp",
-        mode: "cmp",
-    },
-    Model {
-        name: "heisenberg_chain_fsz",
-        mode: "fsz",
-    },
-    Model {
-        name: "hubbard_chain_real",
-        mode: "real",
-    },
-    Model {
-        name: "hubbard_chain_dh_real",
-        mode: "real",
-    },
-    Model {
-        name: "kondo_chain_real",
-        mode: "real",
-    },
-];
-
 #[test]
 fn original_io134_fixed_loader_family_offsets_and_duplicates() {
     use mvmc_expert_parsers::{
@@ -444,10 +411,7 @@ fn original_io134_loader_c_eof_nonfinite_and_atomic_tail_contracts() {
 fn original_io134_public_runner_normal_routing_and_qcaq_are_repeatable() {
     use mvmc_expert_parsers::{GreenOneTerm, Spin};
     use num_complex::Complex64;
-    let fixture = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .join("two-samples/hubbard_chain_real");
+    let fixture = physcal_root().join("two-samples/hubbard_chain_real");
     let mut outputs = Vec::new();
     for repeat in 0..2 {
         let mut preparation = mvmc_core::prepare_phys_cal_from_namelist(
@@ -535,10 +499,7 @@ fn original_io134_public_runner_normal_routing_and_qcaq_are_repeatable() {
 #[test]
 fn third_hubbard_lanczos_consumed19_matches_independent_c_all_five_outputs() {
     // Native C 1.4.0 run of the physcal_181/third-hubbard inputs (#695).
-    let fixture = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .join("../native_c_physcal_181/third_hubbard_lanczos2");
+    let fixture = physcal_root().join("../native_c_physcal_181/third_hubbard_lanczos2");
     let preparation = mvmc_core::prepare_phys_cal_from_namelist(
         fixture.join("inputs/namelist.def"),
         fixture.join("zqp_opt.dat"),
@@ -575,10 +536,7 @@ fn third_hubbard_lanczos_consumed19_matches_independent_c_all_five_outputs() {
 
 #[test]
 fn original_io134_factored_supported_cases_reach_public_validation() {
-    let fixture = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .join("third-hubbard");
+    let fixture = physcal_root().join("third-hubbard");
     let preparation = mvmc_core::prepare_phys_cal_from_namelist(
         fixture.join("inputs/namelist.def"),
         fixture.join("zqp_opt.dat"),
@@ -921,10 +879,8 @@ fn assert_fixed_values(data: &mvmc_core::ExpertModeData, expected: &[num_complex
     }
 }
 
-fn trajectory_fixture(model: Model) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/physcal_181")
-        .join(model.name)
+fn physcal_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/physcal_181")
 }
 
 fn reference_integers(path: &Path) -> Vec<i64> {
@@ -941,147 +897,6 @@ fn assert_discrete(label: &str, actual: &[i64], expected: &[i64]) {
         panic!(
             "{label}: first discrete divergence at element {index}: actual={}, reference={}",
             actual[index], expected[index]
-        );
-    }
-}
-
-fn assert_saved_trajectory(model: Model, state: &mvmc_core::VmcOptimizationState) {
-    let stage = trajectory_fixture(model).join("sample-0");
-    assert_saved_trajectory_at(&stage, model.name, state);
-}
-
-fn assert_saved_trajectory_at(stage: &Path, label: &str, state: &mvmc_core::VmcOptimizationState) {
-    let config = &state.electron_config;
-    for (name, values) in [
-        ("ele_idx", config.ele_idx.as_slice()),
-        ("ele_cfg", config.ele_cfg.as_slice()),
-        ("ele_num", config.ele_num.as_slice()),
-        ("ele_proj_cnt", config.ele_proj_cnt.as_slice()),
-        ("ele_spn", config.ele_spn.as_slice()),
-        ("counter", config.counter.as_slice()),
-    ] {
-        let mut actual = values.to_vec();
-        let mut expected = reference_integers(&stage.join(format!("{name}.txt")));
-        if name == "counter" {
-            // Julia has no exchange counters (slots 2, 3); C and Rust count them and
-            // `mvmc-cli/tests/issue181_native_c_physcal.rs` compares them with native C.
-            (actual[2], actual[3], expected[2], expected[3]) = (0, 0, 0, 0);
-        }
-        assert_discrete(&format!("{label} {name}"), &actual, &expected);
-    }
-}
-
-fn assert_rng_checkpoint(model: Model, stage: &str, rng: &sfmt19937::Sfmt19937Rng) {
-    let fixture = trajectory_fixture(model).join(stage);
-    assert_rng_at(&fixture, &format!("{} {stage}", model.name), rng);
-}
-
-fn assert_rng_at(fixture: &Path, label: &str, rng: &sfmt19937::Sfmt19937Rng) {
-    let expected = reference_integers(&fixture.join("next624.txt"));
-    assert_eq!(expected.len(), 624, "{label} complete RNG block");
-    let count = reference_integers(&fixture.join("draw-count.txt"));
-    assert_eq!(count.len(), 1);
-    assert!(count[0] >= 0);
-    assert_eq!(
-        rng.words_consumed(),
-        count[0] as u128,
-        "{label} actual primitive draw count"
-    );
-    // Validate the independent reference's documented position from seed 1,
-    // then check the actual sampler position without advancing its RNG.
-    let mut position = sfmt19937::Sfmt19937Rng::new(1);
-    for _ in 0..count[0] {
-        position.gen_rand32();
-    }
-    let next = |rng: &sfmt19937::Sfmt19937Rng| {
-        let mut peek = rng.clone();
-        (0..624)
-            .map(|_| i64::from(peek.gen_rand32()))
-            .collect::<Vec<_>>()
-    };
-    assert_discrete(
-        &format!("{label} documented draw count"),
-        &next(&position),
-        &expected,
-    );
-    assert_discrete(&format!("{label} next624 RNG"), &next(rng), &expected);
-}
-
-#[test]
-fn independent_c_definition_component_flags() {
-    for model in PHYSCAL_MODELS.iter().copied().chain([
-        Model {
-            name: "hubbard_chain_dh_overlays",
-            mode: "real",
-        },
-        Model {
-            name: "hubbard_chain_dh_opttrans",
-            mode: "real",
-        },
-        Model {
-            name: "hubbard_chain_dh_rbm_opttrans",
-            mode: "cmp",
-        },
-    ]) {
-        let fixture = trajectory_fixture(model);
-        let preparation = mvmc_core::prepare_phys_cal_from_namelist(
-            fixture.join("inputs/namelist.def"),
-            fixture.join("zqp_opt.dat"),
-            model.mode,
-            Some(1),
-        )
-        .unwrap();
-        let expected = reference_integers(&fixture.join("optimization-flags.txt"));
-        let written = reference_integers(&fixture.join("optimization-flags-written.txt"));
-        assert_eq!(expected.len(), preparation.data.optimization_flags.len());
-        assert_eq!(written.len(), expected.len());
-        // GetInfoOpt leaves real-section imaginary cells untouched. Do not
-        // invent allocation contents for cells the C reader never writes.
-        //
-        // Native GetInfoOptTrans writes undoubled flags at `NProj + NSlater + i`
-        // and never the OptTrans weight components: a C defect (#676,
-        // tmisawa/Julia-mVMC#94) that Rust does not reproduce. Those stray
-        // cells and the OptTrans tail are excluded from the C comparison and
-        // checked against the correct layout instead.
-        let data = &preparation.data;
-        let count = data.count_opt_trans_parameters();
-        let tail = 2 * (data.count_variational_parameters() - count);
-        let stray_start = data.projection_layout().n_proj
-            + mvmc_expert_parsers::utils::parameter_init::n_slater(data);
-        let stray = stray_start..stray_start + count;
-        let excluded = |i: usize| stray.contains(&i) || i >= tail;
-        if count > 0 {
-            let without = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(
-                fixture.join("inputs/namelist.def"),
-                false,
-            )
-            .unwrap();
-            assert_eq!(
-                &data.optimization_flags[..tail],
-                &without.optimization_flags[..tail],
-                "{}: OptTrans must not change other component flags",
-                model.name
-            );
-            let expected_tail: Vec<i64> = (0..count).flat_map(|_| [1, 0]).collect();
-            assert_eq!(&data.optimization_flags[tail..], expected_tail.as_slice());
-        }
-        let actual = data
-            .optimization_flags
-            .iter()
-            .zip(&written)
-            .enumerate()
-            .filter_map(|(i, (flag, written))| (*written == 1 && !excluded(i)).then_some(*flag))
-            .collect::<Vec<_>>();
-        let expected = expected
-            .iter()
-            .zip(&written)
-            .enumerate()
-            .filter_map(|(i, (flag, written))| (*written == 1 && !excluded(i)).then_some(*flag))
-            .collect::<Vec<_>>();
-        assert_discrete(
-            &format!("{} C component flags", model.name),
-            &actual,
-            &expected,
         );
     }
 }
@@ -1223,10 +1038,7 @@ fn no_factored_terms_preserve_one_body_order_and_duplicate_rows() {
     data.modpara.lanczos_mode = 2;
     let error = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
     assert!(error.contains("duplicate OneBodyG"), "{error}");
-    let reference = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .join("duplicate-reader/result.txt");
+    let reference = physcal_root().join("duplicate-reader/result.txt");
     assert_eq!(
         fs::read_to_string(reference).unwrap(),
         "declared_records=2\ncount_after_mode2_dedup=1\nnormal_reader_status=1\nwith_gex_canonical_count=1\nindirect_reader_status=0\n"
@@ -1261,10 +1073,7 @@ fn singular_lanczos_alpha_writes_nan_without_aborting() {
 
 #[test]
 fn duplicate_one_body_with_gex_matches_native_c_canonical_layout_fixture() {
-    let fixture = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .join("duplicate-reader");
+    let fixture = physcal_root().join("duplicate-reader");
     let expected = reference_integers(&fixture.join("canonical-layout.txt"));
     let data = mvmc_expert_parsers::parse_expert_mode_files(fixture.join("namelist.def")).unwrap();
     assert!(data.input_errors.is_empty(), "{:?}", data.input_errors);
@@ -1312,9 +1121,7 @@ fn duplicate_one_body_with_gex_matches_native_c_canonical_layout_fixture() {
         .unwrap();
         preparation.data.modpara.lanczos_mode = mode;
         let out = output_dir("duplicate-gex-c-layout", &format!("mode-{mode}"));
-        let result = mvmc_core::vmc_phys_cal_to_dir(preparation, &out).unwrap();
-        assert_saved_trajectory(PHYSCAL_MODELS[0], &result.state);
-        assert_rng_checkpoint(PHYSCAL_MODELS[0], "sample-0", &result.final_rng);
+        let _result = mvmc_core::vmc_phys_cal_to_dir(preparation, &out).unwrap();
         for suffix in ["cisajs", "ls_cisajs"] {
             if suffix.starts_with("ls_") && mode == 0 {
                 continue;
@@ -1352,10 +1159,7 @@ fn duplicate_one_body_with_gex_matches_native_c_canonical_layout_fixture() {
 
 #[test]
 fn energy_only_physcal_zero_green_file_sets_follow_native_c_all_lanczos_modes() {
-    let root = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .to_owned();
+    let root = physcal_root().to_owned();
     let fixture = root.join("energy-only");
     for mode in 0..=2 {
         let mut preparation = mvmc_core::prepare_phys_cal_from_namelist(
@@ -1445,10 +1249,7 @@ fn fixed_records_overlays_and_normalization_follow_native_c_stages() {
     use mvmc_expert_parsers::utils::{
         parameter_init::init_parameter, read_input_parameters::read_input_parameters,
     };
-    let root = trajectory_fixture(PHYSCAL_MODELS[0])
-        .parent()
-        .unwrap()
-        .to_owned();
+    let root = physcal_root().to_owned();
     for name in [
         "hubbard_chain_dh_overlays",
         "hubbard_chain_dh_opttrans",

@@ -612,9 +612,9 @@ The four extra `mvmc-cli::issue348_multidef` failures in the first run of the op
 came from `OPENBLAS_VERBOSE=2` writing the kernel name to the stderr those tests compare; the
 workflow no longer sets it.
 
-**Kernel class.** `tests/support/julia_fixture.rs::kernel_class` returns `Reference` for Linux
-x86_64 OpenBLAS `Haswell`/`Zen` and for macOS ARM64 cores that have an overlay under
-`tests/fixtures/macos_arm_julia/<core>/`, `Unverified` otherwise (hosted macOS VMs report the generic `armv8` core; a provider that does
+**Kernel class.** `tests/support/blas_kernel.rs::kernel_class` returns `Reference` for Linux
+x86_64 OpenBLAS `Haswell`/`Zen` (the C 1.4.0 reference lineage), `Unverified` otherwise (the
+macOS ARM overlays were removed with the Julia CPU references in #695; a provider that does
 not export `openblas_get_corename` is also `Unverified`; the core name is resolved with `dlsym`
 so the test support code does not add an undefined symbol). `MVMC_BLAS_KERNEL_CLASS=reference|unverified`
 overrides the detection (reference BLAS under `LD_PRELOAD` still reports the OpenBLAS core).
