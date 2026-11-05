@@ -461,12 +461,11 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
 
 #[test]
 fn grouped_opttrans_rows_pass_c_contract_and_need_communicator_without_rng_use() {
-    let fixture = include_str!("../../../tests/fixtures/opttrans/grouped.txt");
-    for line in fixture.lines().filter(|s| !s.starts_with('#')) {
-        let fields = line
-            .split_whitespace()
-            .map(|s| s.parse::<usize>().unwrap())
-            .collect::<Vec<_>>();
+    // NQPOptTrans x OptTrans length x QPOptTrans rows, NSplitSize = 2.
+    for fields in (1..=2usize)
+        .flat_map(|n| (0..3usize).flat_map(move |p| (0..3usize).map(move |q| [n, p, q])))
+    {
+        let line = format!("{fields:?}");
         let mut data = ExpertModeData::new();
         data.modpara.nsplit_size = 2;
         data.n_qp_opt_trans = fields[0] as i64;
@@ -485,10 +484,8 @@ fn grouped_opttrans_rows_pass_c_contract_and_need_communicator_without_rng_use()
             mvmc_core::OptimizationOptions::default(),
         )
         .unwrap_err();
-        // C defines grouped OptTrans for every row (historical Julia fixture
-        // column {} marked some rows as Julia-rejected); only the missing
+        // C defines grouped OptTrans for every row; only the missing
         // communicator rejects here.
-        let _julia_rejected = fields[3] == 1;
         assert!(error.contains("MPI group communicator"), "{line}: {error}");
         assert_eq!(data.opt_trans, before.opt_trans);
         assert_eq!(data.optimization_flags, before.optimization_flags);

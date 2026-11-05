@@ -198,7 +198,7 @@ fn environment_semantics_enable_every_value_except_literal_zero() {
     assert!(flags.legacy_warning());
 }
 #[test]
-fn reports_match_c_and_julia_zero_fixtures_and_respect_prefix() {
+fn reports_match_c_zero_fixture_and_respect_prefix() {
     let dir = std::env::temp_dir().join(format!("mvmc-timer-reports-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let timer = CTimer::<false>::new();
@@ -207,11 +207,6 @@ fn reports_match_c_and_julia_zero_fixtures_and_respect_prefix() {
     assert_eq!(
         fs::read_to_string(path).unwrap(),
         include_str!("../../../tests/fixtures/timers/c_para_opt_zero.dat")
-    );
-    let path = timer.write_diag(&dir, "custom").unwrap();
-    assert_eq!(
-        fs::read_to_string(path).unwrap(),
-        include_str!("../../../tests/fixtures/timers/julia_diag_zero.dat")
     );
     let mut nonzero = CTimer::<true>::new();
     nonzero.start_at(0, 100);

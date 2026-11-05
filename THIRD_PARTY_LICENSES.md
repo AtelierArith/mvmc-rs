@@ -38,28 +38,11 @@ These translate code from `MVMCOptimizers.jl` and
 (GPL-3.0-or-later). See the top-level `LICENSE` file (to be added
 alongside the first non-skeleton commit) for the full GPL-3.0 text.
 
-## Julia Base projection math — MIT + Sun Microsystems notice
-
-`crates/mvmc-expert-parsers/src/utils/julia_trig.rs` ports the Float64
-sine/cosine kernels and the small-angle Cody-Waite reduction from Julia
-1.13.1 `base/special/trig.jl` and `base/special/rem_pio2.jl`. The supported
-range is the projection angles [-pi, pi]; it does not port large-angle
-Payne-Hanek reduction. Julia portions retain MIT; the kernel/reduction
-portions retain the Sun Microsystems permission notice from FDLIBM.
-The full notices are in `crates/mvmc-expert-parsers/LICENSE-julia-math`.
-
-- Source: <https://github.com/JuliaLang/julia/tree/v1.13.1/base/special>
-- Julia license: <https://github.com/JuliaLang/julia/blob/v1.13.1/LICENSE.md>
+## Julia Base complex division — MIT
 
 `crates/pfapack/src/julia_complex.rs` ports the robust `ComplexF64 /
 ComplexF64` division and reciprocal from Julia 1.13.1 `base/complex.jl` under MIT. Its MIT
-notice is also included in `crates/mvmc-expert-parsers/LICENSE-julia-math`.
+notice is in `crates/mvmc-expert-parsers/LICENSE-julia-math`.
 
-`crates/mvmc-expert-parsers/src/utils/julia_hypot.rs` ports Julia 1.13.1
-`base/math.jl` Float64 `hypot`, used for parameter normalization, under the
-same Julia MIT notice.
-
-`crates/mvmc-expert-parsers/src/utils/julia_exp.rs` ports Julia 1.13.1
-`base/special/exp.jl` Float64 `exp` and its 256-entry reconstruction table
-under the same Julia MIT notice. It preserves projection ratios and
-Metropolis probabilities without platform-libm rounding differences.
+- Source: <https://github.com/JuliaLang/julia/tree/v1.13.1/base>
+- Julia license: <https://github.com/JuliaLang/julia/blob/v1.13.1/LICENSE.md>

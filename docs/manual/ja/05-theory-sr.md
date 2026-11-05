@@ -94,7 +94,7 @@ $$
 > - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:280`
 > - Rust: `collect_active_real` — `crates/mvmc-core/src/sr.rs:377`
 > - Rust: `component_is_optimized` — `crates/mvmc-core/src/sr.rs:25`
-> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:933`
+> - Rust: `cholesky_solve` — `crates/mvmc-core/src/sr.rs:535`
 > - Rust: `update_parameter_value` — `crates/mvmc-core/src/sr.rs:837`
 > - 整合性: `S[idx] = OO[(pi+2)*(2*size)+(pj+2)].re - OO[pi+2].re*OO[pj+2].re` および `S[ii] *= 1+DSROptStaDel`(`stcopt_dposv.c:69-74`)、`g[si] = -DSROptStepDt*2.0*(HO[pi+2].re - HO[0].re*OO[pi+2].re)`(`stcopt_dposv.c:81`)です。Rust の `build_s_g_complex` は同じ式を同じ順序で評価します(実モードではインデックスオフセットが2ではなく1)。実モードでは C は実行列を虚部ゼロの複素配置に埋め込むため、$S_{\max}$ にはゼロの虚部分散が含まれます。Rust の `collect_active_real` も同じ理由で `0.0` から畳み込みます。Rust は LAPACK の `dpotrf_`/`dpotrs_`(上三角のコレスキー分解。`sr.rs:45-52` で宣言)で解き、C は `dposv('U')` を使います。$S$ が正定値でない場合、Rust は更新を拒否し(`cholesky_solve` が `Err` を返す)、C は `dposv` の `info` を返します。C が直接ソルバー向けに書き出す $\texttt{zvo\_SRinfo.dat}$ の行(`stcopt.c:157`)は、Rust では書き出し**ません**([9](09-output-files.md))。
 

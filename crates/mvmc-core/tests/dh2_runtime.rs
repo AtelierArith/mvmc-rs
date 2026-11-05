@@ -6,9 +6,6 @@ mod historical_orbital_model;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
-use mvmc_core::ExpertModeData;
-use mvmc_expert_parsers::utils::parameter_init::all_complex_flag;
-use num_complex::Complex64;
 use std::path::Path;
 
 #[test]
@@ -48,37 +45,5 @@ fn supported_dh2_sections_pass_runtime_validation_with_or_without_namelist() {
         mvmc_core::validation::validate_para_opt(&data).unwrap();
         data.namelist.clear();
         mvmc_core::validation::validate_para_opt(&data).unwrap();
-    }
-}
-
-#[test]
-fn dh2_runtime_mode_uses_declarations_and_ignores_loaded_imaginary_values() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/dh2");
-    let fixture = std::fs::read_to_string(root.join("mode.txt")).unwrap();
-    for line in fixture.lines().filter(|l| !l.starts_with('#')) {
-        let row: Vec<i64> = line
-            .split_whitespace()
-            .map(|s| s.parse().unwrap())
-            .collect();
-        let mut data = ExpertModeData::new();
-        data.doublon_holon_2site_complex = row[0] != 0;
-        data.doublon_holon_2site_params = vec![Complex64::new(0.125, row[1] as f64 / 4.0)];
-        if row[2] != -1 {
-            data.complex_flags = vec![row[2]];
-        }
-        assert_eq!(
-            mvmc_core::run::get_all_complex_flag(&data).unwrap(),
-            // C uses definition flags; the archived Julia result in row[3]
-            // also inferred the mode from loaded imaginary coefficients.
-            if row[2] == -1 {
-                row[0] != 0
-            } else {
-                row[2] != 0
-            },
-            "{line}"
-        );
-        // Initializing Slater parameters uses declarations, never loaded values
-        // or the optional runtime override; changing this would alter draw count.
-        assert_eq!(all_complex_flag(&data).unwrap(), row[0] != 0, "{line}");
     }
 }

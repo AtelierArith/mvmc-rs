@@ -746,57 +746,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn weighted_slater_derivative_matches_julia_numerical_values() {
-        let mut lines = include_str!("../../../tests/fixtures/pfaffian_cg/slater_derivative.txt")
-            .lines()
-            .filter(|l| !l.starts_with('#'));
-        let shape: Vec<usize> = lines
-            .next()
-            .unwrap()
-            .split_whitespace()
-            .map(|v| v.parse().unwrap())
-            .collect();
-        let parse = |l: &str| -> Vec<Complex64> {
-            let doubles: Vec<_> = l
-                .split_whitespace()
-                .map(|s| f64::from_bits(u64::from_str_radix(s, 16).unwrap()))
-                .collect();
-            doubles
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|z| Complex64::new(z[0], z[1]))
-                .collect()
-        };
-        let buffer = parse(lines.next().unwrap());
-        let weights = parse(lines.next().unwrap());
-        let ip = parse(lines.next().unwrap())[0];
-        let expected = parse(lines.next().unwrap());
-        let mut scratch = SlaterDerivativeScratch::new();
-        scratch.ensure_shape(shape[0], shape[1]);
-        scratch
-            .qp_orbital
-            .as_mut()
-            .unwrap()
-            .host_data_mut()
-            .unwrap()
-            .copy_from_slice(&buffer);
-        let mut actual = vec![Complex64::new(0.0, 0.0); expected.len()];
-        scratch.reduce_qp_weighted_julia_into(&weights, ip, &mut actual);
-        for (i, (&a, &b)) in actual.iter().zip(&expected).enumerate() {
-            // Weighted QP reduction and complex division, including cancelled
-            // components near zero; the small fixture needs <64 roundoffs.
-            crate::numerical_comparison::assert_values_close(
-                [a.re, a.im],
-                [b.re, b.im],
-                64.0 * f64::EPSILON,
-                64.0 * f64::EPSILON,
-                format!("Slater component {i}"),
-            );
-        }
-    }
-
-    #[test]
     fn scratch_weighted_reduction_preserves_tensor_layout() {
         let mut scratch = SlaterDerivativeScratch::new();
         scratch.ensure_shape(2, 3);

@@ -19,7 +19,7 @@ Usage: scripts/generate-numerical-references.sh [options]
 By default generate the independent C suite in a fresh reviewable staging tree.
 The source checkout and its macOS fixtures are never overwritten by generation.
 
-  --reference c|julia|all  Choose default suites (default: c)
+  --reference c|all       Choose default suites (default: c)
   --workspace DIRECTORY  Source checkout (default: this script's repository)
   --suite NAME           Select a suite; may be repeated (see --list)
   --output DIRECTORY     Use a new/empty staging directory (default: mktemp)
@@ -35,7 +35,6 @@ The source checkout and its macOS fixtures are never overwritten by generation.
 Examples:
   scripts/generate-numerical-references.sh --suite c-division
   scripts/generate-numerical-references.sh --suite c-projection --check
-  scripts/generate-numerical-references.sh --reference julia --suite julia-fsz-moves
   scripts/generate-numerical-references.sh --apply /tmp/mvmc-references.ABCDEFGH
 
 Python always runs through uv. C needs a compiler and the pinned C source
@@ -67,20 +66,6 @@ c-fsz-complex            FSZ complex Green kernels
 c-fsz-energy-real        Complete scalar FSZ Hamiltonian
 c-fsz-energy-complex     Complete complex FSZ Hamiltonian
 c-fsz-measurements       Weighted/factored FSZ Green measurements
-julia-fsz-setup          Small real FSZ setup/failure/RNG cases
-julia-fsz-moves          Small real FSZ proposals/inverse/bilinear cases
-julia-fsz-real-sampling  Small real FSZ sampling/RNG cases (explicit selection)
-julia-fsz-complex-sampling Small complex FSZ sampling/RNG cases (explicit selection)
-julia-linux-all          Full historical Linux overlay (explicit, longer workload)
-julia-linux-setup        Linux overlay: fixed setup
-julia-linux-real-sampling Linux overlay: real sampling
-julia-linux-complex-sampling Linux overlay: complex sampling
-julia-linux-dh2-history  Linux overlay: DH2 history
-julia-linux-dh4-history  Linux overlay: DH4/DH24 history
-julia-linux-direct-CASE  Linux overlay: Direct SR, NStore=0
-julia-linux-store-CASE   Linux overlay: Direct SR, NStore=1
-julia-linux-cg-CASE      Linux overlay: CG
-  CASE: fsz interall pairhop_fsz dh2_fsz dh4_fsz dh24_fsz rbm_fsz opt_fsz
 LIST
 }
 suite_script() {
@@ -108,11 +93,6 @@ suite_script() {
         c-fsz-energy-real) suite_file=check_fsz_green_c_parity.py; suite_flags=(--real --hamiltonian) ;;
         c-fsz-energy-complex) suite_file=check_fsz_green_c_parity.py; suite_flags=(--hamiltonian) ;;
         c-fsz-measurements) suite_file=check_fsz_green_c_parity.py; suite_flags=(--measurements) ;;
-        julia-linux-*) suite_file=generate_linux_julia_references.jl ;;
-        julia-fsz-setup) suite_file=check_real_fsz_setup_parity.jl ;;
-        julia-fsz-moves) suite_file=check_real_fsz_moves_parity.jl ;;
-        julia-fsz-real-sampling) suite_file=check_real_fsz_sampling_parity.jl ;;
-        julia-fsz-complex-sampling) suite_file=check_complex_fsz_sampling_parity.jl ;;
         *) echo "Unknown suite: $1 (use --list)" >&2; exit 2 ;;
     esac
 }
@@ -142,13 +122,14 @@ while (($#)); do
         *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
 done
-case "$reference" in c|julia|all) ;; *) echo 'Expected --reference c, julia or all' >&2; exit 2 ;; esac
+case "$reference" in
+    c|all) ;;
+    julia) echo 'The Julia CPU reference suites were removed (#695); C 1.4.0 is the CPU reference' >&2; exit 2 ;;
+    *) echo 'Expected --reference c or all' >&2; exit 2 ;;
+esac
 if ((${#selected[@]} == 0)); then
     if [[ $reference == c || $reference == all ]]; then
         selected=(c-division c-projection c-projection-flags c-integer-flags c-gutzwiller c-jastrow c-orbital c-general-orbital c-orbital-order c-orbital-initialization c-initial-records c-rbm-reader c-rbm-counters c-rbm-parameters c-interall-reader c-interall-real c-interall-complex c-fsz-real c-fsz-complex)
-    fi
-    if [[ $reference == julia || $reference == all ]]; then
-        selected+=(julia-fsz-setup julia-fsz-moves)
     fi
 fi
 needs_c=false; needs_julia=false
