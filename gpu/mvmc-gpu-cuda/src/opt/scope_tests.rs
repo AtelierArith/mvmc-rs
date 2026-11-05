@@ -102,10 +102,6 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
     // coefficients); and the FSZ Kondo chain (NExUpdatePath=3).
     for (tag, rel) in [
         (
-            "opttrans",
-            "tests/fixtures/opttrans/run_opt_real/namelist.def",
-        ),
-        (
             "fsz-general-orbital",
             "tests/fixtures/native13_initialization/inputs/HubbardChain_fsz/namelist.def",
         ),
@@ -516,4 +512,127 @@ fn resident_scope_rejects_complex_rbm_coefficients() {
         assert!(error.contains("finite and real"), "{error}");
     }
     fs::remove_dir_all(input.parent().unwrap()).unwrap();
+}
+
+const OPT_TRANS: &str = "=============================================
+NQPOptTrans 2
+ComplexType 0
+=============================================
+=============================================
+0 0.75
+1 -0.5
+0 0 0 1
+0 1 1 1
+0 2 2 1
+0 3 3 1
+0 4 4 1
+0 5 5 1
+1 0 5 1
+1 1 4 1
+1 2 3 1
+1 3 2 1
+1 4 1 1
+1 5 0 1
+";
+
+/// OptTrans (#674): the weights follow C's layout after projection, RBM and
+/// Slater, the planes are `NQPFix * NQPOptTrans` with the full weights of C
+/// UpdateQPWeight, and the setup normalization of C SyncModifiedParameter.
+/// A complex OptTrans weight is rejected before CUDA.
+#[test]
+fn resident_scope_accepts_opttrans() {
+    let local = |rel: &str| Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+    let two = edited(
+        "opttrans-two",
+        &[
+            ("namelist.def", "", "OptTrans opttrans.def\n"),
+            ("opttrans.def", "", OPT_TRANS),
+        ],
+    );
+    for (input, nopt, nfix) in [
+        (
+            repo("tests/fixtures/opttrans/run_opt_real/namelist.def"),
+            3,
+            8,
+        ),
+        (two.clone(), 2, 8),
+        (
+            local("tests/fixtures/opttrans/hubbard_opttrans_L16/namelist.def"),
+            3,
+            8,
+        ),
+        (
+            local("tests/fixtures/opttrans/hubbard_opttrans_L128/namelist.def"),
+            3,
+            8,
+        ),
+    ] {
+        let data = parse(&input);
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+        mvmc_core::validation::validate_phys_cal(&data).unwrap();
+        for model in [
+            Model::prepare(&input, &cfg()).unwrap(),
+            Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+        ] {
+            let tail = model.np - model.nopt;
+            assert_eq!((model.nopt, model.fix.len()), (nopt, nfix), "{input:?}");
+            assert_eq!(model.nq, nopt * nfix);
+            assert_eq!(
+                tail,
+                model.nproj + model.nrbm + model.data.slater_params.len()
+            );
+            // Slater parameter indices end before the OptTrans block.
+            assert!(model
+                .pa
+                .iter()
+                .chain(&model.pb)
+                .all(|&p| (p as usize) >= model.nproj + model.nrbm && (p as usize) < tail));
+            // Normalized to maximum amplitude one; the definition flags
+            // optimize every real component.
+            let opt = &model.parameters[tail..];
+            assert_eq!(opt.iter().fold(0f64, |a, x| a.max(x.abs())), 1.0);
+            assert!(model.flags[tail..].iter().all(|&f| f == 1));
+            for (i, &o) in opt.iter().enumerate() {
+                for (j, &f) in model.fix.iter().enumerate() {
+                    assert_eq!(
+                        model.weights[i * nfix + j].to_bits(),
+                        (o * f).to_bits(),
+                        "C UpdateQPWeight"
+                    );
+                }
+            }
+        }
+    }
+    fs::remove_dir_all(two.parent().unwrap()).unwrap();
+    let complex = edited(
+        "opttrans-complex",
+        &[
+            (
+                "namelist.def",
+                "",
+                "OptTrans opttrans.def\nInOptTrans inopttrans.def\n",
+            ),
+            ("opttrans.def", "", OPT_TRANS),
+            (
+                "inopttrans.def",
+                "",
+                "=============================================
+NQPOptTrans 2
+=============================================
+=============================================
+=============================================
+0 0.75 0.0
+1 -0.5 0.25
+",
+            ),
+        ],
+    );
+    for result in [
+        Model::prepare(&complex, &cfg()).map(|_| ()),
+        Model::prepare_physcal(&complex, &cfg(), None).map(|_| ()),
+    ] {
+        let error = result.expect_err("complex OptTrans weight accepted");
+        assert!(error.contains("finite and real"), "{error}");
+    }
+    fs::remove_dir_all(complex.parent().unwrap()).unwrap();
 }

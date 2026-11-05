@@ -5,6 +5,7 @@ including fixed-parameter observables and product-side Green functions (#636).
 Local spins and exchange proposals have [Julia GPU Opt/PhysCal fixtures](localspin/README.md) (#660).
 DH2/DH4 factors have [inputs checked against the Rust CPU C-order path](dh/README.md) (#665); Julia GPU has no DH support.
 RBM factors have [inputs checked against the Rust CPU C-order path](rbm/README.md) (#667); Julia GPU has no RBM support.
+OptTrans weights have [inputs checked against the Rust CPU C-order path](opttrans/README.md) (#674); Julia GPU rejects variational OptTrans.
 
 `interval_parity_j8.txt` is the reference output of the Julia GPU sampler for the
 shared-tape parity test `../interval_parity.rs` (issue #547).
