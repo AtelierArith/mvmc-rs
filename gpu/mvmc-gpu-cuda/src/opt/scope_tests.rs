@@ -1152,12 +1152,12 @@ fn resident_scope_accepts_fsz_general_orbitals() {
 }
 
 /// FSZ inputs outside the supported subset fail before CUDA (#714): complex
-/// general orbitals (also the native KondoGC chain), NSPGaussLeg>1, SR-CG for
-/// Opt, and RBM/DH/OptTrans. The CPU validators accept each input, so the
-/// rejection is GPU-specific.
+/// FSZ with local spins (the native KondoGC chain; no complex local-spin
+/// kernels), NSPGaussLeg>1, SR-CG for Opt, and RBM/DH/OptTrans. The CPU
+/// validators accept each input, so the rejection is GPU-specific.
 #[test]
 fn resident_scope_rejects_fsz_families_before_cuda() {
-    const FAMILIES: &str = "resident GPU FSZ supports real Gutzwiller/Jastrow";
+    const FAMILIES: &str = "resident GPU FSZ supports Gutzwiller/Jastrow";
     let l16 = fsz_input("hubbard_fsz_L16");
     let ns = 16;
     let rbm = format!(
@@ -1175,15 +1175,9 @@ fn resident_scope_rejects_fsz_families_before_cuda() {
     );
     let cases: Vec<(&str, PathBuf, &str, bool)> = vec![
         (
-            "fsz-complex",
-            repo("tests/fixtures/native13_initialization/inputs/HubbardChain_fsz/namelist.def"),
-            FAMILIES,
-            false,
-        ),
-        (
             "fsz-complex-kondo",
             repo("tests/fixtures/native13_initialization/inputs/KondoChain_fsz/namelist.def"),
-            FAMILIES,
+            "resident GPU complex mode does not support",
             false,
         ),
         (
@@ -1266,4 +1260,69 @@ fn resident_scope_rejects_fsz_families_before_cuda() {
         .expect_err("odd 2Sz");
     assert!(error.contains("even 2Sz"), "{error}");
     fs::remove_dir_all(odd.parent().unwrap()).unwrap();
+}
+
+/// Complex general orbitals / FSZ (#714 (c)): C's complex FSZ path with
+/// interleaved complex parameters, complex Slater tables (C
+/// `UpdateSlaterElm_fsz`), rs-encoded complex operators, and the complex QP
+/// weights; local spins stay rejected in complex mode.
+#[test]
+fn resident_scope_accepts_complex_fsz() {
+    for (input, complex_terms) in [
+        (fsz_input("hubbard_fsz_complex_L16"), true),
+        (fsz_input("hubbard_fsz_complex_L128"), true),
+        (
+            repo("tests/fixtures/native13_initialization/inputs/HubbardChain_fsz/namelist.def"),
+            false,
+        ),
+    ] {
+        let data = parse(&input);
+        mvmc_core::validation::validate_para_opt(&data).unwrap();
+        mvmc_core::validation::validate_phys_cal(&data).unwrap();
+        assert!(mvmc_core::get_all_complex_flag(&data).unwrap());
+        for model in [
+            Model::prepare(&input, &cfg()).unwrap(),
+            Model::prepare_physcal(&input, &cfg(), None).unwrap(),
+        ] {
+            let (ns, nq) = (model.ns, model.nq);
+            assert!(model.fsz && model.complex, "{input:?}");
+            assert_eq!((model.lanes(), model.split()), (2, 2 * model.ne));
+            assert_eq!(model.parameters.len(), 2 * model.np);
+            assert_eq!(model.energies.len(), 2 * model.operators.len() / 7);
+            let mut cpu = model.data.clone();
+            let mut state = mvmc_core::VmcOptimizationState::zeros(
+                ns,
+                model.ne,
+                model.nproj,
+                model.np,
+                nq,
+                1,
+                true,
+                true,
+            );
+            state.validate_declared_mode(&cpu).unwrap();
+            mvmc_core::slater_update::update_slater_elm_fsz(&mut cpu, &mut state);
+            let p = |k: usize| {
+                num_complex::Complex64::new(model.parameters[2 * k], model.parameters[2 * k + 1])
+            };
+            let n2 = 2 * ns;
+            // opt_slater_f_c: one complex subtraction of +-1 multiples.
+            for k in 0..nq * n2 * n2 {
+                let device = p(model.pa[k] as usize) * model.sa[k] as f64
+                    - p(model.pb[k] as usize) * model.sb[k] as f64;
+                let host = state
+                    .slater_matrix
+                    .slater_elm
+                    .get(k / (n2 * n2), (k / n2) % n2, k % n2);
+                assert!(
+                    (device - host).norm() <= f64::EPSILON * host.norm(),
+                    "{input:?} entry {k}: {device} vs {host}"
+                );
+            }
+            let imaginary = |v: &[f64]| v.iter().skip(1).step_by(2).any(|&x| x != 0.0);
+            assert!(imaginary(&model.weights) || !complex_terms);
+            assert_eq!(imaginary(&model.energies), complex_terms, "{input:?}");
+            assert!((model.nproj..model.np).any(|k| model.parameters[2 * k + 1] != 0.0));
+        }
+    }
 }
