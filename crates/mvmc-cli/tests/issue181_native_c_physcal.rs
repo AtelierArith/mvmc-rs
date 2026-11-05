@@ -1,7 +1,7 @@
 //! Issue #181: serial PhysCal and Lanczos modes 1/2 against the NATIVE C `vmc.out`.
 //!
 //! References in `tests/fixtures/native_c_physcal_181/` come from the unmodified
-//! vendored mVMC 1.3.0 executable (historical 1.3.0 reference kept after #682;
+//! vendored mVMC 1.4.0 executable (regenerated in #695;
 //! `c_toolbox/physcal_native/`); this test never
 //! builds or runs C. Per scenario it checks
 //!

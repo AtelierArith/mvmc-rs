@@ -67,3 +67,4 @@ hubbard_chain_dh_opttrans_mpi4	tests/fixtures/physcal_181/two-samples/hubbard_ch
 kondo_chain_real_mpi4	tests/fixtures/physcal_181/two-samples/kondo_chain_real	real	0		0	compare	ranks=4
 nodal_neel_lanczos1	tests/fixtures/native_c_physcal_181/_sources/nodal_neel	real	0	NLanczosMode=1	0	compare
 nodal_neel_lanczos2	tests/fixtures/native_c_physcal_181/_sources/nodal_neel	real	0	NLanczosMode=2	0	compare
+third_hubbard_lanczos2	tests/fixtures/physcal_181/third-hubbard	real	0	NLanczosMode=2	0	compare

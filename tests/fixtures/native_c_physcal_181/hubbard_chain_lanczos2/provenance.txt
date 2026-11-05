@@ -3,15 +3,15 @@ source extern/Julia-mVMC/test/integration/reference/hubbard_chain_lanczos/physca
 rust_mode real opttrans_flag 0
 stages NLanczosMode=2
 zqp_perturb 0 class compare variant []
-vmc.out sha256 48cf78a6ce464bc97ea771052892bd1ef02002870181d5ce91e25fae7bfe034b
-probe vmc.out sha256 0e6d1f9c9df1a39ddb587c95f2dda859600049201c6187afb891151a624e2363
-extern/mVMC-1.3.0 commit d73d06bd529d3b2573f38eb5817c4a5f52971006
-source sha256 mVMC/vmcmain.c fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63
+vmc.out sha256 031fee1f55ab11c49666842034d67c3cfef305ed6f095594490ed780a4b9832a
+probe vmc.out sha256 ba7ed8c0369b04d9327656363e0414c4baa26cb0f84b425916f9f1e3779699d0
+extern/mVMC-1.4.0 commit e83aa6cb1e37bfc4876848787ed2f61721a7e972
+source sha256 mVMC/vmcmain.c da14885da14fd5b98feb27f7c53efd6fa229a4a33d27c30fe44848e6514394f0
 source sha256 mVMC/physcal_lanczos.c d0f537e49c25af59140d8a00f1b2532df243f6cc5657f96d41b1f74d44aced15
-source sha256 mVMC/vmcmake.c 8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed
-source sha256 mVMC/vmcmake_fsz.c 2b43a47a85ec13833d453a010962334147024a6d6aae01b99bb8b2a0b80c15db
+source sha256 mVMC/vmcmake.c a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9
+source sha256 mVMC/vmcmake_fsz.c f6322ed48eb186c097074ea9287906fcf58129a44d91b932d0a6750ea9daba66
 source sha256 sfmt/SFMT.c b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
-host x86_64 Linux-6.8.0-146-generic-x86_64-with-glibc2.39
+host x86_64 Linux-6.8.0-147-generic-x86_64-with-glibc2.39
 gcc gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
 mpi one rank, OMP_NUM_THREADS=1, build Release (CMake default flags), unmodified source
 plain stage 0 overrides [NLanczosMode=2] exit 0

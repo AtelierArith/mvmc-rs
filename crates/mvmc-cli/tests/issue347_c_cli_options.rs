@@ -117,7 +117,7 @@ fn c_expected(name: &str) -> PathBuf {
     fixtures().join("issue347_varbin/c_expected").join(name)
 }
 
-/// First divergence from C is the SR solve (BLAS operation order): about 5e-10 absolute on
+/// First divergence from C is the SR solve (BLAS operation order): at most 1.4e-9 absolute on
 /// O(1) parameters. Step 0 must agree exactly; later steps use this explicit bound.
 const LATER_STEP_ATOL: f64 = 1e-8;
 
