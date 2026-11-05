@@ -65,6 +65,16 @@ pub(super) struct Model {
     /// hold interleaved (re, im) pairs and `flags` the `2*np` real/imaginary
     /// component flags (C `OptFlag`). Projection factors use the real parts.
     pub complex: bool,
+    /// General orbitals / FSZ (C `iFlgOrbitalGeneral`, #714). Walker slots
+    /// hold `rs = site + spin*ns`; the Slater tables `pa`/`pb`/`sa`/`sb` cover
+    /// the full `2ns x 2ns` orbital matrix; `operators` hold `rs` positions.
+    pub fsz: bool,
+    /// Up-spin labels of the FSZ initial configuration: C makeInitialSample_fsz
+    /// gives `Ne + 2Sz/2` electrons spin up, `Ne` for `2Sz = -1`.
+    pub nup: usize,
+    /// `2Sz = -1`: hops may change the spin (C `makeCandidate_hopping_fsz`
+    /// and `makeCandidate_LocalSpinFlip_conduction`).
+    pub spin_free: bool,
 }
 
 /// Device optimization flags (0/1) and the C SetFlagShift predicates.
@@ -113,10 +123,58 @@ pub(super) fn flag_contract(
     }
 }
 
+/// One operator of the device layout `(dest1, src1, spin1, dest2, src2, spin2,
+/// pairs)` from `[dest1, s1, src1, t1, dest2, s2, src2, t2, pairs]`, i.e.
+/// `c+_{dest1 s1} c_{src1 t1} c+_{dest2 s2} c_{src2 t2}` (one pair: the second
+/// is unused). Normal walkers need spin-conserving pairs and keep site
+/// indices with one spin per pair. FSZ walkers (#714) encode every position as
+/// `rs = site + spin*ns`, so a pair may flip a spin (C `GreenFunc1_fsz2`,
+/// `GreenFunc2_fsz2`); the spin fields are 0.
+pub(super) fn encode_operator(fsz: bool, ns: usize, op: [i64; 9]) -> Result<[i32; 7], String> {
+    let [d1, s1, a1, t1, d2, s2, a2, t2, pairs] = op;
+    let used = if pairs == 2 { 8 } else { 4 };
+    for k in (0..used).step_by(2) {
+        if op[k] < 0 || op[k] >= ns as i64 || !(0..=1).contains(&op[k + 1]) {
+            return Err("invalid GPU operator site/spin".into());
+        }
+    }
+    let ns = ns as i64;
+    let code = if fsz {
+        let rs = |site: i64, spin: i64| site + spin * ns;
+        let (b1, b2) = if pairs == 2 {
+            (rs(d2, s2), rs(a2, t2))
+        } else {
+            (0, 0)
+        };
+        [rs(d1, s1), rs(a1, t1), 0, b1, b2, 0, pairs]
+    } else {
+        if s1 != t1 || (pairs == 2 && s2 != t2) {
+            return Err("normal-orbital GPU operators require spin-conserving pairs".into());
+        }
+        if pairs == 2 {
+            [d1, a1, s1, d2, a2, s2, pairs]
+        } else {
+            [d1, a1, s1, 0, 0, 0, pairs]
+        }
+    };
+    Ok(code.map(|x| x as i32))
+}
+
 impl Model {
     /// FP64 values per device scalar: 2 for complex mode (interleaved re, im).
     pub fn lanes(&self) -> usize {
         1 + usize::from(self.complex)
+    }
+
+    /// First electron slot whose Slater row carries the down-spin offset:
+    /// `Ne` for normal walkers (spin-major slots), `2Ne` for FSZ walkers,
+    /// whose slots already hold `rs`.
+    pub fn split(&self) -> usize {
+        if self.fsz {
+            2 * self.ne
+        } else {
+            self.ne
+        }
     }
 
     /// Real projection parameters, the sampler's table (C `creal(Proj)`).
@@ -178,15 +236,37 @@ impl Model {
         // Julia GPU does (`cuda_runners.jl:27`); Opt runs C SR-CG (#670).
         // OptTrans follows C `qp.c`/`vmccal.c` (#674); Julia GPU rejects it.
         // Complex normal orbitals follow C's complex normal path (#678).
-        if data.i_flg_orbital_general != 0
-            || m.two_sz != 0
-            || !(0..=2).contains(&m.nex_update_path)
-            || m.nsplit_size != 1
-        {
+        // General orbitals / FSZ follow C's FSZ path (#714). C requires them
+        // for 2Sz != 0 (readdef.c:691-696), so normal orbitals need 2Sz = 0.
+        let fsz = data.i_flg_orbital_general != 0;
+        if !(0..=2).contains(&m.nex_update_path) || m.nsplit_size != 1 || (!fsz && m.two_sz != 0) {
             return Err(
-                "resident GPU requires normal orbitals, NExUpdatePath<=2 and serial execution"
+                "resident GPU requires NExUpdatePath<=2, serial execution, and general \
+                 orbitals for 2Sz != 0"
                     .into(),
             );
+        }
+        if fsz {
+            // C readdef.c:697: 2Sz is even, or -1 (not conserved).
+            if m.two_sz != -1 && m.two_sz % 2 != 0 {
+                return Err("resident GPU FSZ requires an even 2Sz or 2Sz=-1".into());
+            }
+            // C forces NSPGaussLeg=1 for general orbitals (readdef.c:703-707);
+            // the Rust parser keeps the input value, so require it here.
+            if m.nsp_gauss_leg > 1 {
+                return Err("resident GPU FSZ requires NSPGaussLeg=1 (no spin projection)".into());
+            }
+            // C getUpdateType: path 2 with 2Sz=-1 draws local spin flips.
+            if m.nex_update_path == 2 && m.two_sz == -1 {
+                return Err(
+                    "resident GPU FSZ does not support local spin flips (NExUpdatePath=2 \
+                     with 2Sz=-1)"
+                        .into(),
+                );
+            }
+            if !physcal && m.nsrcg != 0 {
+                return Err("resident GPU FSZ Opt requires direct SR (NSRCG=0)".into());
+            }
         }
         if !physcal && m.nsrcg != 0 && mvmc_core::get_all_complex_flag(&data)? {
             return Err("resident GPU complex Opt requires direct SR (NSRCG=0)".into());
@@ -258,6 +338,19 @@ impl Model {
         if ne == 0 || ne > ns || 2 * ne > crate::pfaffian::MAX_N {
             return Err("unsupported electron geometry".into());
         }
+        let fsz = data.i_flg_orbital_general != 0;
+        let two_sz = data.modpara.two_sz;
+        let spin_free = fsz && two_sz == -1;
+        // C makeInitialSample_fsz: Ne + 2Sz/2 up spins (Ne for 2Sz = -1).
+        let nup = if spin_free || !fsz {
+            Some(ne)
+        } else {
+            (ne as i64)
+                .checked_add(two_sz / 2)
+                .and_then(|x| usize::try_from(x).ok())
+        }
+        .filter(|&x| x <= 2 * ne && x <= ns && 2 * ne - x <= ns)
+        .ok_or("unsupported FSZ spin sectors (2Sz)")?;
         let exchange = match data.modpara.nex_update_path {
             0 => 0.0,
             1 => 0.5,
@@ -273,6 +366,23 @@ impl Model {
             return Err("infeasible local-spin filling".into());
         }
         let complex = mvmc_core::get_all_complex_flag(&data)?;
+        // FSZ (#714) supports real Gutzwiller/Jastrow projections. C FSZ has
+        // no RBM (vmccal_fsz.c); DH2/DH4, OptTrans and complex FSZ have no
+        // resident FSZ kernels. Checked before the parameter values.
+        let layout = data.projection_layout();
+        if fsz
+            && (complex
+                || data.has_rbm_terms()
+                || data.count_rbm_parameters() > 0
+                || data.count_opt_trans_parameters() > 0
+                || layout.n_dh2 + layout.n_dh4 > 0)
+        {
+            return Err(
+                "resident GPU FSZ supports real Gutzwiller/Jastrow projections only (no complex \
+                 parameters, RBM, OptTrans or DH2/DH4)"
+                    .into(),
+            );
+        }
         let packed = mvmc_core::pack_parameters(&data).map_err(|e| e.to_string())?;
         if complex {
             if packed
@@ -293,7 +403,6 @@ impl Model {
         if np == 0 || np > i32::MAX as usize {
             return Err("invalid parameter count".into());
         }
-        let layout = data.projection_layout();
         let (ng, nj, n2, n4) = (
             layout.n_gutzwiller,
             layout.n_jastrow,
@@ -437,7 +546,40 @@ impl Model {
         let mut pb = vec![];
         let mut sa = vec![];
         let mut sb = vec![];
-        for q in 0..nq {
+        if fsz {
+            // C UpdateSlaterElm_fsz: one entry per (rsi, rsj) of the
+            // translated general orbital matrix, in SLT order.
+            for q in 0..nq {
+                let opt = q / (nsp * nmp);
+                let mp = (q % (nsp * nmp)) / nsp;
+                let translated = (0..ns)
+                    .map(|r| mvmc_core::qp::translated_site(&data, r, opt, mp, true))
+                    .collect::<Vec<_>>();
+                for rsi in 0..2 * ns {
+                    let (ti, gi) = translated[rsi % ns];
+                    for rsj in 0..2 * ns {
+                        let (tj, gj) = translated[rsj % ns];
+                        if ti >= ns || tj >= ns {
+                            return Err("invalid orbital/translation mapping".into());
+                        }
+                        let (i, j) = (ti + (rsi / ns) * ns, tj + (rsj / ns) * ns);
+                        let (a, b) = (oi[i][j], oi[j][i]);
+                        if a < 0 || b < 0 || a as usize >= slater_end || b as usize >= slater_end {
+                            return Err("invalid general orbital mapping".into());
+                        }
+                        let (a, b) = (nproj + nrbm + a as usize, nproj + nrbm + b as usize);
+                        if a >= slater_end || b >= slater_end {
+                            return Err("orbital parameter outside declared layout".into());
+                        }
+                        pa.push(a as i32);
+                        pb.push(b as i32);
+                        sa.push((os[i][j] * gi * gj) as i32);
+                        sb.push((os[j][i] * gi * gj) as i32);
+                    }
+                }
+            }
+        }
+        for q in 0..if fsz { 0 } else { nq } {
             let opt = q / (nsp * nmp);
             let mp = (q % (nsp * nmp)) / nsp;
             for ri in 0..ns {
@@ -469,7 +611,24 @@ impl Model {
             (1, 0) => -a * ss[q] - b * cc[q],
             _ => (a - b) * cs[q],
         };
-        for q in 0..if derivatives { nq } else { 0 } {
+        // FSZ: dS[q][rsi][rsj]/dF_k from the same tables (C SlaterElmDiff_fsz).
+        let width = 2 * ns;
+        for k in 0..if derivatives && fsz {
+            nq * width * width
+        } else {
+            0
+        } {
+            let (q, row, col) = (k / (width * width), (k / width) % width, k % width);
+            let (a, b) = (pa[k] as usize, pb[k] as usize);
+            let xa = sa[k] as f64 - if a == b { sb[k] as f64 } else { 0. };
+            if xa != 0. {
+                sparse[a].push((row as i32, col as i32, q as i32, xa));
+            }
+            if a != b && sb[k] != 0 {
+                sparse[b].push((row as i32, col as i32, q as i32, -(sb[k] as f64)));
+            }
+        }
+        for q in 0..if derivatives && !fsz { nq } else { 0 } {
             for rs in 0..2 {
                 for ri in 0..ns {
                     for colspin in 0..2 {
@@ -548,16 +707,12 @@ impl Model {
                 real(x).map(|re| num_complex::Complex64::new(re, 0.0))
             }
         };
-        let mut add = |op: [i64; 7], value: num_complex::Complex64| -> Result<(), String> {
-            for i in [0, 1, 3, 4] {
-                if op[i] < 0 || op[i] >= ns as i64 {
-                    return Err("Hamiltonian site out of bounds".into());
-                }
-            }
-            if !(0..=1).contains(&op[2]) || !(0..=1).contains(&op[5]) || !finite(value) {
+        // `[dest1, s1, src1, t1, dest2, s2, src2, t2, pairs]` (encode_operator).
+        let mut add = |op: [i64; 9], value: num_complex::Complex64| -> Result<(), String> {
+            if !finite(value) {
                 return Err("invalid Hamiltonian coefficient/spin".into());
             }
-            operators.extend(op.map(|x| x as i32));
+            operators.extend(encode_operator(fsz, ns, op)?);
             energies.push(value.re);
             if complex {
                 energies.push(value.im);
@@ -566,46 +721,53 @@ impl Model {
         };
         let r = |x: f64| num_complex::Complex64::new(x, 0.0);
         for t in &data.coulomb_intra_terms {
-            add([t.site, t.site, 0, t.site, t.site, 1, 2], r(t.value))?;
+            let i = t.site;
+            add([i, 0, i, 0, i, 1, i, 1, 2], r(t.value))?;
         }
         for t in &data.coulomb_inter_terms {
+            let (i, j) = (t.site1, t.site2);
             for s in 0..2 {
                 for u in 0..2 {
-                    add([t.site1, t.site1, s, t.site2, t.site2, u, 2], r(t.value))?;
+                    add([i, s, i, s, j, u, j, u, 2], r(t.value))?;
                 }
             }
         }
         for t in &data.hund_terms {
+            let (i, j) = (t.site1, t.site2);
             for s in 0..2 {
-                add([t.site1, t.site1, s, t.site2, t.site2, s, 2], r(-t.value))?;
+                add([i, s, i, s, j, s, j, s, 2], r(-t.value))?;
             }
         }
         for t in &data.transfer_terms {
-            if t.spin1 != t.spin2 {
+            // A spin-flip Transfer (C GreenFunc1_fsz2) needs FSZ walkers.
+            if !fsz && t.spin1 != t.spin2 {
                 return Err("GPU Transfer requires spin conservation".into());
             }
+            let (s, u) = (t.spin1.as_code() as i64, t.spin2.as_code() as i64);
             add(
-                [t.site1, t.site2, t.spin1.as_code() as i64, 0, 0, 0, 1],
+                [t.site1, s, t.site2, u, 0, 0, 0, 0, 1],
                 -coefficient(t.value)?,
             )?;
         }
         for t in &data.pair_hop_terms {
-            add([t.site1, t.site2, 0, t.site1, t.site2, 1, 2], r(t.value))?;
+            let (i, j) = (t.site1, t.site2);
+            add([i, 0, j, 0, i, 1, j, 1, 2], r(t.value))?;
         }
         for t in &data.exchange_terms {
+            let (i, j) = (t.site1, t.site2);
             for s in 0..2 {
-                add(
-                    [t.site1, t.site2, s, t.site2, t.site1, 1 - s, 2],
-                    r(t.value),
-                )?;
+                add([i, s, j, s, j, 1 - s, i, 1 - s, 2], r(t.value))?;
             }
         }
         for t in &data.inter_all_terms {
-            if t.spin0 != t.spin1 || t.spin2 != t.spin3 {
+            // Spin-changing pairs (C GreenFunc2_fsz2) need FSZ walkers.
+            if !fsz && (t.spin0 != t.spin1 || t.spin2 != t.spin3) {
                 return Err("GPU InterAll requires spin-conserving pairs".into());
             }
             add(
-                [t.site0, t.site1, t.spin0, t.site2, t.site3, t.spin2, 2],
+                [
+                    t.site0, t.spin0, t.site1, t.spin1, t.site2, t.spin2, t.site3, t.spin3, 2,
+                ],
                 coefficient(t.value)?,
             )?;
         }
@@ -650,6 +812,9 @@ impl Model {
             localspins,
             exchange,
             complex,
+            fsz,
+            nup,
+            spin_free,
         })
     }
 }

@@ -11,6 +11,8 @@ mod complex_tests;
 #[cfg(test)]
 mod dh_tests;
 #[cfg(test)]
+mod fsz_tests;
+#[cfg(test)]
 mod localspin_tests;
 #[cfg(test)]
 mod opttrans_tests;
@@ -106,43 +108,70 @@ impl Operators {
     fn prepare(model: &Model) -> Result<Self, String> {
         let data = &model.data;
         let mut ops = model.operators.clone();
-        let mut add = |op: [i64; 7]| -> Result<(), String> {
-            if [0, 1, 3, 4]
-                .iter()
-                .any(|&i| op[i] < 0 || op[i] >= model.ns as i64)
-                || ![op[2], op[5]].iter().all(|&s| (0..=1).contains(&s))
-            {
-                return Err("invalid GPU PhysCal operator site/spin".into());
-            }
-            ops.extend(op.map(|x| x as i32));
+        // `[dest1, s1, src1, t1, dest2, s2, src2, t2, pairs]` (encode_operator).
+        // FSZ walkers measure spin-flip pairs (C calgrn_fsz.c GreenFunc1_fsz2,
+        // GreenFunc2_fsz2); normal walkers require spin-conserving pairs.
+        let mut add = |op: [i64; 9], what: &str| -> Result<(), String> {
+            ops.extend(
+                super::model::encode_operator(model.fsz, model.ns, op)
+                    .map_err(|_| format!("GPU PhysCal requires spin-conserving {what} pairs"))?,
+            );
             Ok(())
         };
+        let spin = |s: mvmc_expert_parsers::types::Spin| s.as_code() as i64;
         for t in &data.green_one_terms {
-            if t.spin1 != t.spin2 {
-                return Err("GPU PhysCal requires spin-conserving OneBodyG pairs".into());
-            }
-            add([t.site1, t.site2, t.spin1.as_code() as i64, 0, 0, 0, 1])?;
+            let op = [
+                t.site1,
+                spin(t.spin1),
+                t.site2,
+                spin(t.spin2),
+                0,
+                0,
+                0,
+                0,
+                1,
+            ];
+            add(op, "OneBodyG")?;
         }
         for t in &data.green_two_terms {
-            if t.spin1 != t.spin2 || t.spin3 != t.spin4 {
-                return Err("GPU PhysCal requires spin-conserving TwoBodyG pairs".into());
-            }
-            add([
+            let op = [
                 t.site1,
+                spin(t.spin1),
                 t.site2,
-                t.spin1.as_code() as i64,
+                spin(t.spin2),
                 t.site3,
+                spin(t.spin3),
                 t.site4,
-                t.spin3.as_code() as i64,
+                spin(t.spin4),
                 2,
-            ])?;
+            ];
+            add(op, "TwoBodyG")?;
         }
         for t in &data.green_two_ex_terms {
-            if t.spin1 != t.spin2 || t.spin3 != t.spin4 {
-                return Err("GPU PhysCal requires spin-conserving TwoBodyGEx pairs".into());
-            }
-            add([t.site1, t.site2, t.spin1.as_code() as i64, 0, 0, 0, 1])?;
-            add([t.site3, t.site4, t.spin3.as_code() as i64, 0, 0, 0, 1])?;
+            let one = [
+                t.site1,
+                spin(t.spin1),
+                t.site2,
+                spin(t.spin2),
+                0,
+                0,
+                0,
+                0,
+                1,
+            ];
+            let two = [
+                t.site3,
+                spin(t.spin3),
+                t.site4,
+                spin(t.spin4),
+                0,
+                0,
+                0,
+                0,
+                1,
+            ];
+            add(one, "TwoBodyGEx")?;
+            add(two, "TwoBodyGEx")?;
         }
         Ok(Self {
             ops,

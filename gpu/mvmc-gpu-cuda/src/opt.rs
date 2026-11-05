@@ -12,6 +12,8 @@ mod complex_tests;
 #[cfg(test)]
 mod dh_tests;
 #[cfg(test)]
+mod fsz_tests;
+#[cfg(test)]
 mod localspin_tests;
 mod model;
 #[cfg(test)]
@@ -58,6 +60,7 @@ const KERNELS: &[&str] = &[
     "opt_initial",
     "opt_initial_commit",
     "opt_slater",
+    "opt_slater_f",
     "opt_counts",
     "opt_derivatives",
     "opt_energy_terms",
@@ -362,6 +365,7 @@ impl State {
         )?;
         let mut resident = ResidentInterval::from_sampler(backend, sampler, model.seed)?;
         resident.set_moves(backend, &model.localspins, model.exchange)?;
+        resident.set_fsz(model.fsz, model.spin_free);
         resident.set_doublon_holon(backend, &model.dh, model.n2, model.n4)?;
         resident.set_rbm(
             backend,
@@ -453,14 +457,19 @@ impl State {
         let b = &self.buffers;
         let m = &self.model;
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        // FSZ writes every entry of the 2ns x 2ns plane (C UpdateSlaterElm_fsz);
+        // the normal kernels write the four spin blocks of one (r, c) pair.
+        let items = m.nq * m.ns * m.ns * if m.fsz { 4 } else { 1 };
         unsafe {
             exec.launch(
-                module.function(if m.complex {
+                module.function(if m.fsz {
+                    "opt_slater_f"
+                } else if m.complex {
                     "opt_slater_c"
                 } else {
                     "opt_slater"
                 })?,
-                ((m.nq * m.ns * m.ns).div_ceil(256) as u32, 1, 1),
+                (items.div_ceil(256) as u32, 1, 1),
                 256,
                 0,
                 &[
@@ -470,12 +479,16 @@ impl State {
                     p(&b.pb)?,
                     p(&b.sa)?,
                     p(&b.sb)?,
-                    p(&b.cs)?,
-                    p(&b.cc)?,
-                    p(&b.ss)?,
-                    i(m.ns),
-                    i(m.nq),
-                ],
+                ]
+                .into_iter()
+                // C UpdateSlaterElm_fsz has no spin-projection weights.
+                .chain(if m.fsz {
+                    vec![]
+                } else {
+                    vec![p(&b.cs)?, p(&b.cc)?, p(&b.ss)?]
+                })
+                .chain([i(m.ns), i(m.nq)])
+                .collect::<Vec<_>>(),
             )
         }
     }
@@ -512,6 +525,7 @@ impl State {
                     self.resident.dh_ptr(exec)?,
                     i(m.n2),
                     i(m.n4),
+                    i(m.split()),
                 ],
             )?;
             if m.complex {
@@ -614,6 +628,8 @@ impl State {
                             i(m.ns),
                             i(m.ne),
                             i(w),
+                            i(m.nup),
+                            Arg::I(i32::from(m.fsz)),
                         ],
                     )?;
                     self.counts(exec, &module)?;
@@ -638,7 +654,7 @@ impl State {
                             p(&s.pfinv_pf)?,
                             p(&s.pfinv_st)?,
                             i(g.n),
-                            i(m.ne),
+                            i(m.split()),
                             i(m.ns),
                             i(m.nq),
                         ],
@@ -718,6 +734,7 @@ impl State {
                     i(m.nq),
                     i(s.geom.walkers),
                     p(&self.resident.error)?,
+                    i(m.split()),
                 ],
             )
         }
@@ -805,6 +822,7 @@ impl State {
                 ]
                 .into_iter()
                 .chain(self.resident.rbm_args(exec)?)
+                .chain([Arg::I(i32::from(m.fsz))])
                 .collect::<Vec<_>>(),
             )
         }
@@ -899,6 +917,7 @@ impl State {
                 ]
                 .into_iter()
                 .chain(self.resident.rbm_args(exec)?)
+                .chain([Arg::I(i32::from(m.fsz))])
                 .collect::<Vec<_>>(),
             )?;
         }

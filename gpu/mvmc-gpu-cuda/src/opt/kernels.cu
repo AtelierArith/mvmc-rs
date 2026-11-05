@@ -24,8 +24,14 @@ __device__ int opt_bounded(const unsigned int* tape, int& cursor, int length, in
 // order; each spin then shuffles the nonlocal sites (cumulatively) and fills
 // its unassigned labels in order. `loc` is null when there are no local spins,
 // which consumes the same words in the same order.
+//
+// FSZ walkers (#714) take the spins of C makeInitialSample_fsz: labels below
+// `nup` (Ne + 2Sz/2, or Ne for 2Sz=-1) are up, the others down, and each slot
+// is published as rs = site + spin*ns. With nup = ne the draws are those of
+// the normal contract.
 extern "C" __global__ void opt_initial(int* cfg, int* scratch, const unsigned int* tape,
-    const int* pending, int* candidate, const int* loc, int ns, int ne, int batch) {
+    const int* pending, int* candidate, const int* loc, int ns, int ne, int batch,
+    int nup, int fsz) {
   int w=blockIdx.x*blockDim.x+threadIdx.x;
   if (w>=batch || !pending[w]) return;
   int n=2*ne, words=n+2*ns+16, cursor=0, good=1;
@@ -46,21 +52,23 @@ extern "C" __global__ void opt_initial(int* cfg, int* scratch, const unsigned in
     }
   }
   for (int spin=0;spin<2;++spin) {
+    const int lo=spin?nup:0, hi=spin?n:nup;
     int unused=0;
-    for (int a=0;a<ne;++a) unused+=e[spin*ne+a]==-1;
+    for (int a=lo;a<hi;++a) unused+=e[a]==-1;
     if (unused>nonlocal) good=0;
     for (int k=nonlocal;k>=2;--k) {
       int j=opt_bounded(t,cursor,words,k,good), v=s[n+k-1]; s[n+k-1]=s[n+j]; s[n+j]=v;
     }
     int next=0;
-    for (int a=0;a<ne;++a) {
-      if (e[spin*ne+a]==-1) {
-        if (next<nonlocal) e[spin*ne+a]=s[n+next];
+    for (int a=lo;a<hi;++a) {
+      if (e[a]==-1) {
+        if (next<nonlocal) e[a]=s[n+next];
         ++next;
       }
     }
   }
-  if (!good) for (int a=0;a<n;++a) e[a]=a%ne;
+  if (!good) for (int a=0;a<n;++a) e[a]=fsz?a:a%ne;
+  else if (fsz) for (int a=nup;a<n;++a) e[a]+=ns;
   candidate[w]=good;
 }
 
@@ -105,17 +113,29 @@ extern "C" __global__ void opt_slater(double* slater, const double* params,
   s[(r+ns)*n2+c+ns]=__dmul_rn(d,cs[q]);
 }
 
+// C UpdateSlaterElm_fsz (slater_fsz.c:31-106): every entry of the general
+// 2ns x 2ns orbital matrix, S[q][rsi][rsj] = F[a] s_a - F[b] s_b with the
+// translated orbital indices and signs of the model tables (#714).
+extern "C" __global__ void opt_slater_f(double* slater, const double* params,
+    const int* pa, const int* pb, const int* sa, const int* sb, int ns, int nq) {
+  int k=blockIdx.x*blockDim.x+threadIdx.x;
+  if (k>=4*ns*ns*nq) return;
+  double a=__dmul_rn(params[pa[k]],(double)sa[k]), b=__dmul_rn(params[pb[k]],(double)sb[k]);
+  slater[k]=__dsub_rn(a,b);
+}
+
 // Integer counts and electron-label lookup are rebuilt without downloading cfg.
+// `split` is the first slot with the down-spin offset (ne, or n for FSZ).
 extern "C" __global__ void opt_counts(const int* cfg, int* occ, int* lookup,
     int* counts, const int* gutz, const int* jast, const double* params,
     const double* pf, const double* weights, double* overlaps, double* logs,
-    int ns, int ne, int nq, int ng, int nj, const int* dh, int n2, int n4) {
+    int ns, int ne, int nq, int ng, int nj, const int* dh, int n2, int n4, int split) {
   int w=blockIdx.x, tid=threadIdx.x, n=2*ne, nproj=ng+nj+6*n2+10*n4;
   int* o=occ+w*2*ns; int* map=lookup+w*2*ns; int* cnt=counts+w*nproj;
   for (int r=tid;r<2*ns;r+=blockDim.x) { o[r]=0; map[r]=-1; }
   for (int p=tid;p<nproj;p+=blockDim.x) cnt[p]=0;
   __syncthreads();
-  for (int a=tid;a<n;a+=blockDim.x) { int r=cfg[w*n+a]+(a>=ne?ns:0); o[r]=1; map[r]=a; }
+  for (int a=tid;a<n;a+=blockDim.x) { int r=cfg[w*n+a]+(a>=split?ns:0); o[r]=1; map[r]=a; }
   __syncthreads();
   for (int r=tid;r<ns;r+=blockDim.x) {
     if (gutz[r]>=0) atomicAdd(cnt+gutz[r],o[r]*o[r+ns]);
@@ -194,11 +214,11 @@ __device__ int opt_site(const int* e,int i,int a,int k,int da,int dk) {
 
 // Correlation difference for at most two moves. Merge coincident sites first;
 // include each touched/untouched and touched/touched Jastrow pair exactly once.
-__device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
-    const double* params,const int* op,int ns,int ng,int nj,int lane,
-    const int* dh,int n2,int n4,const int* rbm,const double* rbmw,const double* theta_w,int nh) {
-  int sites[4]={op[0],op[1],op[3],op[4]}, spins[4]={op[2],op[2],op[5],op[5]};
-  int change[4]={1,-1,op[6]==2?1:0,op[6]==2?-1:0};
+// Returns this lane's partial sum. `sites`/`spins` are the creation and
+// annihilation positions in operator order with occupation changes +1/-1.
+__device__ double opt_delta_moves(const int* occ,const int* gutz,const int* jast,
+    const double* params,const int* sites,const int* spins,const int* change,
+    int ns,int ng,int nj,int lane,const int* dh,int n2,int n4) {
   int s[4],du[4],dd[4],count=0;
   for(int t=0;t<4;++t) {
     int i=0; for(;i<count && s[i]!=sites[t];++i) {}
@@ -230,6 +250,15 @@ __device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
     const ResidentOccMoved after{occ,ns,count,s,du,dd};
     result+=resident_dh_delta(before,after,dh,n2,n4,ns,ng+nj,params,lane,32);
   }
+  return result;
+}
+
+__device__ double opt_delta(const int* occ,const int* gutz,const int* jast,
+    const double* params,const int* op,int ns,int ng,int nj,int lane,
+    const int* dh,int n2,int n4,const int* rbm,const double* rbmw,const double* theta_w,int nh) {
+  const int sites[4]={op[0],op[1],op[3],op[4]}, spins[4]={op[2],op[2],op[5],op[5]};
+  const int change[4]={1,-1,op[6]==2?1:0,op[6]==2?-1:0};
+  double result=opt_delta_moves(occ,gutz,jast,params,sites,spins,change,ns,ng,nj,lane,dh,n2,n4);
   // C calham.c/calgrn.c: UpdateRBMCnt for the right pair, then the left pair,
   // and the RBM ratio of the moved configuration (LogRBMRatio).
   if(rbm!=nullptr) {
@@ -269,6 +298,50 @@ __device__ int opt_resolve(const int* op,const int* map,const int* e,int ne,int 
   return 0;
 }
 
+// FSZ operators (#714) hold rs = site + spin*ns positions,
+// (dest1, src1, -, dest2, src2, -, pairs), so a pair may flip a spin
+// (C GreenFunc1_fsz2, GreenFunc2_fsz2). The slot search covers all n slots;
+// otherwise this is opt_resolve.
+__device__ int opt_resolve_rs(const int* op,const int* map,const int* e,int n,
+    int& a,int& k,int& da,int& dk) {
+  k=-1;a=-1;da=op[0];dk=op[3];
+  if(op[6]==2) {
+    k=map[op[4]];
+    if(k<0 || (op[3]!=op[4] && map[op[3]]>=0)) return -1;
+  }
+  for(int i=0;i<n;++i) {
+    int r=i==k?op[3]:e[i];
+    if(r==op[1]) a=i;
+    if(op[0]!=op[1] && r==op[0]) return -1;
+  }
+  if(a<0) return -1;
+  if(k==a) k=-1;
+  if(k>=0 && dk==e[k]) k=-1;
+  if(da==e[a]) a=-1;
+  if(a<0 && k<0) return 1;
+  if(a<0) {a=k;da=dk;k=-1;}
+  return 0;
+}
+
+// opt_delta for an FSZ operator: the Gutzwiller/Jastrow change of the moved
+// rs positions (C UpdateProjCnt_fsz). FSZ models have no DH or RBM factors.
+__device__ double opt_delta_rs(const int* occ,const int* gutz,const int* jast,
+    const double* params,const int* op,int ns,int ng,int nj,int lane) {
+  const int moved[4]={op[0],op[1],op[3],op[4]};
+  int sites[4],spins[4];
+  for(int t=0;t<4;++t) {sites[t]=moved[t]%ns;spins[t]=moved[t]/ns;}
+  const int change[4]={1,-1,op[6]==2?1:0,op[6]==2?-1:0};
+  return opt_warp_sum(opt_delta_moves(occ,gutz,jast,params,sites,spins,change,ns,ng,nj,lane,
+      nullptr,0,0));
+}
+
+// One operator against a walker: opt_resolve for normal walkers, the rs form
+// for FSZ walkers.
+__device__ int opt_resolve_any(const int* op,const int* map,const int* e,int ne,int ns,int fsz,
+    int& a,int& k,int& da,int& dk) {
+  return fsz?opt_resolve_rs(op,map,e,2*ne,a,k,da,dk):opt_resolve(op,map,e,ne,ns,a,k,da,dk);
+}
+
 __device__ int opt_all_valid(const int* valid,int w,int nq) {
   int all=1;
   for(int q=0;q<nq;++q) all&=valid[w*nq+q]!=0;
@@ -283,34 +356,37 @@ extern "C" __global__ void opt_energy_terms(double* values,const int* ops,
     const double* weights,const double* inv,const double* pf,
     int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error,
     const int* valid,const int* dh,int n2dh,int n4dh,const int* rbm,const double* rbmw,
-    const double* theta,int nh) {
+    const double* theta,int nh,int fsz) {
   int lane=threadIdx.x%32;
   unsigned int index=blockIdx.x*(blockDim.x/32)+threadIdx.x/32;
   if(index>=terms*batch || *error) return;
   int t=index%terms,w=index/terms,n=2*ne,n2=2*ns;
   if(!opt_all_valid(valid,w,nq)) return;
   const int* op=ops+(size_t)7*t; const int* map=lookup+w*n2; const int* e=cfg+w*n;
+  // FSZ slots hold rs: no spin offset (split = n).
+  const int split=fsz?n:ne;
   int a,k,da,dk;
-  int resolved=opt_resolve(op,map,e,ne,ns,a,k,da,dk);
+  int resolved=opt_resolve_any(op,map,e,ne,ns,fsz,a,k,da,dk);
   if(resolved) {if(!lane) values[index]=resolved>0?1:0;return;}
-  double delta=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane,dh,n2dh,n4dh,
+  double delta=fsz?opt_delta_rs(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane)
+      :opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,lane,dh,n2dh,n4dh,
       rbm,rbmw,rbm?theta+(size_t)w*nh:nullptr,nh),newip=0;
   for(int q=0;q<nq;++q) {
     const double* S=slater+(size_t)q*n2*n2;
     const double* M=inv+((size_t)w*nq+q)*n*n;
-    int ra=da+(a>=ne?ns:0),rk=dk+(k>=ne?ns:0);
+    int ra=da+(a>=split?ns:0),rk=dk+(k>=split?ns:0);
     double ratio=0;
     if(k<0) {
       double sum=0;
-      for(int j=lane;j<n;j+=32) sum+=M[a*n+j]*S[ra*n2+e[j]+(j>=ne?ns:0)];
+      for(int j=lane;j<n;j+=32) sum+=M[a*n+j]*S[ra*n2+e[j]+(j>=split?ns:0)];
       ratio=-opt_warp_sum(sum);
     } else {
       double pa=0,pb=0,qa=0,qb=0,bma=0;
       for(int i=lane;i<n;i+=32) {
-        int ri=opt_site(e,i,a,k,da,dk)+(i>=ne?ns:0);
+        int ri=opt_site(e,i,a,k,da,dk)+(i>=split?ns:0);
         double av=S[ra*n2+ri],bv=S[rk*n2+ri],tmp=0;
         for(int j=0;j<n;++j) {
-          int rj=opt_site(e,j,a,k,da,dk)+(j>=ne?ns:0);
+          int rj=opt_site(e,j,a,k,da,dk)+(j>=split?ns:0);
           tmp+=M[i*n+j]*S[ra*n2+rj];
         }
         bma+=bv*tmp; pa+=M[i*n+a]*av; pb+=M[i*n+k]*av;
@@ -334,8 +410,9 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
     const int* gutz,const int* jast,const double* params,const double* slater,
     const double* weights,const int* valid,double* fac,
     int ns,int ne,int nq,int ng,int nj,int terms,int batch,const int* error,
-    const int* dh,int n2dh,int n4dh,const int* rbm,const double* rbmw,const double* theta,int nh) {
-  int w=blockIdx.x,tid=threadIdx.x,n=2*ne,n2=2*ns;
+    const int* dh,int n2dh,int n4dh,const int* rbm,const double* rbmw,const double* theta,int nh,
+    int fsz) {
+  int w=blockIdx.x,tid=threadIdx.x,n=2*ne,n2=2*ns,split=fsz?n:ne;
   if(w>=batch || *error || opt_all_valid(valid,w,nq)) return;
   extern __shared__ char fallback_mem[];
   int* rs=reinterpret_cast<int*>(fallback_mem);
@@ -348,7 +425,7 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
     const int* op=ops+(size_t)7*t;
     if(!tid) {
       int a,k,da,dk;
-      s_resolved=opt_resolve(op,map,e,ne,ns,a,k,da,dk);
+      s_resolved=opt_resolve_any(op,map,e,ne,ns,fsz,a,k,da,dk);
       s_a=a;s_k=k;s_da=da;s_dk=dk;s_ip=0;
     }
     __syncthreads();
@@ -359,12 +436,13 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
       continue;
     }
     if(tid<32) {
-      double d=opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid,dh,n2dh,n4dh,
+      double d=fsz?opt_delta_rs(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid)
+          :opt_delta(occ+w*n2,gutz,jast,params,op,ns,ng,nj,tid,dh,n2dh,n4dh,
           rbm,rbmw,rbm?theta+(size_t)w*nh:nullptr,nh);
       if(!tid) s_delta=d;
     }
     for(int i=tid;i<n;i+=blockDim.x)
-      rs[i]=opt_site(e,i,s_a,s_k,s_da,s_dk)+(i>=ne?ns:0);
+      rs[i]=opt_site(e,i,s_a,s_k,s_da,s_dk)+(i>=split?ns:0);
     __syncthreads();
     for(int q=0;q<nq;++q) {
       resident_gather(A,rs,n,-1,-1,slater,q,n2);
@@ -383,13 +461,13 @@ extern "C" __global__ void opt_energy_fallback(double* values,const int* ops,
 // (walker, QP); valid planes return. `fac` is per-plane n*n scratch.
 // Dynamic shared memory: n ints of sites (rounded to even), then 2n doubles.
 extern "C" __global__ void opt_cofactors(double* inv,const int* valid,const int* cfg,
-    const double* slater,double* fac,int ns,int ne,int nq,int batch,const int* error) {
+    const double* slater,double* fac,int ns,int ne,int nq,int batch,const int* error,int split) {
   int plane=blockIdx.x,w=plane/nq,q=plane%nq,n=2*ne,n2=2*ns;
   if(w>=batch || *error || valid[plane]) return;
   extern __shared__ char cofactor_mem[];
   int* rs=reinterpret_cast<int*>(cofactor_mem);
   double* vec=reinterpret_cast<double*>(rs+((n+1)&~1));
-  for(int i=threadIdx.x;i<n;i+=blockDim.x) rs[i]=cfg[w*n+i]+(i>=ne?ns:0);
+  for(int i=threadIdx.x;i<n;i+=blockDim.x) rs[i]=cfg[w*n+i]+(i>=split?ns:0);
   __syncthreads();
   double* A=fac+(size_t)plane*n*n;
   double* C=inv+(size_t)plane*n*n;

@@ -129,6 +129,10 @@ pub struct ResidentInterval {
     pub(crate) dh_tables: (usize, usize),
     /// RBM tables, coefficients and per-walker hidden fields (#667).
     pub(crate) rbm: Option<ResidentRbm>,
+    /// General-orbital (FSZ) walkers whose slots hold `rs` (#714).
+    pub(crate) fsz: bool,
+    /// FSZ with `2Sz = -1`: hops may change the spin.
+    pub(crate) spin_free: bool,
 }
 
 /// Device RBM state of one ensemble (`resident_rbm.cuh`). The tables and the
@@ -244,6 +248,8 @@ impl ResidentInterval {
                 dh: None,
                 dh_tables: (0, 0),
                 rbm: None,
+                fsz: false,
+                spin_free: false,
             })
         })
         .map_err(|e| e.to_string())
@@ -279,6 +285,25 @@ impl ResidentInterval {
             None
         };
         Ok(())
+    }
+
+    /// Select the FSZ walker contract (#714): slots hold `rs = site +
+    /// spin*nsite` and the proposals follow `interval_kernels.cu`'s FSZ words.
+    /// `spin_free` is C's `2Sz = -1`. No device state is involved.
+    pub(crate) fn set_fsz(&mut self, fsz: bool, spin_free: bool) {
+        self.fsz = fsz;
+        self.spin_free = fsz && spin_free;
+    }
+
+    /// First slot whose Slater row carries the down-spin offset: `Ne` for
+    /// normal walkers, `2Ne` for FSZ walkers.
+    pub(crate) fn split(&self) -> usize {
+        let g = self.sampler.geom;
+        if self.fsz {
+            g.n
+        } else {
+            g.ne
+        }
     }
 
     /// Upload the doublon-holon neighbor tables once at setup (C `projection.c`
@@ -504,6 +529,10 @@ impl ResidentInterval {
                     ]
                     .into_iter()
                     .chain(self.rbm_args(exec)?)
+                    .chain([
+                        Arg::I(i32::from(self.fsz)),
+                        Arg::I(i32::from(self.spin_free)),
+                    ])
                     .collect::<Vec<_>>(),
                 )?;
                 self.enqueue_rebuild(exec, &module)?;
@@ -684,7 +713,7 @@ impl ResidentInterval {
                         p(&s.pfinv_pf)?,
                         p(&s.pfinv_st)?,
                         i(g.n),
-                        i(g.ne),
+                        i(self.split()),
                         i(g.nsite),
                         i(g.nqp),
                         i(capacity),
@@ -722,7 +751,7 @@ impl ResidentInterval {
                     p(&s.pfinv_pf)?,
                     p(&s.pfinv_st)?,
                     i(g.n),
-                    i(g.ne),
+                    i(self.split()),
                     i(g.nsite),
                     i(g.nqp),
                 ],
