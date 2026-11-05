@@ -173,20 +173,125 @@ fn record_counts_pair_hop_and_lenient_readers_follow_c() {
     assert_eq!(def.pair_hopping, vec![(0, 1, 0.5), (1, 0, 0.5)]);
     assert_eq!(def.hund, vec![(2, 3, 0.25)]);
 
-    // C `ReadDefFileError` returns 0: a short Trans file is reported but
-    // accepted, the missing records stay zero. Extra records are dropped
-    // (C overflows its heap array).
-    let dir = base("short", GOOD, "");
-    dir.write("trans.def", &(header("NTransfer", 3) + "0 0 1 0 1.0 0.0\n"));
-    let def = definition(&dir).unwrap();
-    assert_eq!(def.transfer.len(), 3);
-    assert_eq!(def.transfer[0].value.re, 1.0);
-    assert_eq!(def.transfer[2].value.re, 0.0);
+    // Extra records are dropped with a warning (C 1.3.0 overflows its heap
+    // array; C 1.4.0 aborts for Trans).
+    let dir = base("extra", GOOD, "");
     dir.write(
         "trans.def",
         &(header("NTransfer", 1) + "0 0 1 0 1.0 0.0\n1 0 0 0 7.0 0.0\n"),
     );
-    assert_eq!(definition(&dir).unwrap().transfer.len(), 1);
+    let def = definition(&dir).unwrap();
+    assert_eq!(def.transfer.len(), 1);
+    assert_eq!(def.transfer[0].value.re, 1.0);
+}
+
+/// #680: mVMC 1.3.0 `ReadDefFileError` returns 0, so a file with fewer
+/// records than declared ran with zero-filled terms. Upstream mVMC#81
+/// (v1.4.0) makes it fatal; Rust follows the fixed behaviour.
+#[test]
+fn short_definition_files_are_rejected() {
+    let cases: [(&str, &str, String, &str); 5] = [
+        (
+            "trans.def",
+            "",
+            header("NTransfer", 3) + "0 0 1 0 1.0 0.0\n",
+            "1 records, fewer than the declared 3",
+        ),
+        (
+            "coulombintra.def",
+            "",
+            header("NCoulombIntra", 4) + "0 3.0\n1 3.0\n",
+            "2 records, fewer than the declared 4",
+        ),
+        (
+            "initial.def",
+            "Initial initial.def\n",
+            header("NInitial", 2) + "0 0 0 0 0.5 0.0\n",
+            "1 records, fewer than the declared 2",
+        ),
+        (
+            "locspn.def",
+            "",
+            header("NlocalSpin", 0) + "0 0\n1 0\n2 0\n",
+            "3 records, fewer than the declared 4",
+        ),
+        (
+            "orbital.def",
+            "",
+            header("NOrbitalIdx", 4) + "0 0 0\n0 1 1\n",
+            "2 records, fewer than the declared 16",
+        ),
+    ];
+    for (file, namelist_extra, text, expected) in cases {
+        let dir = base(&format!("short-{file}"), GOOD, namelist_extra);
+        dir.write(file, &text);
+        let error = message(definition(&dir));
+        assert!(
+            error.starts_with(&format!("{file}: {expected}")),
+            "{file}: {error}"
+        );
+        // The run fails before writing any result file.
+        let options = UhfOptions {
+            base_dir: dir.0.clone(),
+        };
+        assert!(run(Path::new("namelist.def"), &options).is_err());
+        assert!(!dir.0.join("zvo_check.dat").exists(), "{file}");
+    }
+    // The fscanf-based readers (Hund/Exchange/PairHop/InterAll) use the same rule.
+    let dir = base("short-hund", GOOD, "Hund hund.def\n");
+    dir.write("hund.def", &(header("NHund", 2) + "2 3 0.25\n"));
+    let error = message(definition(&dir));
+    assert!(
+        error.starts_with("hund.def: 1 records, fewer than the declared 2"),
+        "{error}"
+    );
+}
+
+/// #680 contract: trailing whitespace-only lines are not records in any file.
+/// C counts every `fgets` line, so C 1.4.0 rejects a trailing blank line in
+/// Trans but tolerates it in Initial. Interior lines keep C's
+/// one-line-one-record counting.
+#[test]
+fn trailing_blank_lines_are_not_records() {
+    let dir = base("blank", GOOD, "Initial initial.def\n");
+    let mut trans = String::new();
+    for i in 0..4 {
+        for spin in 0..2 {
+            let j = (i + 1) % 4;
+            trans += &format!("{i} {spin} {j} {spin} 1.0 0.0\n{j} {spin} {i} {spin} 1.0 0.0\n");
+        }
+    }
+    dir.write(
+        "trans.def",
+        &(header("NTransfer", 16) + &trans + "\n  \n\t\n"),
+    );
+    dir.write(
+        "coulombintra.def",
+        &(header("NCoulombIntra", 4) + "0 3.0\n1 3.0\n2 3.0\n3 3.0\n\n"),
+    );
+    dir.write(
+        "locspn.def",
+        &(header("NlocalSpin", 0) + "0 0\n1 0\n2 0\n3 0\n\n"),
+    );
+    dir.write(
+        "initial.def",
+        &(header("NInitial", 1) + "0 0 0 0 0.5 0.0\n\n"),
+    );
+    let def = definition(&dir).unwrap();
+    assert_eq!(def.transfer.len(), 16);
+    assert_eq!(def.coulomb_intra.len(), 4);
+    assert_eq!(def.initial.len(), 1);
+    // An interior blank line is still a record, as in C, so it cannot hide a
+    // missing record.
+    dir.write(
+        "coulombintra.def",
+        &(header("NCoulombIntra", 4) + "0 3.0\n\n1 3.0\n"),
+    );
+    let error = message(definition(&dir));
+    assert!(
+        error.contains("3 records, fewer than the declared 4"),
+        "{error}"
+    );
 }
 
 #[test]
