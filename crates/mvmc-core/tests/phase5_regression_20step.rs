@@ -71,7 +71,7 @@ fn run_and_compare(julia: &Path, model: &Model) -> Result<(), String> {
     }
     ctest_provenance::verify_inputs(&manifest, namelist.parent().unwrap());
     // Match the public runner's parser, not its non-overriding mode label.
-    let data = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&namelist, false)
+    let data = mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&namelist, false)
         .map_err(|error| format!("{}: input preflight: {error}", model.name))?;
     validate_model(model, &data)?;
 

@@ -913,9 +913,10 @@ pub(crate) fn spin_code(spin: Spin) -> u8 {
 }
 
 /// OptTrans derivative components in sector order, using fixed QP weights.
-/// C `calculateOptTransDiff` writes one value per sector in consecutive slots,
-/// leaving the remainder of the doubled block untouched. Historical Julia data
-/// uses real/imaginary pairs; native input metadata selects the C layout.
+/// Each sector writes the (value, i*value) pair of its real/imaginary
+/// components. C `calculateOptTransDiff` writes one value per sector into
+/// consecutive slots instead (`vmccal.c:639`), a defect kept out of Rust
+/// (#370, tmisawa/Julia-mVMC#55; flags #676, tmisawa/Julia-mVMC#94).
 pub fn opt_trans_diff(
     sr_opt_o: &mut [Complex64],
     ip: Complex64,
@@ -937,12 +938,6 @@ pub fn opt_trans_diff(
             }
         }
         let value = crate::julia_complex::divide(acc, ip);
-        if data.c_opt_trans_flags {
-            if let Some(slot) = sr_opt_o.get_mut(sector) {
-                *slot = value;
-            }
-            continue;
-        }
         let real = 2 * sector;
         if real + 1 < sr_opt_o.len() {
             sr_opt_o[real] = value;

@@ -18,7 +18,9 @@ gcc -std=c11 -O3 c_toolbox/native_comparison_492/opttrans_derivative.c -o /tmp/o
 The Rust test reads only this checked-in text. It does not compile or invoke C.
 The six output rows each contain real and imaginary components. The first two
 are sector derivatives in consecutive slots, rather than real/imaginary pairs;
-the other four are untouched sentinel values. Computed components use explicit
+the other four are untouched sentinel values. Rust writes each sector's
+(value, i*value) pair (#370, tmisawa/Julia-mVMC#55), so the test compares the C
+sector values at Rust's pair slots and excludes C's slot layout. Computed components use explicit
 absolute and relative `1e-14` bounds for the short complex arithmetic sequence.
 
 `rbm_sr_system.json` and `rbm_state.txt` come from the optional full native
@@ -27,7 +29,9 @@ executable probe, not Rust. They capture the first pre-SR boundary on the
 `NLanczosMode=0`, `NVMCSample=1000`, one optimization step, one final averaging
 step, no initial parameter file, `-o`, one MPI rank and one OpenMP/BLAS thread.
 The JSON preserves C's column-major unfactored stabilized SR matrix, RHS and
-57 active indices. The state includes exact RNG draw count and next 624 words.
+57 active indices. C never flags the OptTrans weights (#676,
+tmisawa/Julia-mVMC#94); Rust appends their three real components to the active
+set, and only the leading 57x57 block and 57 RHS rows are compared with C. The state includes exact RNG draw count and next 624 words.
 The Rust regression independently runs those inputs and compares operands
 with `1e-13` absolute/relative bounds; measured Linux operand divergence is
 at most `2.1e-15`. Component indices and RNG are exact. This tests the first

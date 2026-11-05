@@ -238,6 +238,44 @@ bound is `2 * n * eps * max|entry|` (observed at most `0.6 * n * eps`, for
 inverse bounds. C-order correctness is covered by the hand-dyadic and analytic
 tests (`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
 
+## OptTrans optimization flags (#676)
+
+C 1.3.0 `GetInfoOptTrans` (`readdef.c:1067-1068, 2385-2402`) writes
+`OptFlag[NProj + NOrbitalIdx + i] = 1`: the index is not doubled and the offset
+has no RBM term. The OptTrans weights are therefore never optimized, and
+unrelated projection/Slater component flags are set instead (in the real
+`physcal_181/hubbard_chain_dh_opttrans` input, components 35-37, two of them
+imaginary components of real-mode parameters). This is a C defect, reported upstream as
+[tmisawa/Julia-mVMC#94](https://github.com/tmisawa/Julia-mVMC/issues/94).
+Rust keeps the correct mathematics, as Julia and the resident GPU path do: with
+`-o` the real component of every OptTrans weight is optimized, its imaginary
+component stays fixed, and no other flag changes (`set_opt_trans_opt_flags`).
+The OptTrans derivatives use their (value, i*value) component pairs, so their
+slots match these flags (`opt_real`, #370, above). Rust no longer has a C-flag emulation
+path (the #100 `set_opt_trans_c_opt_flags` and `c_opt_trans_flags` were
+removed). C comparisons exclude the affected quantities instead of
+regenerating expectations from Rust:
+
+- `physcal_issue181::independent_c_definition_component_flags`: the C stray
+  cells `NProj + NSlater + i` and the OptTrans tail are excluded from the C
+  flag comparison; the test checks that `-o` leaves every other flag equal to
+  the run without OptTrans and that the tail is `1 0` per weight.
+- `native_comparison_492::native_rbm_sr_operands_active_components_and_rng_match_c_capture`:
+  C's 57 active components (its stray writes fall on already active
+  components here) are the leading Rust active set, followed by the three
+  OptTrans real components; only the leading 57x57 block of the stabilized SR
+  matrix and the first 57 RHS rows are compared with C, at the unchanged
+  `1e-13` bounds. RNG and saved state remain exact.
+- `native_comparison_492::native_opttrans_derivative_values_match_c_in_component_pair_layout`:
+  C's per-sector derivative values are compared at Rust's real/imaginary slot
+  pair; C's consecutive slot layout is excluded.
+- The `ot` cells of `multiwalker_sr_435` and `mpi_issue179_matrix` compare
+  step-1 operands before the SR solve, which do not depend on the flags; the
+  real-mode OptTrans trailing entries stay excluded per #370.
+
+Beyond step 1 the C trajectory of an `-o` optimization freezes the weights
+and Rust's moves them, so no multi-step `-o` C trajectory is compared.
+
 ## C `-b` varbin parameter blocks (#347)
 
 C's `-b` output (`vmcmain.c:658`) is `fwrite(Para, sizeof(double), NPara, FileVar)` on a

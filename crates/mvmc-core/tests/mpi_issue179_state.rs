@@ -308,7 +308,7 @@ fn issue179_state() {
         .lines()
         .any(|line| line.split_whitespace().next() == Some("OptTrans"));
     let mut data =
-        mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, enable_opt_trans)
+        mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, enable_opt_trans)
             .unwrap();
     assert!(data.inter_all_terms.is_empty(), "InterAll excluded");
     assert!(

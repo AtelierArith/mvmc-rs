@@ -179,10 +179,10 @@ keeps the Julia GPU tape contract; the physics follows C `qp.c`, `slater.c`,
   `OptTrans` definition and optimizes every real component, as Julia does.
   C activates OptTrans only with `-o`. Its `GetInfoOptTrans` writes
   `OptFlag[fidx]` with an undoubled index (`readdef.c:2400`), so the OptTrans
-  component flags are never written. The Rust C-order CLI keeps them inactive,
-  so its weights stay at their normalized input values. A resident model with
-  those flags cleared reproduces that behaviour
-  (`resident_opt_opttrans_repeats_twenty_steps`).
+  component flags are never written. That is a C defect (#676,
+  tmisawa/Julia-mVMC#94): the Rust C-order CLI (`-o`) also optimizes the real
+  weight components now. A resident model with those flags cleared keeps the
+  weights at their input values (`resident_opt_opttrans_repeats_twenty_steps`).
 
 PhysCal uses the normalized input weights (C normalizes them at setup for both
 modes, `vmcmain.c:276`) and never changes them. See

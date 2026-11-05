@@ -1,7 +1,6 @@
 //! C keyword-slot preflight at all public loaders, not metadata-utility deduplication.
 use mvmc_expert_parsers::{
-    parse_expert_mode_files, parse_expert_mode_files_with_c_opt_trans,
-    parse_expert_mode_files_with_opt_trans, ExpertModeData, ParseError,
+    parse_expert_mode_files, parse_expert_mode_files_with_opt_trans, ExpertModeData, ParseError,
 };
 use std::{
     fs, io,
@@ -35,7 +34,7 @@ impl Input {
         match entry {
             0 => parse_expert_mode_files(path),
             1 => parse_expert_mode_files_with_opt_trans(path, false),
-            2 => parse_expert_mode_files_with_c_opt_trans(path, false),
+            2 => parse_expert_mode_files_with_opt_trans(path, true),
             _ => unreachable!(),
         }
     }

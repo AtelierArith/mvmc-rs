@@ -1,5 +1,5 @@
 //! C-facing indexed TransSym is distinct from Julia generic QPTrans terms.
-use mvmc_expert_parsers::{parse_expert_mode_files, parse_expert_mode_files_with_c_opt_trans};
+use mvmc_expert_parsers::{parse_expert_mode_files, parse_expert_mode_files_with_opt_trans};
 use num_complex::Complex64;
 use std::{
     fs, io,
@@ -46,7 +46,7 @@ fn c_zero_count_is_not_rejected_by_generic_intent_inference() {
             let input = Input::new(keyword, payload);
             for c_mode in [false, true] {
                 let data = if c_mode {
-                    parse_expert_mode_files_with_c_opt_trans(input.0.join("namelist.def"), false)
+                    parse_expert_mode_files_with_opt_trans(input.0.join("namelist.def"), false)
                 } else {
                     parse_expert_mode_files(input.0.join("namelist.def"))
                 }
@@ -73,7 +73,7 @@ fn indexed_alias_and_canonical_transsym_preserve_complex_weights_and_maps() {
             );
             for c_mode in [false, true] {
                 let data = if c_mode {
-                    parse_expert_mode_files_with_c_opt_trans(input.0.join("namelist.def"), false)
+                    parse_expert_mode_files_with_opt_trans(input.0.join("namelist.def"), false)
                 } else {
                     parse_expert_mode_files(input.0.join("namelist.def"))
                 }

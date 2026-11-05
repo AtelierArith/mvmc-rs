@@ -96,7 +96,7 @@ fn canonical_models_match_independent_prefix_oracles() {
                     .join(input_model)
                     .join("inputs/namelist.def");
                 let mut data =
-                    mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false)
+                    mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, false)
                         .unwrap();
                 mvmc_core::validation::validate_para_opt(&data).unwrap();
                 if model == "general_rbm_cmp_cg" {
@@ -433,8 +433,7 @@ fn general_rbm_ctest_short_prefix_and_twenty_step_discrete_trajectory() {
     ] {
         for steps in [1, 2, 3, 20] {
             let mut data =
-                mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(&input, false)
-                    .unwrap();
+                mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&input, false).unwrap();
             mvmc_core::validation::validate_para_opt(&data).unwrap();
             assert_eq!(data.modpara.rnd_seed, 12395);
             let mut rng = sfmt19937::Sfmt19937Rng::new(data.modpara.rnd_seed as u32);

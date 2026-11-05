@@ -42,8 +42,6 @@ pub struct DirectSolveSettings {
     pub nsrcg: i64,
     /// Input derivative-storage selector.
     pub nstore: i64,
-    /// Whether C's consecutive OptTrans flag layout is active.
-    pub c_opt_trans_flags: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,7 +263,6 @@ pub(super) fn before_solve(
                 step_dt: data.modpara.dsr_opt_step_dt,
                 nsrcg: data.modpara.nsrcg,
                 nstore: data.modpara.nstore_o,
-                c_opt_trans_flags: data.c_opt_trans_flags,
             },
             increment: Vec::new(),
             status: None,

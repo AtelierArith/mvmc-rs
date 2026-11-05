@@ -103,11 +103,9 @@ fn negative_clock_and_asymmetric_runner_failures() {
     // TwoBodyGEx fixture. Keep the actual runtime rejection policy intact.
     let optimization_namelist = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../extern/Julia-mVMC/examples/inputs/heisenberg_chain_real/namelist.def");
-    let optimization_data = mvmc_expert_parsers::parse_expert_mode_files_with_c_opt_trans(
-        &optimization_namelist,
-        false,
-    )
-    .unwrap();
+    let optimization_data =
+        mvmc_expert_parsers::parse_expert_mode_files_with_opt_trans(&optimization_namelist, false)
+            .unwrap();
     crate::validation::validate_para_opt(&optimization_data).unwrap();
     let missing = directory.join("missing.def");
     let last_rank = world.rank() + 1 == world.world_size();

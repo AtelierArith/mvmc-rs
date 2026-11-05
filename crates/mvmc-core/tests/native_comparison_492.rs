@@ -53,8 +53,27 @@ fn native_rbm_sr_operands_active_components_and_rng_match_c_capture() {
         .iter()
         .map(|v| v.as_f64().unwrap() as usize)
         .collect();
-    assert_eq!(actual.active_indices, indices);
-    for (key, values) in [("direct_S", &actual.matrix), ("direct_g", &actual.rhs)] {
+    // C 1.3.0 `GetInfoOptTrans` never flags the OptTrans weights (#676,
+    // tmisawa/Julia-mVMC#94); on this input its stray writes land on
+    // components that are already active. Rust additionally optimizes the
+    // real weight components, which follow C's active set and are excluded
+    // from this C comparison.
+    let n_c = indices.len();
+    assert!(actual.active_indices.len() >= n_c);
+    let (common, opttrans) = actual.active_indices.split_at(n_c);
+    assert_eq!(common, indices.as_slice());
+    let tail = actual.flags.len() - 2 * opttrans.len();
+    let expected_opttrans: Vec<_> = (0..opttrans.len()).map(|k| tail + 2 * k).collect();
+    assert_eq!(opttrans, expected_opttrans.as_slice());
+    assert_eq!(opttrans.len(), 3, "three OptTrans weights are optimized");
+    let dimension = actual.dimension;
+    assert_eq!(dimension, n_c + opttrans.len());
+    // Leading C block of the column-major matrix and the matching RHS rows.
+    let matrix: Vec<f64> = (0..n_c)
+        .flat_map(|column| actual.matrix[column * dimension..][..n_c].iter().copied())
+        .collect();
+    let rhs = actual.rhs[..n_c].to_vec();
+    for (key, values) in [("direct_S", &matrix), ("direct_g", &rhs)] {
         let expected = expected[key].as_array().unwrap();
         assert_eq!(values.len(), expected.len());
         for (i, (a, e)) in values.iter().zip(expected).enumerate() {
@@ -93,10 +112,14 @@ fn native_rbm_sr_operands_active_components_and_rng_match_c_capture() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
+// C `calculateOptTransDiff` writes sector `i` into consecutive slot `i`
+// (`vmccal.c:639-655`); Rust keeps each sector's (value, i*value) component
+// pair (#370, tmisawa/Julia-mVMC#55), the layout that the OptTrans flags
+// address (#676, tmisawa/Julia-mVMC#94). The C slot layout is excluded from
+// this comparison; the C sector values are compared at Rust's real slots.
 #[test]
-fn native_opttrans_derivatives_use_consecutive_slots_and_preserve_unwritten_tail() {
+fn native_opttrans_derivative_values_match_c_in_component_pair_layout() {
     let mut data = ExpertModeData::new();
-    data.c_opt_trans_flags = true;
     data.opt_trans = vec![C::new(1.0, 0.0); 2];
     let mut weights = QuantumProjectionWeights::new();
     weights.qp_fix_weight = vec![C::new(0.5, 0.25), C::new(-0.5, 0.125)];
@@ -107,7 +130,8 @@ fn native_opttrans_derivatives_use_consecutive_slots_and_preserve_unwritten_tail
         C::new(2.0, -1.0),
         C::new(-1.0, 4.0),
     ];
-    let mut actual = vec![C::new(7.0, -9.0); 6];
+    let sentinel = C::new(7.0, -9.0);
+    let mut actual = vec![sentinel; 6];
     mvmc_core::observables::opt_trans_diff(&mut actual, C::new(1.25, -0.75), &data, &pf);
     let expected: Vec<f64> =
         include_str!("../../../tests/fixtures/native_comparison_492/opttrans_derivative.txt")
@@ -115,17 +139,25 @@ fn native_opttrans_derivatives_use_consecutive_slots_and_preserve_unwritten_tail
             .map(|v| v.parse().unwrap())
             .collect();
     assert_eq!(expected.len(), 12);
-    for (index, (a, e)) in actual
-        .iter()
-        .flat_map(|v| [v.re, v.im])
-        .zip(expected)
-        .enumerate()
-    {
-        // Two complex products, a sum and C-compatible complex division.
-        assert!(
-            (a - e).abs() <= 1e-14 + 1e-14 * a.abs().max(e.abs()),
-            "component {index}: {a} vs {e}"
-        );
+    let c_sector = |sector: usize| C::new(expected[2 * sector], expected[2 * sector + 1]);
+    // The C probe leaves its four trailing slots at the sentinel.
+    assert!(expected[4..]
+        .chunks(2)
+        .all(|v| C::new(v[0], v[1]) == sentinel));
+    for sector in 0..2 {
+        let e = c_sector(sector);
+        for (component, a, e) in [
+            (2 * sector, actual[2 * sector], e),
+            (2 * sector + 1, actual[2 * sector + 1], C::new(0.0, 1.0) * e),
+        ] {
+            // Two complex products, a sum and C-compatible complex division.
+            for (a, e) in [(a.re, e.re), (a.im, e.im)] {
+                assert!(
+                    (a - e).abs() <= 1e-14 + 1e-14 * a.abs().max(e.abs()),
+                    "slot {component}: {a} vs {e}"
+                );
+            }
+        }
     }
-    assert_eq!(&actual[2..], &[C::new(7.0, -9.0); 4]);
+    assert_eq!(&actual[4..], &[sentinel; 2]);
 }

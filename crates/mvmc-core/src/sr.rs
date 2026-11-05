@@ -20,9 +20,8 @@ use crate::c_timer::CTimer;
 use crate::output_files::SrInfoRow;
 use crate::state::VmcOptimizationState;
 
-/// Select the actual component flag, as C's stcOptInit does. Native
-/// GetInfoOptTrans writes are already represented in optimization_flags;
-/// remapping them here would activate components C never selects.
+/// Select the actual component flag, as C's stcOptInit does. OptTrans weights
+/// carry their own real-component flags (#676); no remapping happens here.
 pub(crate) fn component_is_optimized(data: &ExpertModeData, component: usize) -> bool {
     data.optimization_flags.get(component).copied() == Some(1)
 }
@@ -427,17 +426,17 @@ mod opttrans_tests {
     }
 
     #[test]
-    fn c_opttrans_flags_are_not_remapped_to_parameter_tail() {
+    fn opttrans_real_weight_components_are_optimized_and_projection_is_untouched() {
         let mut data = ExpertModeData::new();
         data.n_gutzwiller_idx = 3;
         data.opt_trans = vec![Complex64::new(0.5, 0.0), Complex64::new(0.75, 0.0)];
-        data.c_opt_trans_flags = true;
-        data.optimization_flags = vec![0, 0, 0, 1, 1, 0, 0];
-        assert!(component_is_optimized(&data, 3));
-        assert!(component_is_optimized(&data, 4));
-        assert!(!component_is_optimized(&data, 6));
+        data.optimization_flags = vec![0; 6];
+        mvmc_expert_parsers::set_opt_trans_opt_flags(&mut data);
+        // C's GetInfoOptTrans would set components 3 and 4 (#676).
+        assert!((0..6).all(|component| !component_is_optimized(&data, component)));
+        assert!(component_is_optimized(&data, 6));
         assert!(!component_is_optimized(&data, 7));
-        assert!(!component_is_optimized(&data, 8));
+        assert!(component_is_optimized(&data, 8));
         assert!(!component_is_optimized(&data, 9));
     }
 
