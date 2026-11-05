@@ -76,7 +76,7 @@ Cの挙動の一部であり、Rustでも厳密に保たれます(乱数の状�
 | 2、一般軌道で `2Sz = -1`(固定されない) | `genrand_real2` を1回 | 交換($<0.5$)または局所スピン反転 |
 | 2、一般軌道で `2Sz` が固定 | なし | 交換 |
 | 3(近藤型) | 1回、最初の値が $\ge0.5$ なら2回目も | ホッピング($<0.5$)、そうでなければ2回目の抽出により交換または局所スピン反転 |
-| その他 | なし | 更新なし |
+| その他 | なし | Cでは更新なし。Rustは出力の前に入力を拒否します(#681) |
 
 Cマニュアルの目安は次のとおりです。`0` はホッピングのみ、`1` は電子系向けのホッピング+交換、
 `2` はスピン系向け(`NLocSpin = 2Ne`、Cのリーダーで強制されます)。
@@ -195,6 +195,7 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - C: `UpdateMAllTwo_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:189`
 > - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:217`
 > - C: `UpdateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_fsz.c:114`
+> - C: `UpdateMAllTwo_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fsz.c:194`
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
 > - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:73`
 > - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
@@ -202,6 +203,7 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - Rust: `calculate_new_pf_m_two2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:341`
 > - Rust: `two_ratio_complex` — `crates/mvmc-core/src/sampling/updates.rs:1405`
 > - Rust: `update_m_all_two_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:722`
+> - Rust: `update_m_all_two_fsz_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:907`
 > - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
 > - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
 > - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。**既知の癖(観測):** 2電子更新において、Cは4つのすべての変種で `rsbOld = raOld + t*Nsite` を定義しています(`rbOld` ではなく `raOld` を用います)(`pfupdate_two_fcmp.c:227`、`pfupdate_two_real.c:227`、およびFSZのファイル)。Rustの*実数*版の更新はこれを意図的に再現していますが(`update_m_all_two_real_flat`、`updates.rs:565`、`rsb_old = ra_old + ...` は `updates.rs:588`)、Rustの*複素数の通常*版の更新は `rb_old` を用います(`updates.rs:537`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
