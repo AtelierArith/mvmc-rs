@@ -59,7 +59,7 @@ Two C behaviours are not reproduced:
   its definition and optimizes the real components, as Julia does. Since #676
   (PR #684) the Rust C-order CLI (`-o`) does the same (upstream report
   tmisawa/Julia-mVMC#94); timings below predate that change. A resident run
-  with those flags cleared keeps the weights bit for bit.
+  with those flags cleared leaves the weights unchanged (an exact copy check).
 
 ## Contract and bounds
 
@@ -75,14 +75,19 @@ Exact:
   and full CPU overlaps over all 24 planes. It also replays every decision
   with identity-only weights (OptTrans = 1, 0, 0) and requires that some
   decisions change.
-- Device full QP weights, bit for bit, against `update_qp_weight_for`
-  (one IEEE product each), initially, after the tape and after one SR update.
-- OptTrans normalization after one SR update, bit for bit, against
-  `sync_modified_parameter_local`. The update moves every OptTrans weight and
-  leaves the maximum amplitude different from one, so the normalization runs.
+- A resident run with the OptTrans flags cleared leaves the weights unchanged
+  (a copy, compared exactly).
+- The SR update moves every OptTrans weight and leaves the maximum amplitude
+  different from one, so the normalization runs.
 
 FP64:
 
+- Device full QP weights against `update_qp_weight_for` (C `UpdateQPWeight`, one rounded
+  product on each side): at most one ulp relative, `|a-b| <= eps max(|a|,|b|)`,
+  initially, after the tape and after one SR update (#699).
+- OptTrans normalization after one SR update against `sync_modified_parameter_local`
+  (`x *= 1/max|x|`, a reciprocal and a product on each side): `2 eps` relative (#699).
+  The host scope test checks that the normalized maximum amplitude is 1 within `2 eps`.
 - Local energies, Slater derivatives and PhysCal operator values: the #656
   interval bound of `../dh/README.md`, `1e-13 + 16 (aw+1) n eps kappa_F S`.
 - OptTrans derivatives against `opt_trans_diff`. With per-plane relative
@@ -111,7 +116,8 @@ Observed (RTX 3060, CUDA 12.9.2 devcontainer image `b129bd583bbe`):
 | `hubbard_opttrans_L16` | 6.6e4 / 1.0e5 / 3.6e3 | 0.002 / 0.050 / 0.145 | 6.1e-14 (0.002 of the bound) | 100 | 8.5e-3 | 1.6e-17 | 0 |
 | `hubbard_opttrans_L128` | 4.1e5 / 3.0e5 / 1.9e6 | <0.001 / <0.001 / 0.001 | 2.6e-12 (<0.001 of the bound) | 99 | 5.7e-3 | 1.5e-17 | 0 |
 
-Every bound holds with a wide margin. The derivative spread between sectors is
+Every bound holds with a wide margin. The QP weights and the OptTrans normalization differ by 0
+(2026-11-05 rerun, #699); both sides perform the same IEEE operations. The derivative spread between sectors is
 0.7-2.0, so the three columns are far from degenerate. Per stage, the
 largest local-energy difference between the reference and identity-only
 weights is 2.0 to 6.0e3 (L128) and 4.6 to 30 (L16). Opt and PhysCal accept exactly the same moves on the same tape, so the delayed (Opt)

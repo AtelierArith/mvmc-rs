@@ -6,9 +6,9 @@
 //! `log_rbm_ratio` (LogRBMRatio), `set_rbm_diff` (RBMDiff) and the RBM-aware
 //! `calculate_local_energy`. The supplied-tape trajectory is replayed on the
 //! host with the GPU tape contract, C UpdateRBMCnt/LogRBMRatio and full CPU
-//! Pfaffians. Integers (configurations, acceptance counts, counters) and the
-//! hidden fields, which both sides form with the same IEEE operations in the
-//! same order, are compared exactly; FP64 bounds are stated at each assertion.
+//! Pfaffians. Integers (configurations, acceptance counts, counters) are
+//! compared exactly. The hidden fields use the rounding bound of
+//! [`theta_bound`]; other FP64 bounds are stated at each assertion.
 //!
 //! The physics is C's complex normal path (`vmcmake.c`, `calham.c`,
 //! `vmccal.c`), which keeps the RBM factor in the Metropolis ratio and the
@@ -182,6 +182,14 @@ pub(crate) fn replay(
     }
 }
 
+/// Accepted moves per walker as update counts for [`theta_bound`].
+pub(crate) fn accepted_moves(accepted: &[i32]) -> Vec<usize> {
+    accepted
+        .iter()
+        .map(|&a| usize::try_from(a).expect("nonnegative acceptance count"))
+        .collect()
+}
+
 pub(crate) fn download<T: Copy + Default>(
     exec: &RawExec<'_, '_>,
     buffer: &DeviceBuffer,
@@ -209,16 +217,73 @@ pub(crate) fn device_theta(backend: &mut CudaEngine, state: &State) -> Vec<f64> 
     .unwrap()
 }
 
-/// Hidden fields equal bit for bit: the same IEEE operations in the same order.
-pub(crate) fn assert_theta_exact(what: &str, gpu: &[f64], cpu: &[f64]) {
+/// Bound on the difference of two evaluations of hidden field `h` (#699).
+///
+/// C MakeRBMCnt forms `theta_h = 0 + w_b + sum_rs w_c[rs] x_rs` and
+/// UpdateRBMCnt adds `-k w_c[ri] + k w_c[rj]` per hop, with `x_rs` in
+/// {-1, 0, 1} and `k` in {1, -1, 2}: every product is exact, so only the
+/// additions round. Every partial sum is bounded by
+/// `S_h = |w_b| + 2 sum_rs |w_c[rs]|` (the factor 2 covers the general
+/// family's `2 w` and a hop's intermediate value), so one evaluation is within
+/// `gamma_k S_h` of the exact field, `gamma_k = k eps / (1 - k eps)` with
+/// `k = width + 2` additions of a fresh MakeRBMCnt plus four per accepted move
+/// (an exchange is two hops). Two evaluations differ by at most `2 gamma_k S_h`.
+/// The bound is absolute in `S_h`, so cancellation near `theta = 0` needs no
+/// separate floor. Both sides currently use the same IEEE operations in the
+/// same order; the measured differences are reported, not assumed zero.
+pub(crate) fn theta_bound(model: &Model, weights: &[f64], h: usize, updates: usize) -> f64 {
+    let (ns, nh) = (model.ns, model.nneuron);
+    let t = &model.rbm;
+    let width = if t[4 * ns + h] == 2 { 2 * ns } else { ns };
+    let bias = t[4 * ns + nh + h];
+    let coupling = &t[4 * ns + 2 * nh + h * 2 * ns..][..width];
+    let mut scale = if bias >= 0 {
+        weights[bias as usize].abs()
+    } else {
+        0.0
+    };
+    for &c in coupling {
+        if c >= 0 {
+            scale += 2.0 * weights[c as usize].abs();
+        }
+    }
+    let k = (width + 2 + 4 * updates) as f64;
+    2.0 * k * f64::EPSILON / (1.0 - k * f64::EPSILON) * scale
+}
+
+/// Hidden fields `[walker][neuron]` within [`theta_bound`]: finite on both
+/// sides, `updates[w]` accepted moves since the last fresh MakeRBMCnt of the
+/// compared evaluations. Returns `(max |diff|, max |diff| / bound)`.
+pub(crate) fn assert_theta_close(
+    what: &str,
+    model: &Model,
+    weights: &[f64],
+    gpu: &[f64],
+    cpu: &[f64],
+    updates: &[usize],
+) -> (f64, f64) {
+    let h = model.nneuron;
     assert_eq!(gpu.len(), cpu.len());
-    for (k, (a, b)) in gpu.iter().zip(cpu).enumerate() {
-        assert_eq!(
-            a.to_bits(),
-            b.to_bits(),
+    assert_eq!(gpu.len(), h * updates.len());
+    let (mut diff, mut ratio) = (0f64, 0f64);
+    for (k, (&a, &b)) in gpu.iter().zip(cpu).enumerate() {
+        assert!(
+            a.is_finite() && b.is_finite(),
             "{what}: hidden field {k}: {a} vs {b}"
         );
+        let bound = theta_bound(model, weights, k % h, updates[k / h]);
+        let d = (a - b).abs();
+        assert!(
+            d <= bound,
+            "{what}: hidden field {k}: {a} vs {b} (bound {bound:e})"
+        );
+        diff = diff.max(d);
+        if bound > 0.0 {
+            ratio = ratio.max(d / bound);
+        }
     }
+    println!("{what}: hidden fields max abs diff={diff:e}, normalized by the bound={ratio:.3}");
+    (diff, ratio)
 }
 
 /// Contributions to each RBM derivative slot (C RBMDiff), from the tables.
@@ -284,8 +349,9 @@ fn measure(backend: &mut CudaEngine, state: &State) -> Measured {
 }
 
 /// Compare one stage with the CPU C-order evaluation of the same walkers.
-/// `expected_theta` is the exact C-order hidden-field state (a fresh
-/// MakeRBMCnt initially, the replayed UpdateRBMCnt chain after the tape).
+/// `expected_theta` is the C-order hidden-field state and the accepted moves
+/// of each walker (the replayed UpdateRBMCnt chain after the tape); `None`
+/// compares with a fresh MakeRBMCnt.
 fn assert_stage(
     name: &str,
     stage: &str,
@@ -293,7 +359,7 @@ fn assert_stage(
     plain: &mut Cpu,
     state: &State,
     backend: &mut CudaEngine,
-    expected_theta: Option<&[f64]>,
+    expected_theta: Option<(&[f64], &[usize])>,
 ) {
     let cfg = with_raw_exec(backend, "rbm.cfg", |exec| {
         let g = state.resident.sampler.geom;
@@ -403,10 +469,14 @@ fn assert_stage(
             derivative_error = derivative_error.max(d / (budget * largest / 16.0));
         }
     }
+    let weights = &m.parameters[m.nproj..m.nproj + m.nrbm];
+    let what = format!("{name} {stage}");
     match expected_theta {
-        Some(expected) => assert_theta_exact(&format!("{name} {stage}"), &theta, expected),
-        None => assert_theta_exact(&format!("{name} {stage}"), &theta, &fresh_theta),
-    }
+        Some((expected, updates)) => {
+            assert_theta_close(&what, m, weights, &theta, expected, updates)
+        }
+        None => assert_theta_close(&what, m, weights, &theta, &fresh_theta, &vec![0; walkers]),
+    };
     assert!(
         rbm_effect > 1e2 * bound_max,
         "{name} {stage}: the RBM factor must change the local energy ({rbm_effect:e})"
@@ -477,7 +547,7 @@ fn assert_opt_stages(name: &str, steps_per_site: usize) {
         &mut plain,
         &state,
         backend,
-        Some(&host.theta),
+        Some((&host.theta, &accepted_moves(&host.accepted))),
     );
     // One SR update plus the gauge, against the C-order sync; then the
     // rebuilt hidden fields against MakeRBMCnt with the new coefficients.
@@ -538,7 +608,16 @@ fn assert_opt_stages(name: &str, steps_per_site: usize) {
                 .collect::<Vec<_>>()
         })
         .collect();
-    assert_theta_exact(&format!("{name} after SR"), &theta, &rebuilt);
+    // Post-SR coefficients are arbitrary doubles, not binary fractions: the
+    // bound uses the updated coefficients, and the rebuild is a fresh MakeRBMCnt.
+    assert_theta_close(
+        &format!("{name} after SR"),
+        m,
+        &after[m.nproj..m.nproj + m.nrbm],
+        &theta,
+        &rebuilt,
+        &vec![0; walkers],
+    );
     println!("{name}: SR backward error={relative:e}; gauge max abs diff={diff:e}");
 }
 
@@ -662,7 +741,7 @@ fn resident_rbm_minimal_family_tables_run_on_cuda() {
                 Model::prepare(&input, &config).unwrap()
             };
             assert_eq!((model.nrbm, model.nneuron), (nrbm, nneuron), "{label}");
-            let cfg = with_runtime(0, |backend| {
+            with_runtime(0, |backend| {
                 let mut state = State::prepare_with_derivatives(backend, model, &config, !physcal)?;
                 state.initialize(backend)?;
                 let theta = device_theta(backend, &state);
@@ -679,15 +758,12 @@ fn resident_rbm_minimal_family_tables_run_on_cuda() {
                             .collect::<Vec<_>>()
                     })
                     .collect();
-                Ok((theta, expected))
+                let weights = &m.parameters[m.nproj..m.nproj + m.nrbm];
+                let what = format!("{label} physcal={physcal}");
+                assert_theta_close(&what, m, weights, &theta, &expected, &[0; 8]);
+                Ok(())
             })
             .unwrap();
-            // One exact IEEE addition on both sides: a 1-ulp relative bound.
-            let (ratio, diff) = worst(&cfg.0, &cfg.1, 0.0, f64::EPSILON);
-            assert!(
-                ratio <= 1.0,
-                "{label} physcal={physcal}: theta diff {diff:e}"
-            );
         }
         let opt = run_gpu_para_opt_from_namelist(&input, config.clone()).unwrap();
         assert_eq!(opt.energies.len(), 2, "{label}");

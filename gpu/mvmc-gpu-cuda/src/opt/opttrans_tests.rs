@@ -9,8 +9,8 @@
 //! OptTrans normalization) and `update_qp_weight_for` (C UpdateQPWeight). The
 //! supplied-tape trajectory is replayed on the host with the GPU tape contract
 //! and full CPU Pfaffians. Integers (configurations, acceptance counts,
-//! counters) and the device QP weights are compared exactly; FP64 bounds are
-//! stated at each assertion.
+//! counters) are compared exactly; the device QP weights within one ulp of the
+//! CPU product. Other FP64 bounds are stated at each assertion.
 use super::dh_tests::{arrays, tape, worst, Cpu};
 use super::rbm_tests::download;
 use super::tests::{close, sr_backward_error};
@@ -194,14 +194,17 @@ fn assert_stage(
     let walkers = cfg.len() / n;
     let t0 = tail(m);
     let nfix = m.fix.len();
-    // The device full weights are C UpdateQPWeight of the current OptTrans
-    // (one IEEE product each, as the CPU), bit for bit.
+    // The device full weights are C UpdateQPWeight of the current OptTrans:
+    // one rounded product on each side, so at most one ulp of relative
+    // difference (#699). The measured maximum is reported.
     let full = cpu.data.qp_weights.as_ref().unwrap().qp_full_weight.clone();
     let opt: Vec<f64> = cpu.data.opt_trans.iter().map(|z| z.re).collect();
     assert_eq!(opt.len(), m.nopt);
-    for (q, (&a, b)) in g.weights.iter().zip(&full).enumerate() {
-        assert_eq!(a.to_bits(), b.re.to_bits(), "{name} {stage}: QP weight {q}");
-    }
+    assert_eq!(g.weights.len(), full.len());
+    let full_re: Vec<f64> = full.iter().map(|z| z.re).collect();
+    let (ratio, weight_diff) = worst(&g.weights, &full_re, 0.0, f64::EPSILON);
+    assert!(ratio <= 1.0, "{name} {stage}: QP weights ratio {ratio:e}");
+    println!("{name} {stage}: QP weight max abs diff={weight_diff:e} (bound 1 ulp relative)");
     let mut cpu_overlaps = vec![];
     let (mut energy_error, mut derivative_error, mut opt_error) = (0f64, 0f64, 0f64);
     let (mut energy_abs, mut opt_abs, mut kappa_max) = (0f64, 0f64, 0f64);
@@ -252,8 +255,8 @@ fn assert_stage(
         let largest = e.derivatives[m.nproj + m.nrbm..t0]
             .iter()
             .fold(0f64, |a, x| a.max(x.abs()));
-        for p in m.nproj + m.nrbm..t0 {
-            let (a, b) = (row[p], e.derivatives[p]);
+        let slater = row.iter().zip(&e.derivatives).enumerate();
+        for (p, (&a, &b)) in slater.take(t0).skip(m.nproj + m.nrbm) {
             let d = (a - b).abs();
             assert!(
                 d <= 1e-13 + budget * largest,
@@ -425,11 +428,17 @@ fn assert_opt_stages(name: &str, steps_per_site: usize) {
     // Slater rescale over the Slater block only, then OptTrans *= 1/max|.|.
     let (ratio, diff) = worst(&after, &expected, 1e-15, 4.0 * f64::EPSILON);
     assert!(ratio <= 1.0, "{name}: gauge ratio {ratio:e}");
-    for (a, b) in after[t0..].iter().zip(&expected[t0..]) {
-        assert_eq!(a.to_bits(), b.to_bits(), "{name}: OptTrans normalization");
-    }
+    // OptTrans normalization (C `x *= 1/max|x|`): the reciprocal and the
+    // product round once each on both sides, so the weights differ by at most
+    // 2 eps relative; tighter than the 4 eps gauge envelope above (#699).
+    let (ratio, opt_diff) = worst(&after[t0..], &expected[t0..], 0.0, 2.0 * f64::EPSILON);
+    assert!(
+        ratio <= 1.0,
+        "{name}: OptTrans normalization ratio {ratio:e}"
+    );
+    println!("{name}: OptTrans normalization max abs diff={opt_diff:e} (bound 2 eps relative)");
     // The rebuild used the refreshed weights: the device state equals a CPU
-    // model built from the updated parameters (weights compared bit for bit).
+    // model built from the updated parameters (QP weights within one ulp).
     let mut cpu = Cpu::new(m, &after);
     let mut plain = identity_only(m, &after);
     assert_stage(name, "after SR", &mut cpu, &mut plain, &state, backend);
