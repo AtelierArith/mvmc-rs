@@ -25,6 +25,8 @@ Rust uses edition 2021 with `rustfmt.toml` enforcing `max_width = 100`, field in
 
 ## Development and Backward Compatibility
 
+Owner decisions that refine these guidelines (C reference version, C defects not reproduced, C-only features, threading, GPU direction, hosts) are recorded in [docs/PROJECT_DECISIONS.md](docs/PROJECT_DECISIONS.md). Record new decisions there.
+
 This Rust crate and its workspace are under active development. Backward compatibility may be completely ignored during development, including compatibility with existing Rust APIs. Treat the C implementation in `extern/mVMC-1.3.0/` as the authoritative source of truth. Use `extern/Julia-mVMC/` as a secondary port/reference and test aid; when their behavior differs, inspect C and make Rust follow its supported input contract and numerical behavior. Do not copy Julia-only repairs or extensions as C parity. Change or remove existing APIs and update their callers and tests whenever needed to match that implementation; do not retain compatibility wrappers solely to preserve the old Rust API.
 
 The historical implementation was written in C and later reimplemented in Julia. Rust should follow the Julia design for public APIs, runner structure, lifecycle, and test organization, while following C for numerical authority: parameter layout and offsets, initialization and draw order, arithmetic and operation order, signs, formatting, and floating-point results. When the two references differ, keep the Julia architecture and adopt the defined C numerical contract. Record the distinction in focused tests and preserve the authoritative algorithm and input contracts when applying the numerical-comparison policy below.
