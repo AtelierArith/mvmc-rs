@@ -32,8 +32,9 @@ tmisawa/Julia-mVMC#95.
   lines that 1.4.0 changed were checked by hand.
 - **Fixtures and artifacts:** historical fixtures, benchmark results under
   `benchmark/**/results/` and other generated evidence stay labelled 1.3.0
-  (`d73d06bd`) unless they are regenerated with recorded provenance. They are
-  records of the 1.3.0 reference, not claims about 1.4.0.
+  (`d73d06bd`) until they are removed or regenerated (see "Removing 1.3.0 and
+  Julia CPU references" below, #695). They are records of the 1.3.0 reference,
+  not claims about 1.4.0.
 - **1.4.0 contract changes adopted** (#682):
   - SR-CG aborts by default at max iterations and on the new breakdown guards
     (`NSRCGAbortOnFail`, `NSRCGFallback`).
@@ -50,6 +51,30 @@ tmisawa/Julia-mVMC#95.
 - **Out of scope for #682:** the new 1.4.0 features (reweight, twist, spin
   Jastrow, t-J, `NExUpdatePath=6`, backflow) are tracked separately under the
   C-only features policy below.
+
+## Removing 1.3.0 and Julia CPU references
+
+**Decision (owner, 2026-11-05):** once the move to mVMC 1.4.0 is complete
+(#682), C 1.4.0 is the only CPU reference. The 1.3.0-era data may be deleted.
+Tracked in #695.
+
+- **Remove:**
+  - C 1.3.0 references: native `vmc.out` runs and probes generated from
+    `d73d06bd`, and 1.3.0-only goldens.
+  - The helpers that map 1.4.0 output back to those references
+    (`as_historical_cg_srinfo`, `c14_cg_breakdown`, and the
+    `NSRCGAbortOnFail 0` settings that exist only to continue 1.3.0 CG
+    trajectories).
+  - Historical Julia CPU fixtures and goldens. Tests that compare Rust CPU
+    with Julia CPU output are deleted or re-pointed to C 1.4.0 references.
+- **Keep:**
+  - The Julia GPU fixtures (pin `7314015`, XORWOW contract). They are the
+    accepted resident GPU reference (AGENTS.md), not 1.3.0 data.
+  - Input files that other tests or the GPU tests still read.
+- **Replace** a reference a test still needs with a C 1.4.0-generated one with
+  recorded provenance. Never use a Rust-generated expectation.
+- **Until #695 is done,** the registry `tests/fixtures/C_REFERENCE_PROVENANCE.md`
+  and the #682 inventory on the issue list what remains.
 
 ## Clear C defects are not reproduced
 
