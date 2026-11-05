@@ -1,0 +1,28 @@
+scenario third_hubbard_lanczos2
+source tests/fixtures/physcal_181/third-hubbard
+rust_mode real opttrans_flag 0
+stages NLanczosMode=2
+zqp_perturb 0 class compare variant []
+vmc.out sha256 031fee1f55ab11c49666842034d67c3cfef305ed6f095594490ed780a4b9832a
+probe vmc.out sha256 ba7ed8c0369b04d9327656363e0414c4baa26cb0f84b425916f9f1e3779699d0
+extern/mVMC-1.4.0 commit e83aa6cb1e37bfc4876848787ed2f61721a7e972
+source sha256 mVMC/vmcmain.c da14885da14fd5b98feb27f7c53efd6fa229a4a33d27c30fe44848e6514394f0
+source sha256 mVMC/physcal_lanczos.c d0f537e49c25af59140d8a00f1b2532df243f6cc5657f96d41b1f74d44aced15
+source sha256 mVMC/vmcmake.c a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9
+source sha256 mVMC/vmcmake_fsz.c f6322ed48eb186c097074ea9287906fcf58129a44d91b932d0a6750ea9daba66
+source sha256 sfmt/SFMT.c b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
+host x86_64 Linux-6.8.0-147-generic-x86_64-with-glibc2.39
+gcc gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+mpi one rank, OMP_NUM_THREADS=1, build Release (CMake default flags), unmodified source
+plain stage 0 overrides [NLanczosMode=2] exit 0
+dump stage 0 overrides [NLanczosMode=2] exit 0
+probe output identical zvo_cisajs_001.dat True
+probe output identical zvo_cisajscktalt_001.dat True
+probe output identical zvo_cisajscktaltex_001.dat True
+probe output identical zvo_ls_cisajs_001.dat True
+probe output identical zvo_ls_cisajscktalt_001.dat True
+probe output identical zvo_ls_cisajscktaltex_001.dat True
+probe output identical zvo_ls_out_001.dat True
+probe output identical zvo_ls_qqqq_001.dat True
+probe output identical zvo_out_001.dat True
+probe output identical zvo_var_001.dat True

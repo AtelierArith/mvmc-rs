@@ -63,10 +63,6 @@ documented translation:
   solve. Only their step-1 sampling, energy and SR diagnostic columns 0-5 are
   compared, with the 1.4.0 status asserted; later steps check repeatability
   (`c14_cg_breakdown`). C 1.4.0 aborts these inputs by default.
-- `native_c_lanczos_576`: with `rbOld` the largest Lanczos-output difference
-  from the 1.3.0 native reference is `2.45e-10` absolute (`3.4e-13` relative);
-  with `raOld` Rust reproduces the earlier `1.4e-12`. The Lanczos bound is
-  `max(1e-10, 1e-12 |value|)` (fixture README).
 - Julia's real two-electron update keeps `raOld`; the synthetic Julia operand
   test (`pf_update_vs_julia`) passes `ra_old` as `rb_old` to compare its
   arithmetic, since those operands do not satisfy `invM = M^-1`.
@@ -388,7 +384,7 @@ unmodified C `vmc.out` therefore uses:
 - block data: C's `NPara` doubles against the leading `NPara` doubles of Rust's block. PhysCal
   blocks (file-read or `InitParameter` values, no accumulated arithmetic) and the optimizer's
   step-0 block are compared exactly; later optimizer steps depend on the SR solve (BLAS
-  operation order, #358) and use an absolute bound of `1e-8` (observed maximum about `5e-10`,
+  operation order, #358) and use an absolute bound of `1e-8` (observed maximum `1.4e-9` against C 1.4.0,
   parameters O(1)) with RNG-driven control paths identical;
 - completeness: the Rust block must contain every parameter of the text `zvo_var` output.
 
