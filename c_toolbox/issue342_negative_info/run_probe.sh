@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Optional developer reproduction (Dev Container, Linux x86_64). Never run by Cargo.
 # usage: run_probe.sh <repo-root> <exclusive-output-dir> [mVMC build dir containing src/ltl2inv, src/pfapack]
-# The build dir is a normal CMake build of extern/mVMC-1.3.0 (target vmc.out), see README.md.
+# The build dir is a normal CMake build of extern/mVMC-1.4.0 (target vmc.out), see README.md.
 set -euo pipefail
 root=$(realpath "${1:?repo root}")
 out=$(realpath "${2:?exclusive output dir}")
 build=$(realpath "${3:?mVMC cmake build dir}")
-src=$root/extern/mVMC-1.3.0/src
+src=$root/extern/mVMC-1.4.0/src
 tb=$root/c_toolbox/issue342_negative_info
 test -d "$out" && test -z "$(ls -A "$out")"
 perl "$tb/extract_initializers.pl" "$src/mVMC/vmcmake.c" "$out"

@@ -56,7 +56,7 @@ retain the mask and cannot claim C parity for those sentinel cells. Raw RNG
 counts/state and numerical parameter values remain independently acquired.
 
 Mode0 invokes original `SetFlagShift`; Mode1 leaves the shift flags zero, as
-`readdef.c:1169–1177`. The stage order is actual `InitParameter`, optional
+`readdef.c:1429–1437`. The stage order is actual `InitParameter`, optional
 full-record `ReadInitParameter`, keyword `ReadInputParameters`, original
 `SyncModifiedParameter`. Three observations are always present: initialized,
 overlaid (after both overlay kinds), synchronized. No Julia-only overlay fix is

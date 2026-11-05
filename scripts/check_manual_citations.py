@@ -20,7 +20,7 @@ This is an optional developer tool; it is not run by the Rust build or tests.
 Usage (from the repository root):
 
     python3 scripts/check_manual_citations.py \
-        [--c-root extern/mVMC-1.3.0] [--fix]
+        [--c-root extern/mVMC-1.4.0] [--fix]
 
 The script uses only the Python standard library (``uv run --no-project`` also
 works). CI runs it with ``--tolerant``: a bullet citation whose symbol moved but is
@@ -32,7 +32,7 @@ rewritten to the nearest line within ``--window`` lines (default 400) that
 defines or contains the symbol; the corrected lines are listed and the check is
 re-run. Citations whose symbol is not found nearby remain errors.
 
-``extern/mVMC-1.3.0`` is a git submodule. When it is not checked out, pass its
+``extern/mVMC-1.4.0`` is a git submodule. When it is not checked out, pass its
 location with ``--c-root`` or the citations into it are skipped with a warning.
 """
 from __future__ import annotations
@@ -49,10 +49,10 @@ IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 def resolve(repo: Path, c_root: Path | None, path: str, index: dict[str, list[Path]]):
     """Return (resolved_path | None, note)."""
-    if path.startswith("extern/mVMC-1.3.0/"):
+    if path.startswith("extern/mVMC-1.4.0/"):
         if c_root is None or not c_root.exists():
             return None, "skipped (C reference not available)"
-        return c_root / path[len("extern/mVMC-1.3.0/"):], ""
+        return c_root / path[len("extern/mVMC-1.4.0/"):], ""
     candidate = repo / path
     if candidate.exists():
         return candidate, ""
@@ -150,7 +150,7 @@ def main() -> int:
                     help="CI mode: a moved symbol found within --window lines is a warning, not an error")
     args = ap.parse_args()
     repo = Path(args.repo)
-    c_root = Path(args.c_root) if args.c_root else repo / "extern" / "mVMC-1.3.0"
+    c_root = Path(args.c_root) if args.c_root else repo / "extern" / "mVMC-1.4.0"
 
     index: dict[str, list[Path]] = {}
     for root in (repo / "crates", repo / "docs", repo / "xtask"):

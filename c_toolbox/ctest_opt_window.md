@@ -15,7 +15,7 @@ outer include guard are omitted. No numerical bodies are translated or
 edited. Verify this extraction before reproducing:
 
 ```sh
-diff -u <(sed -n '1,27p;34,260p' extern/mVMC-1.3.0/src/mVMC/avevar.c) \
+diff -u <(sed -n '1,27p;34,260p' extern/mVMC-1.4.0/src/mVMC/avevar.c) \
   c_toolbox/ctest_opt_window_upstream.inc
 ctest_window_build=$(mktemp -d /tmp/mvmc-ctest-window.XXXXXX)
 cc -O0 -ffp-contract=off c_toolbox/ctest_opt_window.c -lm \
@@ -57,7 +57,7 @@ and energy squared. Window >1 uses sequential complex means, then sequential
 `sqrt(sum(real(delta*conj(delta)))/(window-1))`, emitted as `(real, imag,
 deviation)` triples. This is sample deviation, not standard error. Energies
 belong to the just-measured pre-SR state; coefficients belong to its post-SR
-synchronized state (`vmcmain.c:511–512`). Julia's final-parameter-only
+synchronized state (`vmcmain.c:513–514`). Julia's final-parameter-only
 `zqp_opt.dat` is retained externally but is not an expected C output.
 
 Each generated case records source/extraction/adapter/executable/history
@@ -72,8 +72,8 @@ to the prefix length (1, 2, 3 or 50), in the Julia observer call and Rust
 test modpara. This is a labelled prefix workload, not the canonical long
 averaging window and not `min(prefix, canonical_window)`. Model settings
 record original and effective counts; the C input's first integer is the
-effective window. C `readdef.c:683-684` assigns both parsed fields directly;
-`vmcmain.c:511-512` stores the last NSROptItrSmp post-SR snapshots. These
+effective window. C `readdef.c:818-819` assigns both parsed fields directly;
+`vmcmain.c:513-514` stores the last NSROptItrSmp post-SR snapshots. These
 positive window<=steps inputs need no reader repair or invented clamp.
 The long gate keeps original steps/window and seed for all thirteen models.
 

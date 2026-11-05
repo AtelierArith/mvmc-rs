@@ -1,7 +1,7 @@
 //! #367: a negative `DSROptStepDt` selects C's "Diagonalization Mode"
-//! (readdef.c:749-755): rank 0 prints `remark: Diagonalization Mode`, the sign
+//! (readdef.c:959-965): rank 0 prints `remark: Diagonalization Mode`, the sign
 //! is dropped, and the SR run is identical to the positive step. The only other
-//! C effect is the `sEigen*` SRinfo header spelling (initfile.c:47-54).
+//! C effect is the `sEigen*` SRinfo header spelling (initfile.c:47-59).
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};

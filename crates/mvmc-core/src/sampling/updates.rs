@@ -715,7 +715,7 @@ pub fn update_m_all_fsz_real_flat(
 
 /// Complex normal-mode `update_m_all_two!`.
 ///
-/// C (`pfupdate_two_fcmp.c:227`) defines `rsbOld = raOld + t*Nsite`, whereas this function uses
+/// C (`pfupdate_two_fcmp.c:230`) defines `rsbOld = raOld + t*Nsite`, whereas this function uses
 /// `rb_old + t*n_site`. The old `(a,b)` element only enters through `vec_s[msb]`, and the
 /// updated Pfaffian and inverse do not depend on it beyond roundoff, so the difference is
 /// unobservable; see `tests/two_electron_rsbold.rs` for the equivalence check (#365).
@@ -887,7 +887,7 @@ pub fn update_m_all_two_fsz_real_flat(
     );
 }
 
-/// Complex FSZ `UpdateMAllTwo_fsz` (`pfupdate_two_fsz.c:194-345`).
+/// Complex FSZ `UpdateMAllTwo_fsz` (`pfupdate_two_fsz.c:197-360`).
 ///
 /// The ma-th electron (spin `s`) has hopped from `ra_old` to `ele_idx[ma]`
 /// and then the mb-th electron (spin `t`) from `rb_old` to `ele_idx[mb]`.
@@ -897,8 +897,8 @@ pub fn update_m_all_two_fsz_real_flat(
 /// electron's own spin for the column orbital.
 ///
 /// `rsbOld` follows mVMC 1.4.0 (upstream #100): `rbOld + t*Nsite`, the C
-/// reference target for new work (docs/PROJECT_DECISIONS.md) and the choice
-/// of [`update_m_all_two_complex_flat`]. mVMC 1.3.0 uses `raOld + t*Nsite`.
+/// reference (docs/PROJECT_DECISIONS.md) and the choice of
+/// [`update_m_all_two_complex_flat`]. mVMC 1.3.0 used `raOld + t*Nsite`.
 /// The old `(a,b)` element only enters through `vec_s[msb]` and cancels
 /// algebraically, so both choices agree to roundoff
 /// (`tests/two_electron_rsbold.rs`, `tests/two_electron_fsz_complex.rs`).
@@ -1568,7 +1568,7 @@ fn two_ratio_real<const FSZ: bool>(
 }
 
 /// Two-hop bilinear form `b^T M a` in the operation order of the authoritative C kernel
-/// `calculateNewPfMTwo_child_real` (`extern/mVMC-1.3.0/src/mVMC/pfupdate_two_real.c:167-177`):
+/// `calculateNewPfMTwo_child_real` (`extern/mVMC-1.4.0/src/mVMC/pfupdate_two_real.c:169-180`):
 ///
 /// ```text
 /// for i: tmp = 0; for j: tmp += M[i][j] * a[j];   bMa += b[i] * tmp;
@@ -1964,7 +1964,7 @@ mod tests {
     }
 
     /// The kernel equals the values of the authoritative C loops (compiled without FMA from
-    /// `pfupdate_two_real.c:167-177`, `c_toolbox/two_hop_bilinear_449`) bit for bit.
+    /// `pfupdate_two_real.c:169-180`, `c_toolbox/two_hop_bilinear_449`) bit for bit.
     #[test]
     fn two_hop_bilinear_is_bit_identical_to_the_c_reduction() {
         let fixture = include_str!("../../../../tests/fixtures/pfaffian_cg/two_hop_bilinear.txt");

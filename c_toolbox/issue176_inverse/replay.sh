@@ -3,7 +3,7 @@ set -euo pipefail
 probe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$probe_dir/../.." && pwd)
 replay_dir=$(mktemp -d /tmp/mvmc-issue176-inverse.XXXXXX)
-native_dir="$repo_dir/extern/mVMC-1.3.0/src"
+native_dir="$repo_dir/extern/mVMC-1.4.0/src"
 printf 'artifacts=%s\n' "$replay_dir"
 c++ --version > "$replay_dir/compiler.txt"
 gfortran --version >> "$replay_dir/compiler.txt"

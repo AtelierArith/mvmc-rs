@@ -1,5 +1,5 @@
 /* Optional original fixed-operand DPOSV driver; not a native sampler.
- * Contract follows extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:33-49.
+ * Contract follows extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c:33-49.
  * stdin: dimension, column-major matrix, RHS. No Rust/Cargo dependency.
  */
 #include <cblas.h>

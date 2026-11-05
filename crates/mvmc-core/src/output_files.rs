@@ -1,9 +1,9 @@
 //! C run-log files: `{head}_time_{NDataIdxStart:03}.dat` and `{head}_SRinfo.dat`.
 //!
-//! C authority (`extern/mVMC-1.3.0/src/mVMC/`): `InitFile` (`initfile.c:35-66`)
+//! C authority (`extern/mVMC-1.4.0/src/mVMC/`): `InitFile` (`initfile.c:35-71`)
 //! opens both files with `"w"` on rank 0 (SRinfo only for `NVMCCalMode==0`),
 //! `OutputTime` (`vmcclock.c:34-46`) writes the time rows, `FlushFile`
-//! (`initfile.c:192-203`) flushes every `NFileFlushInterval` steps and
+//! (`initfile.c:205-216`) flushes every `NFileFlushInterval` steps and
 //! `CloseFile` closes them. C keeps stdio-buffered `FILE*` handles open for the
 //! whole run; [`RunFiles`] holds buffered writers the same way, so rows reach
 //! disk only at [`RunFiles::flush_file`] or when the files are closed (dropped).
@@ -49,7 +49,7 @@ pub struct SrInfoRow {
     pub cg_info: Option<i64>,
 }
 
-/// Header of `_SRinfo.dat` (`initfile.c:46-52`); `SRFlag==1` is diagonalization mode.
+/// Header of `_SRinfo.dat` (`initfile.c:46-57`); `SRFlag==1` is diagonalization mode.
 pub fn sr_info_header(diagonalization: bool) -> &'static str {
     if diagonalization {
         "#Npara Msize optCut diagCut sEigenMax  sEigenMin    absRmax       imax\n"

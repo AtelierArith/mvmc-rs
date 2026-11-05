@@ -1,6 +1,6 @@
 //! Original M0111–130/M0135–144 conditions through the public file loader.
 //! Julia8bb test_orbital_qptrans_utils.jl:150–289 supplies the independent inputs.
-//! C readdef.c:2232–2265 defines complete forward/inverse/sign tables. Rust
+//! C readdef.c:2646–2679 defines complete forward/inverse/sign tables. Rust
 //! derives inverse rows with a fresh query instead of storing Julia's parallel
 //! inverse array. No original helper's mutation/error API or model is certified.
 use mvmc_expert_parsers::{parse_expert_mode_files, ExpertModeData};

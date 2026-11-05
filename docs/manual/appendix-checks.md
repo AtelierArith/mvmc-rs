@@ -7,14 +7,14 @@
 Every "Implementation" box lists a C function and a Rust function with `file:line`. To keep them honest,
 
 ```bash
-uv run --no-project scripts/check_manual_citations.py --c-root extern/mVMC-1.3.0
+uv run --no-project scripts/check_manual_citations.py --c-root extern/mVMC-1.4.0
 ```
 
 parses `docs/manual/*.md` and `docs/manual/ja/*.md` and verifies for every backticked `path:line` or `path:line-line` citation that the file exists and the line is inside the file; for the bullets
 ``- C: `symbol` — `path:line` `` and ``- Rust: `symbol` — `path:line` `` it also verifies that the first identifier of `symbol` occurs on the cited line. The script is an optional developer
-tool (standard library only); it is not run by the Rust build or tests. `extern/mVMC-1.3.0` is a git submodule and must be checked out (or passed with `--c-root`).
+tool (standard library only); it is not run by the Rust build or tests. `extern/mVMC-1.4.0` is a git submodule and must be checked out (or passed with `--c-root`).
 
-At the time of writing (repository commit `3e9024ee`, C reference commit `d73d06bd`) it reported **430 citations checked, 0 problems**. The checker now also covers the Japanese translation in `docs/manual/ja/` and verifies relative links and heading anchors; the combined run reports 860 citations (430 per language), 0 problems.
+At the time of writing (repository commit `3e9024ee`, C reference mVMC 1.3.0 commit `d73d06bd`) it reported **430 citations checked, 0 problems**. The checker now also covers the Japanese translation in `docs/manual/ja/` and verifies relative links and heading anchors; the combined run reports 860 citations (430 per language), 0 problems.
 
 What the check does **not** cover: whether the cited function really implements the equation next to it, ranges such as `driver.rs:271-278, 532-552` listed inside one backtick span, test names, and prose
 claims about operation order. Those were checked by reading the C and Rust sources while writing; the places where a claim rests only on reading are marked **(code reading)** or **(unverified)**.
@@ -44,5 +44,5 @@ The numbers in the tutorial are results of one build and platform; other BLAS pr
 - The example programs in `crates/mvmc-cli/examples` (they need the `extern/Julia-mVMC` submodule inputs).
 - Runs with FSZ/general orbitals, complex wave functions, RBM, OptTrans (`-o`), `InterAll`, local spins, `NExUpdatePath` other than 0, and `NSRCG = 1` beyond the 5-step demonstration.
 - Numerical parity of any run with C or Julia; the tutorial compares nothing against a reference.
-- The Japanese manual `extern/mVMC-1.3.0/doc/ja` was not read; the English manual (`doc/en`) is the source for all paraphrases.
+- The Japanese manual `extern/mVMC-1.4.0/doc/ja` was not read; the English manual (`doc/en`) is the source for all paraphrases.
 - [Chapter 12](12-accelerated-backends.md): the CUDA gates, the CUDA kernels and every GPU or device-resident number were **not run** for this manual; they are copied from `docs/design/gpu-readiness.md` and `docs/NUMERICAL_COMPARISONS.md`. Only the CPU-side statements marked **(observed)** (the `tenferro` selection of the stock `mvmc` binary on `hubbard_chain_L16`) were reproduced here. The legacy CUDA stage route that the original chapter also described was removed in #643.

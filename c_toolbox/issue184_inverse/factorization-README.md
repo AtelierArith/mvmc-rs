@@ -19,7 +19,7 @@ All compiled units and transitive common/ltl2inv headers are hashed before
 compiler invocation and checked unchanged after acquisition.
 
 Fortran licensing/origin remains in original
-`extern/mVMC-1.3.0/src/pfapack/LapackLicence` (Wimmer/LAPACK-derived modified
+`extern/mVMC-1.4.0/src/pfapack/LapackLicence` (Wimmer/LAPACK-derived modified
 BSD redistribution terms); included invert.tcc retains its MPL-2.0 notice.
 No vendored source edits, production FFI or distribution of compiled binaries.
 The harness uses a separate C++ alias for native zsktrf_ with actual LP64

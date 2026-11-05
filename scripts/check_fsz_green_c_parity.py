@@ -29,7 +29,7 @@ def main():
     if args.measurements and (args.real or args.hamiltonian):
         parser.error("--measurements uses the complex FSZ family and is separate from --real/--hamiltonian")
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC"
     selected = {
         "projection.c": ["inline double ProjRatio(", "void UpdateProjCnt(", "void UpdateProjCnt_fsz("],
         "pfupdate_fsz.c": ["void CalculateNewPfM_fsz("],

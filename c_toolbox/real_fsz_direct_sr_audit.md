@@ -6,7 +6,7 @@ Developer-only `real_fsz_direct_sr_audit.c` includes complete, unchanged
 and `stcopt_dposv.c` (SHA256
 `2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca`).
 No numerical-body changes: copyright/GPL notices remain in
-the included sources; upstream license is `extern/mVMC-1.3.0/COPYING`.
+the included sources; upstream license is `extern/mVMC-1.4.0/COPYING`.
 
 Harness-only serial communicator/timer stubs and a DPOSV observation wrapper
 provide a standalone kernel check, **not full C executable, MPI, sampling or

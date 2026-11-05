@@ -1,7 +1,7 @@
 //! Pure-Rust port of the mVMC StdFace (Standard mode): read a `stan.in`-style keyword file and
 //! generate the Expert-mode input files (`namelist.def`, `modpara.def`, `trans.def`, ...).
 //!
-//! The module layout mirrors `extern/mVMC-1.3.0/src/StdFace/src/`:
+//! The module layout mirrors `extern/mVMC-1.4.0/src/StdFace/src/`:
 //!
 //! | Rust module | C source |
 //! | --- | --- |

@@ -196,7 +196,7 @@ fn rust_only_keywords_are_rejected_naming_the_keyword() {
 
 #[test]
 fn c_defaults_apply_to_absent_keys() {
-    // readdef.c:1756-1823.
+    // readdef.c:2064-1823.
     let p = ModParaParameters::default();
     assert_eq!(
         (

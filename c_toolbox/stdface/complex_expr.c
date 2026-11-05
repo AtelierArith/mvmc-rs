@@ -1,6 +1,6 @@
 /*
  * Probe of the compiled C `double complex` expressions used by StdFace_HubbardLocal,
- * StdFace_MagField and StdFace_GeneralJ (extern/mVMC-1.3.0/src/StdFace/src/StdFace_ModelUtil.c).
+ * StdFace_MagField and StdFace_GeneralJ (extern/mVMC-1.4.0/src/StdFace/src/StdFace_ModelUtil.c).
  *
  * The expressions below are copied verbatim from those functions (same operand order, same mix
  * of `double`, `I` and `double complex`). The probe evaluates them on a grid of operands that

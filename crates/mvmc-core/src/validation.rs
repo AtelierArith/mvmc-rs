@@ -34,9 +34,9 @@ pub fn validate_grouped_runtime(
     if entry_point == RuntimeEntryPoint::ParaOpt && data.modpara.nsrcg != 0 {
         return Err(
             "NSplitSize > 1 with NSRCG != 0 is undefined in mVMC C: VMCMainCal writes \
-             SROptO_Store at the global sample slot (vmccal.c:241,248) but reads it back from \
-             column 0 with the local sample count (calculateOO_Store, vmccal.c:314-318), so ranks \
-             after the first read unwritten malloc memory (setmemory.c:419-421); use NSRCG = 0"
+             SROptO_Store at the global sample slot (vmccal.c:250,257) but reads it back from \
+             column 0 with the local sample count (calculateOO_Store, vmccal.c:323-327), so ranks \
+             after the first read unwritten malloc memory (setmemory.c:455-457); use NSRCG = 0"
                 .into(),
         );
     }
@@ -90,9 +90,9 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
 
 /// Reject `NExUpdatePath` values outside the ported update paths 0-3.
 ///
-/// mVMC 1.3.0 `getUpdateType` (`vmcmake.c:606-629`) returns `NONE` for any other value
-/// and `readdef.c:621-631` checks `NExUpdatePath` only when local spins are
-/// present, so C 1.3.0 starts such a run, never proposes a move and saves the
+/// mVMC `getUpdateType` (`vmcmake.c:797-826`) returns `NONE` for any value it does not
+/// define and `readdef.c:714-724` checks `NExUpdatePath` only when local spins are
+/// present, so C starts such a run, never proposes a move and saves the
 /// initial configuration as every sample. That is a C defect, not an input
 /// contract (#681). mVMC 1.4.0 assigns 4/5 to the t-J spin-hopping updates
 /// and 6 to doublon-only pair hopping (upstream #94, #97, #98); those update
@@ -102,7 +102,7 @@ pub fn validate_ex_update_path(path: i64) -> Result<(), String> {
         0..=3 => Ok(()),
         4..=6 => Err(format!(
             "NExUpdatePath = {path} is not supported: the mVMC 1.4.0 {} update is not ported; \
-             use 0, 1, 2 or 3 (mVMC 1.3.0 update paths)",
+             use 0, 1, 2 or 3 (the ported update paths)",
             if path == 6 {
                 "doublon-only pair-hopping"
             } else {
@@ -110,7 +110,7 @@ pub fn validate_ex_update_path(path: i64) -> Result<(), String> {
             }
         )),
         _ => Err(format!(
-            "NExUpdatePath = {path} is not supported; use 0, 1, 2 or 3 (mVMC 1.3.0 \
+            "NExUpdatePath = {path} is not supported; use 0, 1, 2 or 3 (mVMC \
              getUpdateType has no move for other values, so the sampler would never move)"
         )),
     }
@@ -118,9 +118,9 @@ pub fn validate_ex_update_path(path: i64) -> Result<(), String> {
 
 /// Reject the SR-CG storage combination that is undefined in C.
 ///
-/// C selects the CG solver for any `NSRCG != 0` (vmcmain.c:461,485;
-/// vmccal.c:582,591) but allocates `SROptO_Store` only when
-/// `NSRCG == 1 || NStoreO != 0` (setmemory.c:394-416). `NSRCG >= 2` with
+/// C selects the CG solver for any `NSRCG != 0` (vmcmain.c:463,487;
+/// vmccal.c:591,602) but allocates `SROptO_Store` only when
+/// `NSRCG == 1 || NStoreO != 0` (setmemory.c:428-452). `NSRCG >= 2` with
 /// `NStore == 0` therefore leaves the CG solver without its O storage, which is
 /// undefined behavior in C; Rust rejects it instead of imitating that.
 pub fn validate_sr_storage_contract(p: &ModParaParameters) -> Result<(), String> {
@@ -302,7 +302,7 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     if p.lanczos_mode > 0 {
         if data.i_flg_orbital_general != 0 {
             return Err(
-                "NLanczosMode > 0 is not supported for FSZ/general orbitals (mVMC C readdef.c:615-617)"
+                "NLanczosMode > 0 is not supported for FSZ/general orbitals (mVMC C readdef.c:708-710)"
                     .into(),
             );
         }

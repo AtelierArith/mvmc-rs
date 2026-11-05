@@ -38,11 +38,11 @@ int main(int argc, char **argv) {
       SROptO_real[0]=1; SROptO_real[1]=100*group+sample+1;
       measured+=SROptO_real[1];
       for(int int_i=0;int_i<SROptSize;int_i++) {
-        /* vmccal.c:241 actual absolute-column assignment, unchanged. */
+        /* vmccal.c:250 actual absolute-column assignment, unchanged. */
         SROptO_Store_real[int_i+sample*SROptSize]  = sqrtw*SROptO_real[int_i];
       }
     }
-    /* vmccal.c:314 passes BASE store, not store+sampleStart*SROptSize. */
+    /* vmccal.c:323 passes BASE store, not store+sampleStart*SROptSize. */
     calculateOO_Store_real(oo,ho,SROptO_Store_real,1,0,SROptSize,end-start);
     double actual, assigned;
     MPI_Allreduce(&oo[1],&actual,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);

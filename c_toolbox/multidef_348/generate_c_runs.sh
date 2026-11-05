@@ -4,10 +4,10 @@
 # Explicit developer command; never invoked by Cargo or by Rust tests. Run inside the
 # Linux x86_64 Dev Container (MPICH under /opt/mpich, OpenBLAS, GCC) from the repo root:
 #
-#   SOURCE_COMMIT=$(git -C extern/mVMC-1.3.0 rev-parse HEAD) \
+#   SOURCE_COMMIT=$(git -C extern/mVMC-1.4.0 rev-parse HEAD) \
 #     c_toolbox/multidef_348/generate_c_runs.sh /tmp/mvmc-348-c
 #
-# The vendored extern/mVMC-1.3.0 tree is copied and built unmodified (stock vmc.out).
+# The vendored extern/mVMC-1.4.0 tree is copied and built unmodified (stock vmc.out).
 # Two directories with different inputs, `a` (physcal_181/heisenberg_chain_real) and `b`
 # (physcal_181/hubbard_chain_real), are listed in dirs.txt. `mpiexec -n W vmc.out -m 2
 # dirs.txt namelist.def zqp_opt.dat` runs at W = 2, 3, 4 (2x1, 2+1 with the C load
@@ -23,7 +23,7 @@ inputs=$root/tests/fixtures/physcal_181
 export CC=gcc CXX=g++ FC=gfortran OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 rm -rf "$work"
 mkdir -p "$work/build"
-cp -r "$root/extern/mVMC-1.3.0" "$work/src"
+cp -r "$root/extern/mVMC-1.4.0" "$work/src"
 (cd "$work/build" &&
   cmake ../src -DCMAKE_BUILD_TYPE=Release -DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF \
     -DMPI_C_COMPILER=/opt/mpich/bin/mpicc > cmake.log 2>&1 &&
@@ -88,8 +88,8 @@ err bad_dir 'nope\n' -m 1 list.txt namelist.def zqp_opt.dat
 {
   echo "generator=c_toolbox/multidef_348/generate_c_runs.sh"
   echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "source=extern/mVMC-1.3.0 (unmodified copy), submodule commit ${SOURCE_COMMIT:-unknown}"
-  echo "vmcmain.c_sha256=$(sha256sum "$root/extern/mVMC-1.3.0/src/mVMC/vmcmain.c" | cut -d' ' -f1)"
+  echo "source=extern/mVMC-1.4.0 (unmodified copy), submodule commit ${SOURCE_COMMIT:-unknown}"
+  echo "vmcmain.c_sha256=$(sha256sum "$root/extern/mVMC-1.4.0/src/mVMC/vmcmain.c" | cut -d' ' -f1)"
   echo "vmc_out_sha256=$(sha256sum "$vmc" | cut -d' ' -f1)"
   echo "arch=$(uname -m) kernel=$(uname -sr)"
   echo "gcc=$(gcc --version | head -1)"

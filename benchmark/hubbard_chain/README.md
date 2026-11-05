@@ -33,7 +33,8 @@ inputs/hubbard_chain_L16/
 ## Provenance
 
 Generated with the C StdFace input generator shipped in
-`extern/mVMC-1.3.0/src/StdFace` (`mVMC-1.3.0`). The generator was built
+`extern/mVMC-1.3.0/src/StdFace` (StdFace `6fa4ef1f`, the same pin as in
+`extern/mVMC-1.4.0`). The generator was built
 standalone; only `-lm` is required:
 
 ```sh

@@ -36,7 +36,7 @@ for model in sort(readdir(stage))
             for path in (raw, joinpath(case, "c-window-declared-input.txt"), probe,
                 @__FILE__, joinpath(repo, "c_toolbox/ctest_opt_window.c"),
                 joinpath(repo, "c_toolbox/ctest_opt_window_upstream.inc"),
-                joinpath(repo, "extern/mVMC-1.3.0/src/mVMC/avevar.c"))
+                joinpath(repo, "extern/mVMC-1.4.0/src/mVMC/avevar.c"))
                 println(io, basename(path), " sha256=", bytes2hex(sha256(read(path))))
             end
             println(io, "Compiler: GCC Ubuntu 13.3.0-6ubuntu2~24.04.1; -O0 -ffp-contract=off -lm; native Linux x86_64; no BLAS in aggregator")

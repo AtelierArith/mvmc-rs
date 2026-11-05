@@ -1,5 +1,5 @@
 /* Standalone kernel probe (issue #348): the MultiDef communicator-split colour of
- * `initMultiDefMode` (extern/mVMC-1.3.0/src/mVMC/vmcmain.c:752-760), with the
+ * `initMultiDefMode` (extern/mVMC-1.4.0/src/mVMC/vmcmain.c:762-770), with the
  * statements copied verbatim and only wrapped in a loop over (size, nMultiDef, rank).
  * No MPI: this checks the arithmetic only, not a full vmc.out -m run (see
  * generate_c_runs.sh for that).
@@ -18,7 +18,7 @@ int main(void) {
       printf("%d %d", size, nMultiDef);
       for (rank = 0; rank < size; rank++) {
         int group1, div, mod, threshold;
-        /* ---- verbatim vmcmain.c:752-759 ---- */
+        /* ---- verbatim vmcmain.c:762-769 ---- */
         div = size / nMultiDef;
         mod = size % nMultiDef;
         threshold = (div+1)*mod;

@@ -1,7 +1,7 @@
 //! S180 / M0843–M0854, Julia test_unit_threading.jl:91–117 (8bb1b9).
 //! Independent literal energy moments, not a sampling oracle.
 //!
-//! C vmccal_fsz.c:144–148 accumulates w, w*E, w*conj(E)*E, w*Sz,
+//! C vmccal_fsz.c:150–154 accumulates w, w*E, w*conj(E)*E, w*Sz,
 //! w*Sz*Sz. Thus the original samples (w=2,E=1+2i,Sz=3) and
 //! (w=.5,E=-2+i,Sz=-1) have the immutable moment records below.
 //! C average.c:43–75 reduces these five slots, keeps Wc, and multiplies

@@ -32,15 +32,15 @@ Cの挙動の一部であり、Rustでも厳密に保たれます(乱数の状�
 5. 次の呼び出しのために最終配置を保存し、`BurnFlag = 1` に設定します。
 
 > **実装**
-> - C: `VMCMakeSample` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:45`
-> - C: `VMCMakeSample_real` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_real.c:45`
-> - C: `VMCMakeSample_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:42`
-> - C: `saveEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:445`
+> - C: `VMCMakeSample` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:45`
+> - C: `VMCMakeSample_real` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_real.c:45`
+> - C: `VMCMakeSample_fsz` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:42`
+> - C: `saveEleConfig` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:550`
 > - Rust: `vmc_make_sample_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:462`
 > - Rust: `vmc_make_sample_real_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:147`
 > - Rust: `vmc_make_sample_fsz_with_reducer_timed` — `crates/mvmc-core/src/sampling/driver.rs:1022`
 > - Rust: `vmc_make_sample` — `crates/mvmc-core/src/sampling/driver.rs:443`
-> - 整合性: 外側ステップ数、保存サンプルの添字、および `nAccept > Nsite` のリフレッシュは `vmcmake.c:141, 309, 334-349` に従っています(Rustでは `driver.rs:271-278, 532-552, 558-562`)。リフレッシュの判定は厳密な `>` を用います。最終ステップ後の `copyToBurnSample` は `ElectronConfiguration` の「burn」バッファで再現されており、持ち越しは `counter[9] != 0` で検出されます(`driver.rs:167`)。
+> - 整合性: 外側ステップ数、保存サンプルの添字、および `nAccept > Nsite` のリフレッシュは `vmcmake.c:141, 389, 414-429` に従っています(Rustでは `driver.rs:271-278, 532-552, 558-562`)。リフレッシュの判定は厳密な `>` を用います。最終ステップ後の `copyToBurnSample` は `ElectronConfiguration` の「burn」バッファで再現されており、持ち越しは `counter[9] != 0` で検出されます(`driver.rs:167`)。
 
 ## 4.2 初期配置
 
@@ -55,7 +55,7 @@ Cの挙動の一部であり、Rustでも厳密に保たれます(乱数の状�
    それでもだめなら異常終了します)。
 
 > **実装**
-> - C: `makeInitialSample` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:359`
+> - C: `makeInitialSample` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:439`
 > - Rust: `make_initial_sample` — `crates/mvmc-core/src/sampling/initial.rs:76`
 > - Rust: `make_initial_sample_normal_with_info` — `crates/mvmc-core/src/sampling/normal_initial.rs:252`
 > - Rust: `make_initial_sample_fsz` — `crates/mvmc-core/src/sampling/initial.rs:274`
@@ -101,14 +101,14 @@ Cマニュアルの目安は次のとおりです。`0` はホッピングのみ
 有限でない場合やゼロの場合でも、採択判定でちょうど1回 `genrand_real2` が消費されます。
 
 > **実装**
-> - C: `getUpdateType` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:606`
-> - C: `makeCandidate_hopping` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:515`
-> - C: `makeCandidate_exchange` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:548`
-> - C: `updateEleConfig` — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:585`
-> - C: `makeCandidate_hopping_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:594`
-> - C: `makeCandidate_exchange_fsz` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:670`
-> - C: `makeCandidate_LocalSpinFlip_localspin` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:728`
-> - C: `makeCandidate_LocalSpinFlip_conduction` — `extern/mVMC-1.3.0/src/mVMC/vmcmake_fsz.c:756`
+> - C: `getUpdateType` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:797`
+> - C: `makeCandidate_hopping` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:620`
+> - C: `makeCandidate_exchange` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:684`
+> - C: `updateEleConfig` — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:777`
+> - C: `makeCandidate_hopping_fsz` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:633`
+> - C: `makeCandidate_exchange_fsz` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:780`
+> - C: `makeCandidate_LocalSpinFlip_localspin` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:838`
+> - C: `makeCandidate_LocalSpinFlip_conduction` — `extern/mVMC-1.4.0/src/mVMC/vmcmake_fsz.c:866`
 > - Rust: `get_update_type` — `crates/mvmc-core/src/sampling/candidate.rs:320`
 > - Rust: `make_candidate_hopping` — `crates/mvmc-core/src/sampling/candidate.rs:137`
 > - Rust: `make_candidate_exchange` — `crates/mvmc-core/src/sampling/candidate.rs:230`
@@ -136,7 +136,7 @@ $r=\texttt{genrand\_real2()}\in[0,1)$ に対して $w>r$ のときに限り採�
 $\ln\mathrm{IP}$ が更新されます。棄却された場合は占有配列が元に戻され(`revertEleConfig`)、それ以外は何も変化しません。
 
 > **実装**
-> - C: `VMCMakeSample` (acceptance block `w = exp(2.0*(creal(x+logIpNew-logIpOld)))`) — `extern/mVMC-1.3.0/src/mVMC/vmcmake.c:194`
+> - C: `VMCMakeSample` (acceptance block `w = exp(2.0*(creal(x+logIpNew-logIpOld)))`) — `extern/mVMC-1.4.0/src/mVMC/vmcmake.c:203`
 > - Rust: `metropolis_weight` — `crates/mvmc-core/src/sampling/metropolis.rs:42`
 > - Rust: `metropolis_decision` — `crates/mvmc-core/src/sampling/metropolis.rs:60`
 > - Rust: `attempt_hopping_move` — `crates/mvmc-core/src/sampling/one_move.rs:200`
@@ -187,15 +187,15 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 `InvM`/`PfM` を一時的に更新したのち復元します(`copyMAll`)。
 
 > **実装**
-> - C: `CalculateNewPfM2` — `extern/mVMC-1.3.0/src/mVMC/pfupdate.c:78`
-> - C: `UpdateMAll` — `extern/mVMC-1.3.0/src/mVMC/pfupdate.c:119`
-> - C: `updateMAll_child` — `extern/mVMC-1.3.0/src/mVMC/pfupdate.c:143`
-> - C: `CalculateNewPfMTwo2_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:73`
-> - C: `calculateNewPfMTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:107`
-> - C: `UpdateMAllTwo_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:189`
-> - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fcmp.c:217`
-> - C: `UpdateMAll_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_fsz.c:114`
-> - C: `UpdateMAllTwo_fsz` — `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_fsz.c:194`
+> - C: `CalculateNewPfM2` — `extern/mVMC-1.4.0/src/mVMC/pfupdate.c:80`
+> - C: `UpdateMAll` — `extern/mVMC-1.4.0/src/mVMC/pfupdate.c:123`
+> - C: `updateMAll_child` — `extern/mVMC-1.4.0/src/mVMC/pfupdate.c:147`
+> - C: `CalculateNewPfMTwo2_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:73`
+> - C: `calculateNewPfMTwo_child_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:107`
+> - C: `UpdateMAllTwo_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:192`
+> - C: `updateMAllTwo_child_fcmp` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fcmp.c:220`
+> - C: `UpdateMAll_fsz` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_fsz.c:116`
+> - C: `UpdateMAllTwo_fsz` — `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_fsz.c:197`
 > - Rust: `calculate_new_pf_m2_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:26`
 > - Rust: `calculate_new_pf_m2_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:73`
 > - Rust: `update_m_all_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:548`
@@ -206,7 +206,7 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 > - Rust: `update_m_all_two_fsz_complex_flat` — `crates/mvmc-core/src/sampling/updates.rs:907`
 > - Rust: `update_two_complex` — `crates/mvmc-core/src/sampling/updates.rs:1253`
 > - Rust: `update_m_all_two_real_flat` — `crates/mvmc-core/src/sampling/updates.rs:779`
-> - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。**既知の癖(観測):** 2電子更新において、Cは4つのすべての変種で `rsbOld = raOld + t*Nsite` を定義しています(`rbOld` ではなく `raOld` を用います)(`pfupdate_two_fcmp.c:227`、`pfupdate_two_real.c:227`、およびFSZのファイル)。Rustの*実数*版の更新はこれを意図的に再現していますが(`update_m_all_two_real_flat`、`updates.rs:565`、`rsb_old = ra_old + ...` は `updates.rs:588`)、Rustの*複素数の通常*版の更新は `rb_old` を用います(`updates.rs:537`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
+> - 整合性: `updateMAll_child` 内のCの `invM` の累積順序は、$j$ にわたる `vec1[msi] += -invM_j[msi] * sltE_aj` の後に $i$ を外側とするランク2更新です。Rustのカーネルはこのループの入れ子とスカラーの順序を保っており、結果は丸め誤差の範囲で一致します。**既知の癖(観測):** 2電子更新において、Cは4つのすべての変種で `rsbOld = raOld + t*Nsite` を定義しています(`rbOld` ではなく `raOld` を用います)(`pfupdate_two_fcmp.c:230`、`pfupdate_two_real.c:230`、およびFSZのファイル)。Rustの*実数*版の更新はこれを意図的に再現していますが(`update_m_all_two_real_flat`、`updates.rs:565`、`rsb_old = ra_old + ...` は `updates.rs:588`)、Rustの*複素数の通常*版の更新は `rb_old` を用います(`updates.rs:537`)。[11.5](11-compatibility.md#115-未解決の観測事項)を参照してください。
 
 ## 4.6 サンプラー内の並列化
 
@@ -219,8 +219,8 @@ $t=\det^{-1}W_{b\cdot}$ を用います(`update_two_complex` を参照してく�
 グループの全ランクで同一に行われます。[8.4](08-running.md#84-mpiとグループ実行)を参照してください。
 
 > **実装**
-> - C: `SplitLoop` — `extern/mVMC-1.3.0/src/mVMC/splitloop.c:31`
-> - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.3.0/src/mVMC/qp.c:110`
+> - C: `SplitLoop` — `extern/mVMC-1.4.0/src/mVMC/splitloop.c:31`
+> - C: `CalculateIP_fcmp` (group `MPI_Allreduce`) — `extern/mVMC-1.4.0/src/mVMC/qp.c:110`
 > - Rust: `partition_range` — `crates/mvmc-core/src/parallel.rs:88`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`
 > - Rust: `resolve_rnd_seed` — `crates/mvmc-core/src/run.rs:2093`

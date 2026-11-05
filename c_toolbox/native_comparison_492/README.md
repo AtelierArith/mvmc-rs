@@ -1,6 +1,6 @@
 # Native comparison boundary probe (#492)
 
-This optional developer command copies the authoritative `extern/mVMC-1.3.0`
+This optional developer command copies the authoritative `extern/mVMC-1.4.0`
 source, then reuses the existing `sr_operand_dump/dump_sr_operands.patch` and
 `physcal_native/state_dump.patch`. `add_probe.py` declares the existing state
 writer and calls it immediately before the original SR solve. It changes no

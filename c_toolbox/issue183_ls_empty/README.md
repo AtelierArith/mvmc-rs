@@ -7,7 +7,7 @@ sampling, MPI, Julia or numerical trajectory parity. No BLAS or RNG is used.
 
 ## Authority and provenance
 
-Origin: vendored mVMC1.3.0, `extern/mVMC-1.3.0/src/mVMC/`.
+Origin: vendored mVMC1.3.0, `extern/mVMC-1.4.0/src/mVMC/`.
 No extraction or source modification: the whole original `physcal_lanczos.c`
 translation unit and its original header are compiled and linked. The probe is
 a standalone caller. Upstream license is GNU GPLv3, as provided by
@@ -23,9 +23,9 @@ a standalone caller. Upstream license is GNU GPLv3, as provided by
 | vmcmain.c | fdcd661c4eb028786fc58ae5e1f5232426c943b547f95a0d74e888e602256d63 |
 | probe.c | 10ce12bcb868cb612102081a1068216b609e18285203cdb2860e5c13158e5be8 |
 
-`readdef.c:706` maps NCisAjsCktAlt to NTwoBodyGEx (default zero at1790).
-`initfile.c:130-132` opens LS GEx file with `w` even at zero count when
-NLanczosMode>1; `initfile.c:184` closes it. `vmcmain.c:696-709` passes that count
+`readdef.c:850` maps NCisAjsCktAlt to NTwoBodyGEx (default zero at1790).
+`initfile.c:140-142` opens LS GEx file with `w` even at zero count when
+NLanczosMode>1; `initfile.c:197` closes it. `vmcmain.c:706-719` passes that count
 and stream to the real/complex functions. `physcal_lanczos.c:138-141` (real) and
 `:259-262` (complex) execute zero pair-loop iterations then unconditionally
 `fprintf(...,"\n")`. Therefore successful mode2 zero-GEx output is exactly
@@ -39,9 +39,9 @@ From the repository root, with an exclusively new temporary directory:
 ```sh
 probe_dir=$(mktemp -d /tmp/mvmc-183-c-ls-empty.XXXXXX)
 cc -std=c11 -O0 -Wall -Wextra \
-  -I extern/mVMC-1.3.0/src/mVMC/include \
+  -I extern/mVMC-1.4.0/src/mVMC/include \
   c_toolbox/issue183_ls_empty/probe.c \
-  extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c \
+  extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c \
   -lm -o "$probe_dir/probe"
 "$probe_dir/probe"
 ```

@@ -93,7 +93,7 @@ fn entries(dir: &Path) -> Vec<String> {
 }
 
 /// Decoded `_varbin_` file: `(NPara, step count, blocks)`. `full` selects Rust's
-/// `2*NPara`-double blocks; C's blocks hold `NPara` doubles (vmcmain.c:658).
+/// `2*NPara`-double blocks; C's blocks hold `NPara` doubles (vmcmain.c:660).
 fn read_varbin(path: &Path, full: bool) -> (i32, i32, Vec<Vec<f64>>) {
     let bytes = fs::read(path).unwrap();
     let n_para = i32::from_ne_bytes(bytes[0..4].try_into().unwrap());
@@ -159,7 +159,7 @@ fn version_flag_prints_crate_and_c_reference_version_without_files() {
         assert!(output.status.success(), "{}", stderr(&output));
         let text = stdout(&output);
         assert!(text.contains(env!("CARGO_PKG_VERSION")), "{text}");
-        assert!(text.contains("C mVMC 1.3.0"), "{text}");
+        assert!(text.contains("C mVMC 1.4.0"), "{text}");
         assert!(entries(&work.0).is_empty());
     }
 }

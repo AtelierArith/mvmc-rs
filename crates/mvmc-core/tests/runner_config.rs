@@ -28,7 +28,7 @@ fn invalid_options_fail_before_opening_inputs() {
 
 #[test]
 fn final_window_must_fit_effective_steps() {
-    // C readdef.c assigns both counts unchanged. vmcmain.c:511-512 indexes
+    // C readdef.c assigns both counts unchanged. vmcmain.c:513-514 indexes
     // StoreOptData with the original window; an oversized window leaves
     // leading allocated rows unwritten. Reject this unsupported contract,
     // rather than silently changing the requested window to fit the steps.

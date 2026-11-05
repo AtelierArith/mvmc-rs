@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src"
     parameter = (src / "mVMC/parameter.c").read_text()
     slater = (src / "mVMC/slater.c").read_text()
     bodies = [function(parameter, "void InitParameter()"),

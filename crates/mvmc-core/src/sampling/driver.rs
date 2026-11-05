@@ -1287,7 +1287,7 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
                     if decision.accepted {
                         timer.start(68);
                         // C `UpdateMAllTwo_fsz(mi, s, mj, t, ri, rj, ...)`
-                        // (vmcmake_fsz.c:295): rank-two update, which cannot
+                        // (vmcmake_fsz.c:321): rank-two update, which cannot
                         // fail. Julia's full recalculation is not C parity (#679).
                         crate::sampling::updates::update_m_all_two_fsz_complex_flat(
                             mi,
@@ -1584,7 +1584,7 @@ pub fn vmc_make_sample_fsz_with_reducer_timed<const TIMED: bool, R: Reducer + ?S
             }
             if n_accept_window > n_site {
                 timer.start(34);
-                // C `CalculateMAll_fsz` (vmcmake_fsz.c:394). A failed refresh
+                // C `CalculateMAll_fsz` (vmcmake_fsz.c:420). A failed refresh
                 // publishes nothing, so keep the updated matrices and their
                 // log-IP, as the normal complex driver does.
                 if !reducer.sampling_any_failure(

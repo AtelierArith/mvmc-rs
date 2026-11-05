@@ -9,7 +9,7 @@ and `zqp` is `CParaFileHead` from `modpara.def` (defaults `zvo`, `zqp`), and `NN
 
 Numbers are written with the C format `"% .18e"` (a leading space instead of `+`, 18 digits,
 at least two exponent digits; `format_c_double`, `crates/mvmc-core/src/io.rs:50`). The C reference of every format
-is [`extern/mVMC-1.3.0/doc/en/source/output.rst`](../../extern/mVMC-1.3.0/doc/en/source/output.rst) and `initfile.c`, `vmcmain.c:outputData`, `avevar.c`.
+is [`extern/mVMC-1.4.0/doc/en/source/output.rst`](../../extern/mVMC-1.4.0/doc/en/source/output.rst) and `initfile.c`, `vmcmain.c:outputData`, `avevar.c`.
 
 Summary of what is written ("opt" = parameter optimization, "phys" = PhysCal):
 
@@ -42,18 +42,18 @@ One row per SR step (opt; the file is truncated at step 0 and appended afterward
 | 6 | $\langle S_z^2\rangle$ |
 
 The C format is `"% .18e % .18e  % .18e % .18e %.18e %.18e\n"` — two spaces before column 3 and no leading space before
-columns 5 and 6 (`vmcmain.c:640`); Rust reproduces it byte for byte. Example (first row of the tutorial run):
+columns 5 and 6 (`vmcmain.c:642`); Rust reproduces it byte for byte. Example (first row of the tutorial run):
 
 ```text
  1.719867648718613040e+01  0.000000000000000000e+00   3.255315646316159359e+02  1.005329525872698249e-01 0.000000000000000000e+00 0.000000000000000000e+00
 ```
 
 > **Implementation**
-> - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
-> - C: `InitFile` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:33`
+> - C: `outputData` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:642`
+> - C: `InitFile` — `extern/mVMC-1.4.0/src/mVMC/initfile.c:33`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
-> - Parity (**naming difference**): for optimization C writes the files with the data index, `zvo_out_001.dat` and `zvo_var_001.dat` (`initfile.c:55,59`, `NDataIdxStart`); Rust writes **`zvo_out.dat` and `zvo_var.dat` without the index** (Julia convention, `io.rs:113,128`). PhysCal files carry the index in both. The variance column is `0.0` in the optimization output when $\lvert\langle H\rangle\rvert\le10^{-14}$ (`io.rs:103`).
+> - Parity (**naming difference**): for optimization C writes the files with the data index, `zvo_out_001.dat` and `zvo_var_001.dat` (`initfile.c:60,64`, `NDataIdxStart`); Rust writes **`zvo_out.dat` and `zvo_var.dat` without the index** (Julia convention, `io.rs:113,128`). PhysCal files carry the index in both. The variance column is `0.0` in the optimization output when $\lvert\langle H\rangle\rvert\le10^{-14}$ (`io.rs:103`).
 
 ## 9.2 Parameters per step: `zvo_var.dat` and `zvo_var_NNN.dat`
 
@@ -61,7 +61,7 @@ One line per step. It starts with $\operatorname{Re}\langle H\rangle,\ \operator
 `Re Im 0.0` for **every** entry of the parameter vector in the layout of
 [3.1](03-theory-wavefunction.md#parameter-layout) (projection, RBM, Slater, OptTrans; unmapped and reserved slots are written too). A line therefore has
 $6+3N_{\rm para}$ numbers (306 for the 100-parameter tutorial model). The parameters in line $t$ are those *used* for the samples of step $t$, before the SR update.
-The line format is `"% .18e % .18e 0.0 ..."` (`vmcmain.c:655-657`).
+The line format is `"% .18e % .18e 0.0 ..."` (`vmcmain.c:657-659`).
 
 ## 9.3 Optimized parameters
 
@@ -89,8 +89,8 @@ i.e. five header lines (the second names the block and its declared count) and r
 of the DH blocks is the number of patterns, while the row count is $6\times$ (DH2) or $10\times$ (DH4) that number.
 
 > **Implementation**
-> - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
-> - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
+> - C: `StoreOptData` — `extern/mVMC-1.4.0/src/mVMC/avevar.c:82`
+> - C: `OutputOptData` — `extern/mVMC-1.4.0/src/mVMC/avevar.c:94`
 > - Rust: `store_opt_data` — `crates/mvmc-core/src/io.rs:21`
 > - Rust: `output_opt_data` — `crates/mvmc-core/src/io.rs:561`
 > - Rust: `output_parameter_block` — `crates/mvmc-core/src/io.rs:700`
@@ -111,9 +111,9 @@ parameter index `imax`, and, after a comma, the number of CG iterations. Format 
 The C manual notes that imaginary components of real-mode parameters are counted in `optCut`.
 
 > **Implementation**
-> - C: `fn_StochasticOptCG` (writes the CG row) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:73`
-> - C: `StochasticOpt` (writes the direct-solver row) — `extern/mVMC-1.3.0/src/mVMC/stcopt.c:33`
-> - C: `InitFile` (header, opened for every optimization) — `extern/mVMC-1.3.0/src/mVMC/initfile.c:33`
+> - C: `fn_StochasticOptCG` (writes the CG row) — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:81`
+> - C: `StochasticOpt` (writes the direct-solver row) — `extern/mVMC-1.4.0/src/mVMC/stcopt.c:33`
+> - C: `InitFile` (header, opened for every optimization) — `extern/mVMC-1.4.0/src/mVMC/initfile.c:33`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
 > - Parity (**difference**): C also writes `zvo_SRinfo.dat` for the *direct* solver (`stcopt.c:157`, columns without the iteration count); Rust writes it only in the CG path (`crates/mvmc-core/src/sr_cg.rs:208-241`, prefix from `CDataFileHead`). A direct-solver run produces no `zvo_SRinfo.dat` **(observed)**. In Rust the header line is written only if the file is new or empty.
 
@@ -142,8 +142,8 @@ slots (ids up to 966; uninstrumented slots read 0). The file name is **always `z
 `"zvo"` (`run.rs`, `crates/mvmc-cli/src/lib.rs`), whereas C uses `CDataFileHead` (`vmcclock.c:79`). Timers are inclusive: a parent section keeps running while its children are timed.
 
 > **Implementation**
-> - C: `OutputTimerParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcclock.c:79`
-> - C: `OutputTimerPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcclock.c:140`
+> - C: `OutputTimerParaOpt` — `extern/mVMC-1.4.0/src/mVMC/vmcclock.c:79`
+> - C: `OutputTimerPhysCal` — `extern/mVMC-1.4.0/src/mVMC/vmcclock.c:140`
 > - Rust: `TimerEnv::from_lookup` — `crates/mvmc-core/src/c_timer.rs:174`
 
 ## 9.6 Green functions: `zvo_cisajs_NNN.dat`, `zvo_cisajscktalt_NNN.dat`, `zvo_cisajscktaltex_NNN.dat`
@@ -168,10 +168,10 @@ Examples (tutorial run, `NVMCSample = 3000`):
 A file is not created when its count is zero (the tutorial has no `TwoBodyGEx`, hence no `zvo_cisajscktaltex_001.dat`).
 
 > **Implementation**
-> - C: `outputData` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:640`
-> - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
+> - C: `outputData` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:642`
+> - C: `InitFilePhysCal` — `extern/mVMC-1.4.0/src/mVMC/initfile.c:77`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
-> - Parity: row text and the trailing blank line / single-line layout of the `ex` file are reproduced (`io.rs:244-301`, comment "C vmcmain.c:671-675 emits pairs in term order, newline after the loop").
+> - Parity: row text and the trailing blank line / single-line layout of the `ex` file are reproduced (`io.rs:244-301`, comment "C vmcmain.c:673-677 emits pairs in term order, newline after the loop").
 
 ## 9.7 Lanczos files
 
@@ -183,7 +183,7 @@ For `NLanczosMode > 0` ([6.2](06-theory-observables-lanczos.md#62-the-single-ste
   **`zvo_ls_cisajscktaltex_NNN.dat`** (one line of `Re Im` pairs). The `ex` file is created even when `TwoBodyGEx` is empty (it then contains one newline).
 
 > **Implementation**
-> - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:149`
+> - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:149`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
 > - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - Parity: the debug-only C files `zvo_ls_qcisajsq_NNN.dat` and `zvo_ls_qcisajscktaltq_NNN.dat` (`#ifdef _DEBUG`) are not produced. On a failed $\alpha$ determination C writes nothing; Rust writes `NaN` ([6.2](06-theory-observables-lanczos.md#62-the-single-step-lanczos-wave-function)).
@@ -212,7 +212,7 @@ Inputs:
 
 - **NameList** — keywords `OneBodyG`, `TwoBodyG`, `ModPara` and `CalcMod` (case-insensitive; other keywords are skipped). Without `CalcMod` the data are taken as mVMC (`calctype = 4`); a `CalcMod` file selects the HPhi modes by its `CalcType` (0 Lanczos, 1 TPQ, 2 FullDiag, 3 LOBCG).
 - **ModPara** — `NSite`, `CDataFileHead`, `NDataIdxStart`, `NDataQtySmp` (mVMC); `NumAve`, `Lanczos_max`, `ExpecInterval`, `Exct` (HPhi). The mVMC data files are `output/<CDataFileHead>_cisajs_NNN.dat` and `..._cisajscktalt_NNN.dat` for `NNN = NDataIdxStart .. NDataIdxStart+NDataQtySmp-1`, exactly the files of [9.6](#96-green-functions-zvo_cisajs_nnndat-zvo_cisajscktalt_nnndat-zvo_cisajscktaltex_nnndat) (names, `%03d` index and row layout are identical to C's).
-- **Geometry** — the `geometry.dat` of C StdFace (lattice vectors, boundary phase in degrees, supercell, one `R orbital` row per site), followed by the k path (`nnode nk_line`, then `label k1 k2 k3` for each node) and the k grid `nk1 nk2 nk3` that the user appends (`echo "..." >> geometry.dat`, [`format.rst`](../../extern/mVMC-1.3.0/doc/en/source/fourier/format.rst)). **Rust does not write `geometry.dat`**: Standard-mode input expansion is not part of the Rust CLI, so use the file produced by C StdFace (`mvmc_dry.out`/`vmc.out`) or write it by hand.
+- **Geometry** — the `geometry.dat` of C StdFace (lattice vectors, boundary phase in degrees, supercell, one `R orbital` row per site), followed by the k path (`nnode nk_line`, then `label k1 k2 k3` for each node) and the k grid `nk1 nk2 nk3` that the user appends (`echo "..." >> geometry.dat`, [`format.rst`](../../extern/mVMC-1.4.0/doc/en/source/fourier/format.rst)). **Rust does not write `geometry.dat`**: Standard-mode input expansion is not part of the Rust CLI, so use the file produced by C StdFace (`mvmc_dry.out`/`vmc.out`) or write it by hand.
 
 Outputs (Fortran formats reproduced exactly, including the gfortran list-directed spacing):
 
@@ -232,20 +232,20 @@ Differences from the Fortran program (the Fortran behaviours are defects or comp
 - `CalcType 2` (FullDiag): gfortran cannot run the input format `("  MAX DIMENSION idim_max=1", i16)` (constant string in an input format). Rust skips the 26 characters of that string as other compilers do, reads the next 16 columns and then behaves like LOBCG. There is no Fortran reference for this branch.
 - Signed zeros of the reciprocal lattice vectors in the console output (`-0.0000000000` from LAPACK) are not reproduced.
 
-Other tools in `extern/mVMC-1.3.0/tool/` are not ported; they are independent of the Rust binaries and are used unchanged with Rust outputs:
+Other tools in `extern/mVMC-1.4.0/tool/` are not ported; they are independent of the Rust binaries and are used unchanged with Rust outputs:
 
 | Tool | Decision |
 |------|----------|
 | `wout2geom.sh` | Shell/`bc` converter from a Wannier90 `.wout` file to the lattice part of `geometry.dat` (Wannier90 mode). Not ported: it does not read any mVMC output and its result is an input of C StdFace and `greenr2k`. Use as `wout2geom.sh seed.wout > geometry.dat`. |
-| `respack2wan90.py` | Python/numpy converter from RESPACK output (`dir-wan`, `dir-intW`, `dir-intJ`) to the Wannier90-mode files `seed_hr.dat`, `seed_ur.dat`, `seed_jr.dat`, `seed_geom.dat`. Not ported: pre-processing for C StdFace. Use `uv run --with numpy extern/mVMC-1.3.0/tool/respack2wan90.py [seed]` in the RESPACK directory. |
+| `respack2wan90.py` | Python/numpy converter from RESPACK output (`dir-wan`, `dir-intW`, `dir-intJ`) to the Wannier90-mode files `seed_hr.dat`, `seed_ur.dat`, `seed_jr.dat`, `seed_geom.dat`. Not ported: pre-processing for C StdFace. Use `uv run --with numpy extern/mVMC-1.4.0/tool/respack2wan90.py [seed]` in the RESPACK directory. |
 | `gen_frmsf.sh` | `awk` script that cuts FermiSurfer files out of a momentum-distribution table. Not ported: it only post-processes text columns (and expects a different column layout than the current `greenr2k` output; `greenr2k` already writes `.frmsf` files itself). |
 
 > **Implementation**
-> - C: `read_filename` — `extern/mVMC-1.3.0/tool/greenr2k.F90:95`
-> - C: `read_geometry` — `extern/mVMC-1.3.0/tool/greenr2k.F90:294`
-> - C: `read_corrindx` — `extern/mVMC-1.3.0/tool/greenr2k.F90:467`
-> - C: `fourier_cor` — `extern/mVMC-1.3.0/tool/greenr2k.F90:782`
-> - C: `output_cor` — `extern/mVMC-1.3.0/tool/greenr2k.F90:819`
+> - C: `read_filename` — `extern/mVMC-1.4.0/tool/greenr2k.F90:95`
+> - C: `read_geometry` — `extern/mVMC-1.4.0/tool/greenr2k.F90:294`
+> - C: `read_corrindx` — `extern/mVMC-1.4.0/tool/greenr2k.F90:467`
+> - C: `fourier_cor` — `extern/mVMC-1.4.0/tool/greenr2k.F90:782`
+> - C: `output_cor` — `extern/mVMC-1.4.0/tool/greenr2k.F90:819`
 > - Rust: `run` — `crates/mvmc-greenr2k/src/lib.rs:1339`
 > - Rust: `fourier_cor` — `crates/mvmc-greenr2k/src/lib.rs:998`
 > - Rust: `list_real` — `crates/mvmc-greenr2k/src/fortran_fmt.rs:142`

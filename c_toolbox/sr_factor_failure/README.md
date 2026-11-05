@@ -11,7 +11,7 @@ read this directory. No runtime FFI is introduced into Rust.
 
 ## Numerical authority and source boundaries
 
-Authoritative reference: `extern/mVMC-1.3.0`, gitlink
+Authoritative reference: `extern/mVMC-1.4.0`, gitlink
 `d73d06bd529d3b2573f38eb5817c4a5f52971006`.
 
 - `src/mVMC/stcopt_dposv.c`, SHA-256

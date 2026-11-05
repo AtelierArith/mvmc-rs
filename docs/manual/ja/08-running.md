@@ -11,7 +11,7 @@
 mvmc [options] <namelist.def> [initpara]
 ```
 
-書式は C ドライバーの `vmc.out [option] NameListFile [OptParaFile]`(`vmcmain.c:714-723`)です。オプションは位置引数の後ろにも置けます。短いオプションはまとめて指定でき(`-bo`)、値は直後に続けても(`-F2`)次の語としても(`-F 2`)渡せます。C の `getopt` と同じです。
+書式は C ドライバーの `vmc.out [option] NameListFile [OptParaFile]`(`vmcmain.c:724-733`)です。オプションは位置引数の後ろにも置けます。短いオプションはまとめて指定でき(`-bo`)、値は直後に続けても(`-F2`)次の語としても(`-F 2`)渡せます。C の `getopt` と同じです。
 
 | オプション | 意味 | デフォルト |
 |--------|---------|---------|
@@ -25,7 +25,7 @@ mvmc [options] <namelist.def> [initpara]
 | `-b` | バイナリのパラメータ出力: `zvo_var` テキストファイルの代わりに `zvo_varbin_NNN.dat` を書き出します([バイナリ出力](#バイナリ出力-b)) | off |
 | `-F <N>`, `--flush-interval <N>` | `_time_`/`_SRinfo` ファイルを `N` ステップごとにフラッシュします。`N < 1` はエラーです([9.5](09-output-files.md)) | 1 |
 | `-e`, `--expert` | Expert モード(既定)。受理されますが何もしません | on |
-| `-v`, `--version` | `mvmc-rs version <crate version> (follows C mVMC 1.3.0)` を標準出力に出して終了ステータス `0` で終了します | |
+| `-v`, `--version` | `mvmc-rs version <crate version> (follows C mVMC 1.4.0)` を標準出力に出して終了ステータス `0` で終了します | |
 | `-h`, `--help` | 使用法(C のオプション一覧と Rust 拡張)を C と同じく標準エラー出力に表示し、終了ステータス `0` で終了します | |
 | `-s`, `--standard` | Standard モード: StdFace 入力から Expert ファイルを `--out-dir`(既定はカレントディレクトリ)に生成し、続けて `namelist.def` を実行します([7.6](07-input-files.md#76-standard-モードstdface)) | オフ |
 | `--dry-run` | StdFace 入力から Expert ファイルを生成して停止します(C の `vmcdry.out`) | オフ |
@@ -48,7 +48,7 @@ C(`vmcmain.c:177-182`, `:252-260`)と同様に、省略可能な 2 番目の位�
 
 ### MultiDef モード(`-m`)
 
-`mvmc -m N DirListFile NameListFile [OptParaFile]` は C の `vmc.out -m N` オプション(`initMultiDefMode`, `vmcmain.c:727-800`)の移植です。1 回の MPI 起動の中で `N` 個の独立した計算を、それぞれ別のディレクトリと別の定義ファイルで実行します。
+`mvmc -m N DirListFile NameListFile [OptParaFile]` は C の `vmc.out -m N` オプション(`initMultiDefMode`, `vmcmain.c:737-810`)の移植です。1 回の MPI 起動の中で `N` 個の独立した計算を、それぞれ別のディレクトリと別の定義ファイルで実行します。
 
 - **分割。** `size` 個のランクの world を `N` グループに分けます。`div = size / N`, `mod = size % N`, `threshold = (div+1)*mod` として、ランク `r` は `r < threshold` なら `r / (div+1)`、そうでなければ `mod + (r - threshold) / div` 番のグループに属します。先頭の `mod` グループは `div+1` ランク、残りは `div` ランクです。グループのコミュニケーターがその実行の world 全体(`comm0`)になります。グループ内のランク 0 が出力ルートでコンソールのバナーを表示し、`NSplitSize`(およびシードのオフセット `RndSeed + comm1 のグループ`、[4.6](04-theory-sampling.md#46-サンプラー内の並列化))はグループ内で働きます。グループ番号そのものはシードに入らないので、同じ入力を同じ幅で実行する 2 つのグループは同じチェインになります。
 - **ディレクトリ。** ランク 0 が `DirListFile` の空白区切りの先頭 `N` 個の名前を読みます(C の `fscanf("%s")`。パスは起動ディレクトリ相対)。グループ `g` は `g` 番目のディレクトリに入ります。`NameListFile` と `OptParaFile` はグループのディレクトリ**内**で解決され、既定の出力ディレクトリと相対の `--out-dir` も同様です。C はランクごとに 1 プロセスなので `chdir` でプロセスの作業ディレクトリを変えます。`mvmc` も同じ(ランクごとに 1 プロセス)です。
@@ -61,7 +61,7 @@ C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` �
 
 ### バイナリ出力(`-b`)
 
-`-b`(C の `FlagBinary`, `vmcmain.c:654-660`, `initfile.c:58-66`, `:82-90`)では `zvo_var` テキストファイルは**書き出されず**、他の出力ファイルは変わりません。パラメータは `zvo_varbin_NNN.dat`(`NNN` = `NDataIdxStart`。最適化では 1 ファイル、PhysCal ではサンプルごとに 1 ファイル)に書き出されます。
+`-b`(C の `FlagBinary`, `vmcmain.c:656-662`, `initfile.c:63-71`, `:82-90`)では `zvo_var` テキストファイルは**書き出されず**、他の出力ファイルは変わりません。パラメータは `zvo_varbin_NNN.dat`(`NNN` = `NDataIdxStart`。最適化では 1 ファイル、PhysCal ではサンプルごとに 1 ファイル)に書き出されます。
 
 | バイト | 内容 |
 |-------|---------|
@@ -89,9 +89,9 @@ C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` �
 (`validate_para_opt`)は、ライブラリレベルでの対応物です。
 
 > **実装**
-> - C: `main` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
-> - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
-> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
+> - C: `main` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:46`
+> - C: `VMCParaOpt` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:333`
+> - C: `VMCPhysCal` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:533`
 > - Rust: `main` — `crates/mvmc-cli/src/lib.rs:201`
 > - Rust: `parse_c_int` — `crates/mvmc-cli/src/lib.rs:149`
 > - Rust: `select_calculation` — `crates/mvmc-cli/src/lib.rs:969`
@@ -100,7 +100,7 @@ C との相違(いずれも C 側の欠陥または未定義動作): `N <= 0` �
 > - Rust: `prepare_physcal` — `crates/mvmc-cli/src/lib.rs:1154`
 > - Rust: `output_data` — `crates/mvmc-core/src/io.rs:142`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1512`
-> - C: `initMultiDefMode` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:727`
+> - C: `initMultiDefMode` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:737`
 > - Rust: `init_multi_def` — `crates/mvmc-cli/src/lib.rs:847`
 > - Rust: `group_of_rank` — `crates/mvmc-core/src/multidef.rs:16`
 > - Rust: `split_multi_def` — `crates/mvmc-core/src/mpi.rs:137`
@@ -145,8 +145,8 @@ mvmc namelist.def zqp_opt.dat --out-dir phys    # --physcal zqp_opt.dat と同�
 (`crates/mvmc-cli/src/physcal_trace.rs`)。整合性のデバッグ用であり、本番用の出力ではなく、マルチランクでの起動では拒否されます。
 
 > **実装**
-> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - C: `InitFilePhysCal` — `extern/mVMC-1.3.0/src/mVMC/initfile.c:72`
+> - C: `VMCPhysCal` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:533`
+> - C: `InitFilePhysCal` — `extern/mVMC-1.4.0/src/mVMC/initfile.c:77`
 > - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:518`
 > - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:908`
 > - Rust: `read_opt_para_file` — `crates/mvmc-core/src/initial_params.rs:141`
@@ -212,8 +212,8 @@ $\mathrm{IP}$ はグループ内でリダクションされます。したがっ
 
 Rust が初期化の前に拒否するのは、C で未定義の唯一のグループ組合せだけです(`validate_grouped_runtime`, [7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
 
-- CG ソルバー(`NSRCG != 0`)での `NSplitSize > 1`。`VMCMainCal` は `sqrt(w) O` をグローバルなサンプル位置に保存しますが(`vmccal.c:241,248`)、
-  `calculateOO_Store` は基底ポインタから先頭の `sampleEnd - sampleStart` 列を読むため(`vmccal.c:314-318`)、最初以外のランクは未書き込みの `malloc` メモリを読みます(`setmemory.c:419-421`)。
+- CG ソルバー(`NSRCG != 0`)での `NSplitSize > 1`。`VMCMainCal` は `sqrt(w) O` をグローバルなサンプル位置に保存しますが(`vmccal.c:250,257`)、
+  `calculateOO_Store` は基底ポインタから先頭の `sampleEnd - sampleStart` 列を読むため(`vmccal.c:323-327`)、最初以外のランクは未書き込みの `malloc` メモリを読みます(`setmemory.c:455-457`)。
   同じ欠陥により C では `NStore != 0` かつ `NSplitSize > 1` の直接SRも壊れます。Rust はこの場合を正しく計算するため、C と異なります。
 
 サポート(ネイティブ C の 2/4 ランクと照合、`tests/fixtures/grouped_nsplit_349/`): 任意の `NSplitSize` での直接SR(`NSRCG = 0`)、`NSplitSize = 1` でのSR-CG(`NSRCG = 1`)、
@@ -227,8 +227,8 @@ sz 保存・FSZ/一般軌道・任意の `NQPFull` での PhysCal と最適化�
 失敗は集団的に合意されるため、いずれかのランクが失敗すると、ハングせずにすべてのランクが停止します。
 
 > **実装**
-> - C: `main` (communicator split, `init_gen_rand(RndSeed+group1)`) — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:46`
-> - C: `SplitLoop` — `extern/mVMC-1.3.0/src/mVMC/splitloop.c:31`
+> - C: `main` (communicator split, `init_gen_rand(RndSeed+group1)`) — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:46`
+> - C: `SplitLoop` — `extern/mVMC-1.4.0/src/mVMC/splitloop.c:31`
 > - Rust: `MpiContext::split_groups` — `crates/mvmc-core/src/mpi.rs:154`
 > - Rust: `MpiContext::initialize` — `crates/mvmc-core/src/mpi.rs:70`
 > - Rust: `assign_group` — `crates/mvmc-core/src/parallel.rs:67`

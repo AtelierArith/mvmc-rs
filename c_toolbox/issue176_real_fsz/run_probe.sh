@@ -8,7 +8,7 @@
 set -euo pipefail
 root=$(realpath "${1:?repo root}")
 out=$(realpath "${2:?exclusive output dir}")
-src=$root/extern/mVMC-1.3.0/src
+src=$root/extern/mVMC-1.4.0/src
 tb=$root/c_toolbox/issue176_real_fsz
 test -d "$out" && test -z "$(ls -A "$out")"
 perl "$tb/extract_initializer.pl" "$src/mVMC/vmcmake_fsz_real.c" "$out"

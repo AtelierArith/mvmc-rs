@@ -1,6 +1,6 @@
 //! C's `|g| <= 1e-12` branch of the Lanczos operators (`calHCA2`, `calHCACA2`; issue #481).
 //!
-//! `calHCA`/`calHCACA` (`extern/mVMC-1.3.0/src/mVMC/lslocgrn{,_real}.c`) evaluate
+//! `calHCA`/`calHCACA` (`extern/mVMC-1.4.0/src/mVMC/lslocgrn{,_real}.c`) evaluate
 //! `<psi|H C_is A_js|x>/<psi|x>` as `<psi|x'>/<psi|x> * <psi|H|x'>/<psi|x'>` (`calHCA1`,
 //! `calHCACA1`) only while the hopped Pfaffian ratio `g = checkGF1/checkGF2` is above `1e-12` in
 //! magnitude. For a nodal hop (`|g| <= 1e-12`, e.g. the hopped configuration has weight zero)

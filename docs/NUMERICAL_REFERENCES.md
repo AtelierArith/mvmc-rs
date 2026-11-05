@@ -96,7 +96,7 @@ setup/move suites. Sampling subsets require explicit suite selection; no full
 Install uv, a C compiler and Git, then initialize reference data explicitly:
 
 ```sh
-git submodule update --init --recursive -- extern/mVMC-1.3.0 extern/Julia-mVMC
+git submodule update --init --recursive -- extern/mVMC-1.4.0 extern/Julia-mVMC
 ```
 
 Python runs exclusively through `uv run --no-project python`. `--compiler`

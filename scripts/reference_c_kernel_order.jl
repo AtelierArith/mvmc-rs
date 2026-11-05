@@ -17,8 +17,8 @@ const C_KERNEL_PROVENANCE = "# Mixed reference: Julia 1.13.1 runner with C MakeR
 
 function install_c_kernel_order!()
     root = joinpath(@__DIR__, "..")
-    @assert bytes2hex(sha256(read(joinpath(root, "extern/mVMC-1.3.0/src/mVMC/rbm.c")))) == C_RBM_SHA
-    @assert bytes2hex(sha256(read(joinpath(root, "extern/mVMC-1.3.0/src/mVMC/slater.c")))) == C_SLATER_SHA
+    @assert bytes2hex(sha256(read(joinpath(root, "extern/mVMC-1.4.0/src/mVMC/rbm.c")))) == C_RBM_SHA
+    @assert bytes2hex(sha256(read(joinpath(root, "extern/mVMC-1.4.0/src/mVMC/slater.c")))) == C_SLATER_SHA
     julia_source = joinpath(root, "extern/Julia-mVMC/MVMCOptimizers.jl/src")
     body = source_function(joinpath(julia_source, "vmc_sampling.jl"), "function make_rbm_cnt(")
     needle = "rbm_cnt[idx] += term.value * xi"

@@ -6,7 +6,7 @@ anything here; they consume only the checked-in files under
 
 | File | Purpose |
 | --- | --- |
-| `build.sh` | Builds `vmc.out` from a copy of `extern/mVMC-1.3.0` (Release, GCC, MPICH). `plain` = unmodified; `dump` applies `state_dump.patch`. |
+| `build.sh` | Builds `vmc.out` from a copy of `extern/mVMC-1.4.0` (Release, GCC, MPICH). `plain` = unmodified; `dump` applies `state_dump.patch`. |
 | `state_dump.patch` | Additive probe: after every PhysCal sample writes `state_dump_NNN.txt` (EleIdx/EleCfg/EleNum/EleProjCnt/EleSpn, `Counter[0..6]`, RNG draw count, next 624 SFMT words). The RNG dump saves/restores state and count. No numerical code changes; `generate.py` asserts every `zvo_*` output of the probe build is byte-identical to the unmodified build. |
 | `generate.py` | Runs every row of `scenarios.tsv` (one MPI rank, `OMP_NUM_THREADS=1`) and writes `inputs/`, `zqp_opt.dat`, `expected/`, `native-state/`, `time-rows/`, `provenance.txt`. |
 | `lanczos_sensitivity.py` | First-divergence analysis of Lanczos alpha (see the matrix document). |
@@ -19,7 +19,7 @@ c_toolbox/physcal_native/build.sh /tmp/pn
 c_toolbox/physcal_native/build.sh /tmp/pnd dump
 python3 c_toolbox/physcal_native/generate.py \
   --vmc /tmp/pn/build/src/mVMC/vmc.out --vmc-dump /tmp/pnd/build/src/mVMC/vmc.out \
-  --mvmc-commit "$(git rev-parse HEAD:extern/mVMC-1.3.0)" \
+  --mvmc-commit "$(git rev-parse HEAD:extern/mVMC-1.4.0)" \
   --out tests/fixtures/native_c_physcal_181
 ```
 

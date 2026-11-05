@@ -27,7 +27,7 @@ def main():
     options = args.parse_args()
     write = options.write
     root = Path(__file__).resolve().parent.parent
-    src = (options.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
+    src = (options.source or root / "extern/mVMC-1.4.0") / "src/mVMC"
     reader = (src / "readdef.c").read_text()
     qp = (src / "qp.c").read_text()
     read_count = next(line for line in reader.splitlines() if "NMPTrans = bufInt[IdxMPTrans];" in line)

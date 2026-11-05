@@ -10,7 +10,7 @@
  * Only passive observation is added: the shared loop's CalculateMAll_fcmp call is wrapped by a function
  * that forwards to the original and logs its INFO. The globals normally set by
  * readdef.c/setmemory.c are set directly with the same formulas
- * (Nsize = 2*Ne, Nsite2 = 2*Nsite, readdef.c:757-758; LapackLWork from the
+ * (Nsize = 2*Ne, Nsite2 = 2*Nsite, readdef.c:978-979; LapackLWork from the
  * original getLWork_fcmp, vmcmain.c:259).
  *
  * usage: probe real|complex ne0|ne1
@@ -56,11 +56,11 @@ int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
 
   NThread = omp_get_max_threads(); /* vmcmain.c:75 */
-  initializeWorkSpaceAll();         /* setmemory.c:462 */
+  initializeWorkSpaceAll();         /* setmemory.c:500 */
   Nsite = 2;
   Ne = ne0 ? 0 : 1;
-  Nsize = 2 * Ne;     /* readdef.c:757 */
-  Nsite2 = 2 * Nsite; /* readdef.c:758 */
+  Nsize = 2 * Ne;     /* readdef.c:978 */
+  Nsite2 = 2 * Nsite; /* readdef.c:979 */
   NProj = 0;
   NQPFull = 1;
   LocSpn = calloc(Nsite, sizeof(int)); /* itinerant electrons only */

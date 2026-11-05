@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--source",type=Path)
     args=parser.parse_args()
     root=Path(__file__).resolve().parent.parent
-    src=(args.source or root/"extern/mVMC-1.3.0")/"src"
+    src=(args.source or root/"extern/mVMC-1.4.0")/"src"
     reader=(src/"mVMC/readdef.c").read_text()
     parameter=(src/"mVMC/parameter.c").read_text()
     sr=(src/"mVMC/stcopt.c").read_text()

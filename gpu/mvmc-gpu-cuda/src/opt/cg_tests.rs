@@ -179,7 +179,7 @@ fn assert_solve(name: &str, model: &Model, g: &Solve) -> usize {
         );
     }
 
-    // stcopt_cg_impl.c:111-160: non-absolute maximum from sDiagElm[0], cut on `<`.
+    // stcopt_cg_impl.c:127-176: non-absolute maximum from sDiagElm[0], cut on `<`.
     let mut max = variance[0];
     for &v in &variance {
         if v > max {
@@ -279,7 +279,7 @@ fn assert_solve(name: &str, model: &Model, g: &Solve) -> usize {
     }
     let kappa = 2.0 * lambda_max / lambda_min;
 
-    // C stopping rule on the device's own values (stcopt_cg_impl.c:268-270):
+    // C stopping rule on the device's own values (stcopt_cg_impl.c:495-497):
     // every completed iteration started with delta >= threshold (or NaN), and
     // the loop ended by max_iter or by delta < threshold.
     assert!(gpu_k <= max_iter, "{name}: iterations beyond max_iter");
@@ -473,8 +473,8 @@ fn resident_cg_l128_matches_cpu_c_order() {
     check("L128", "max40", &["NSROptCGMaxIter 40"], 320);
 }
 
-/// A nonfinite increment is C `StochasticOptCG` info=1 (`stcopt_cg_impl.c:221-233`):
-/// C stops the optimization (`vmcmain.c:501-504`); the device latches
+/// A nonfinite increment is C `StochasticOptCG` info=1 (`stcopt_cg_impl.c:315-327`):
+/// C stops the optimization (`vmcmain.c:503-506`); the device latches
 /// RESIDENT_CG and publishes nothing.
 #[test]
 #[ignore = "requires CUDA; nonfinite SR-CG increment must never publish parameters"]

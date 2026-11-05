@@ -36,7 +36,7 @@ The manual is written in plain GitHub-rendered Markdown. Equations use
 Each key equation is followed by a box of this form:
 
 > **Implementation**
-> - C: `Function` — `extern/mVMC-1.3.0/src/mVMC/file.c:LINE`
+> - C: `Function` — `extern/mVMC-1.4.0/src/mVMC/file.c:LINE`
 > - Rust: `function` — `crates/<crate>/src/file.rs:LINE`
 > - Parity: operation-order or contract remarks that matter for numerical comparison.
 
@@ -47,7 +47,7 @@ Conventions:
   the Rust public API and runner structure. See [AGENTS.md](../../AGENTS.md) and
   [chapter 11](11-compatibility.md).
 - File and line numbers were checked against
-  - the C reference `extern/mVMC-1.3.0` (git submodule, commit `d73d06bd`), and
+  - the C reference `extern/mVMC-1.4.0` (git submodule, tag `v1.4.0`, commit `e83aa6cb`), and
   - this repository at commit `37348eac` (`main`, "Add public RBM flag refresh and manual orbital mode (#336)").
 
   Line numbers drift as the code changes; the symbol names are the stable key.
@@ -62,8 +62,8 @@ Conventions:
 
 ## Sources used
 
-- C manual: `extern/mVMC-1.3.0/doc/en/source/{algorithm,expert,output,standard,start,tutorial}.rst`
+- C manual: `extern/mVMC-1.4.0/doc/en/source/{algorithm,expert,output,standard,start,tutorial}.rst`
   (the Japanese manual is `doc/ja`).
-- C implementation: `extern/mVMC-1.3.0/src/mVMC/`.
+- C implementation: `extern/mVMC-1.4.0/src/mVMC/`.
 - Julia documentation (structure only): `extern/Julia-mVMC/docs/src/en/*.md`.
 - Rust workspace: `crates/`.

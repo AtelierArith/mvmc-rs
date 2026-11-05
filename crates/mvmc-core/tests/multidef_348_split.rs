@@ -2,7 +2,7 @@
 //! formula.
 //!
 //! `tests/fixtures/multidef_348/split_c_probe.txt` holds the colour computed by the verbatim
-//! statements of `vmcmain.c:752-759` for every `1 <= N <= size <= 48` and every rank
+//! statements of `vmcmain.c:762-769` for every `1 <= N <= size <= 48` and every rank
 //! (`c_toolbox/multidef_348/generate_split.sh`, provenance in `split_PROVENANCE.txt`). The
 //! Rust rank-to-group map must reproduce each line exactly (integer arithmetic).
 

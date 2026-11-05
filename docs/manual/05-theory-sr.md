@@ -35,11 +35,11 @@ $\mathrm{Pf}X_q$-weighted, $w_q$-weighted sum over sectors is then divided by
 $\mathrm{IP}$. At $\beta=0$ this reduces to $O_k=-\sum_{i\uparrow,j\downarrow}(X^{-1})_{ij}\,\sigma^{(k)}_{ij}$.
 
 > **Implementation**
-> - C: `VMCMainCal` (assembles `SROptO`) — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:82`
-> - C: `SlaterElmDiff_fcmp` — `extern/mVMC-1.3.0/src/mVMC/slater.c:100`
-> - C: `SlaterElmDiff_fsz` — `extern/mVMC-1.3.0/src/mVMC/slater_fsz.c:119`
-> - C: `RBMDiff` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:323`
-> - C: `calculateOptTransDiff` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:639`
+> - C: `VMCMainCal` (assembles `SROptO`) — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:82`
+> - C: `SlaterElmDiff_fcmp` — `extern/mVMC-1.4.0/src/mVMC/slater.c:100`
+> - C: `SlaterElmDiff_fsz` — `extern/mVMC-1.4.0/src/mVMC/slater_fsz.c:119`
+> - C: `RBMDiff` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:323`
+> - C: `calculateOptTransDiff` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:652`
 > - Rust: `set_projection_diff` — `crates/mvmc-core/src/observables.rs:201`
 > - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:692`
 > - Rust: `slater_elm_diff_with_scratch_timed` — `crates/mvmc-core/src/slater_derivative.rs:176`
@@ -88,9 +88,9 @@ no parameter is updated and the run stops with an error. Afterwards the paramete
 are synchronized ([3.7](03-theory-wavefunction.md#37-initial-values-and-synchronization)).
 
 > **Implementation**
-> - C: `StochasticOpt` (cut, diag shift via `stcOptInit`, solve, update) — `extern/mVMC-1.3.0/src/mVMC/stcopt.c:33`
-> - C: `stcOptInit` (builds $S$ and $g$) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:53`
-> - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:33`
+> - C: `StochasticOpt` (cut, diag shift via `stcOptInit`, solve, update) — `extern/mVMC-1.4.0/src/mVMC/stcopt.c:33`
+> - C: `stcOptInit` (builds $S$ and $g$) — `extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c:53`
+> - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c:33`
 > - Rust: `stochastic_opt_real_timed` — `crates/mvmc-core/src/sr.rs:78`
 > - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:184`
 > - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:280`
@@ -112,12 +112,12 @@ $O(N_pN_{\rm smp})$ extra memory but is much faster, and is required by the CG s
 are summed and divided by the total weight $W$ (`WeightAverageSROpt`).
 
 > **Implementation**
-> - C: `calculateOO` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:769`
-> - C: `calculateOO_real` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:796`
-> - C: `calculateOO_Store` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:692`
-> - C: `calculateOO_Store_real` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:656`
-> - C: `WeightAverageSROpt` — `extern/mVMC-1.3.0/src/mVMC/average.c:78`
-> - C: `WeightAverageSROpt_real` — `extern/mVMC-1.3.0/src/mVMC/average.c:115`
+> - C: `calculateOO` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:814`
+> - C: `calculateOO_real` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:841`
+> - C: `calculateOO_Store` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:721`
+> - C: `calculateOO_Store_real` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:669`
+> - C: `WeightAverageSROpt` — `extern/mVMC-1.4.0/src/mVMC/average.c:78`
+> - C: `WeightAverageSROpt_real` — `extern/mVMC-1.4.0/src/mVMC/average.c:115`
 > - Rust: `calculate_oo` — `crates/mvmc-core/src/observables.rs:263`
 > - Rust: `calculate_oo_real` — `crates/mvmc-core/src/observables.rs:219`
 > - Rust: `calculate_oo_store` — `crates/mvmc-core/src/observables.rs:394`
@@ -126,7 +126,7 @@ are summed and divided by the total weight $W$ (`WeightAverageSROpt`).
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
 > - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:50`
 > - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1818`
-> - Parity: C scales stored samples by `sqrt(w)` (`SROptO_Store[...] = sqrtw*SROptO[...]`, `vmccal.c:241,248`); the Gram product is formed once per step. For the real stored matrix Rust follows Julia's SYRK dispatch and upper-triangle copy; the complex stored product preserves a sequential sample sum (`sr_store_gram_julia`, `observables.rs:497`; tests `stored_direct_sr_gram_matches_sampled_julia_values`, `real_gram_matches_julia_generic_and_syrk_dispatch_boundary`). These floating-point summation orders differ between BLAS providers and are compared with tolerances. Only the active branch (real or complex) is reduced over MPI, exactly as `vmcmain.c` selects one `WeightAverageSROpt` branch.
+> - Parity: C scales stored samples by `sqrt(w)` (`SROptO_Store[...] = sqrtw*SROptO[...]`, `vmccal.c:250,257`); the Gram product is formed once per step. For the real stored matrix Rust follows Julia's SYRK dispatch and upper-triangle copy; the complex stored product preserves a sequential sample sum (`sr_store_gram_julia`, `observables.rs:497`; tests `stored_direct_sr_gram_matches_sampled_julia_values`, `real_gram_matches_julia_generic_and_syrk_dispatch_boundary`). These floating-point summation orders differ between BLAS providers and are compared with tolerances. Only the active branch (real or complex) is reduced over MPI, exactly as `vmcmain.c` selects one `WeightAverageSROpt` branch.
 
 ## 5.4 Conjugate-gradient solver (`NSRCG = 1`)
 
@@ -157,18 +157,18 @@ cut are $\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$. The number of CG iterations is pr
 Only `NSplitSize = 1` is supported for CG in Rust (grouped CG is undefined in C) ([7.5](07-input-files.md#75-supported-and-rejected-inputs)).
 
 > **Implementation**
-> - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg.c:42`
-> - C: `fn_StochasticOptCG` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:73`
-> - C: `fn_StochasticOptCG_Main` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:258`
-> - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
-> - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
+> - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg.c:56`
+> - C: `fn_StochasticOptCG` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:81`
+> - C: `fn_StochasticOptCG_Main` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:484`
+> - C: `fn_operate_by_S` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:598`
+> - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:670`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
 > - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:330`
 > - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:517`
 > - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:268`
 > - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:292`
-> - Parity: this is where operation order matters most. C computes `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat` (`stcopt_cg_impl.c:265`), and the recurrence `beta = xdot(r,r)/delta; delta = beta*delta;` — the old $\delta$ is *not* replaced by $r\!\cdot\!r$ (`stcopt_cg_impl.c:333-336`). Rust reproduces both (`crates/mvmc-core/src/sr_cg.rs:346`, `crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm"). The dot products are sequential (`sequential_dot`) rather than BLAS `ddot`, and the products use the same `dgemv` pairs as C, which is why CG is sensitive to FMA and reduction order; truncated CG results therefore use a tolerance gate, not bit parity.
-> - Parity: the diagonal shift appears as `z += sdiag[si]*DSROptStaDel*x[si]` (`stcopt_cg_impl.c:420`) rather than a modified matrix; $\langle O\rangle\cdot x$ uses `xdot`. The MPI reduction of the sampled product is performed before the global weight, mean and shift corrections (`apply_with_reducer` docs).
+> - Parity: this is where operation order matters most. C computes `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat` (`stcopt_cg_impl.c:492`), and the recurrence `beta = xdot(r,r)/delta; delta = beta*delta;` — the old $\delta$ is *not* replaced by $r\!\cdot\!r$ (`stcopt_cg_impl.c:565-575`). Rust reproduces both (`crates/mvmc-core/src/sr_cg.rs:346`, `crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm"). The dot products are sequential (`sequential_dot`) rather than BLAS `ddot`, and the products use the same `dgemv` pairs as C, which is why CG is sensitive to FMA and reduction order; truncated CG results therefore use a tolerance gate, not bit parity.
+> - Parity: the diagonal shift appears as `z += sdiag[si]*DSROptStaDel*x[si]` (`stcopt_cg_impl.c:662`) rather than a modified matrix; $\langle O\rangle\cdot x$ uses `xdot`. The MPI reduction of the sampled product is performed before the global weight, mean and shift corrections (`apply_with_reducer` docs).
 
 ## 5.5 The optimization loop and the final averaging window
 
@@ -187,9 +187,9 @@ only. If `NSROptItrSmp = 1` only the last values are written, as (value, 0) pair
 the input of a later PhysCal run ([chapter 6](06-theory-observables-lanczos.md), [8.2](08-running.md#82-physical-quantities-with-fixed-parameters)).
 
 > **Implementation**
-> - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
-> - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
-> - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
+> - C: `VMCParaOpt` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:333`
+> - C: `StoreOptData` — `extern/mVMC-1.4.0/src/mVMC/avevar.c:82`
+> - C: `OutputOptData` — `extern/mVMC-1.4.0/src/mVMC/avevar.c:94`
 > - Rust: `vmc_para_opt_timed` — `crates/mvmc-core/src/run.rs:1181`
 > - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:1160`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1512`

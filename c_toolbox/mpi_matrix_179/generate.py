@@ -109,7 +109,7 @@ def main():
         energy = open(f"{run}/output/zvo_out_001.dat").read().split()[0]
         with open(f"{dest}/operands.txt", "w") as f:
             f.write(f"energy {energy}\n")
-            # Grouped SR-CG reads unwritten malloc memory for <OO> (vmccal.c:314-318):
+            # Grouped SR-CG reads unwritten malloc memory for <OO> (vmccal.c:323-327):
             # the values differ between identical runs (denormal garbage), so they
             # are not stored.
             undefined_oo = solver == "cg" and width > 1
@@ -135,7 +135,7 @@ def main():
 
     with open(f"{args.out}/PROVENANCE.txt", "w") as f:
         f.write("generator=c_toolbox/mpi_matrix_179/generate.py (build.sh builds the executable)\n")
-        f.write(f"source=extern/mVMC-1.3.0 submodule commit {os.environ.get('SOURCE_COMMIT', 'unknown')}\n")
+        f.write(f"source=extern/mVMC-1.4.0 submodule commit {os.environ.get('SOURCE_COMMIT', 'unknown')}\n")
         f.write(f"vmc_out_sha256={sha(args.vmc)}\n")
         for patch in ("sr_operand_dump/dump_sr_operands.patch", "mpi_matrix_179/rank_state.patch"):
             f.write(f"patch_sha256 {patch} {sha(os.path.join(root, 'c_toolbox', patch))}\n")

@@ -65,7 +65,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    src = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
+    src = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC"
     reader, kernel = src / "readdef.c", src / "rbm.c"
     # Verify each native dependency independently of other oracle invocations.
     materialize_readers(root, reader, args.write)

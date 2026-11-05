@@ -143,7 +143,7 @@ fn run(case: &Case, ra_old_arg: usize, rb_old_arg: usize) -> (f64, f64, C, Vec<C
     (pf_err, inv_err, pfm[0], inv)
 }
 
-/// C defines `rsbOld = raOld + t*Nsite` in `pfupdate_two_fcmp.c:227` (and the real/fsz/fsz_real
+/// C defines `rsbOld = raOld + t*Nsite` in `pfupdate_two_fcmp.c:230` (and the real/fsz/fsz_real
 /// variants) where `rbOld + t*Nsite` was evidently meant, and the Rust real paths reproduce it.
 /// The complex path uses `rb_old`. The old (a,b) matrix element only enters through
 /// `vec_s[msb]`, and the updated Pfaffian and inverse do not depend on it beyond roundoff:

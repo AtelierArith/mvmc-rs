@@ -4,7 +4,7 @@ Related to #180 and #185. Not a deterministic-parity claim.
 
 ## Contract implemented
 
-C `extern/mVMC-1.3.0/test/python/runtest.py` runs `vmc.out -s StdFace.def initial.def`
+C `extern/mVMC-1.4.0/test/python/runtest.py` runs `vmc.out -s StdFace.def initial.def`
 unchanged (upstream `NSROptItrStep`/`NSROptItrSmp`, input seed), reads the first two values of
 the result, and exits non-zero when, for either value,
 `|calculated - ref_mean| >= 3 * ref_std` **and** `|calculated - ref_mean| >= 1e-8`.

@@ -34,11 +34,11 @@ $\texttt{InvM}[m][n]$ にセクターのスピン回転因子
 $\mathrm{IP}$ で割ります。$\beta=0$ ではこれは $O_k=-\sum_{i\uparrow,j\downarrow}(X^{-1})_{ij}\,\sigma^{(k)}_{ij}$ に帰着します。
 
 > **実装**
-> - C: `VMCMainCal` (assembles `SROptO`) — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:82`
-> - C: `SlaterElmDiff_fcmp` — `extern/mVMC-1.3.0/src/mVMC/slater.c:100`
-> - C: `SlaterElmDiff_fsz` — `extern/mVMC-1.3.0/src/mVMC/slater_fsz.c:119`
-> - C: `RBMDiff` — `extern/mVMC-1.3.0/src/mVMC/rbm.c:323`
-> - C: `calculateOptTransDiff` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:639`
+> - C: `VMCMainCal` (assembles `SROptO`) — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:82`
+> - C: `SlaterElmDiff_fcmp` — `extern/mVMC-1.4.0/src/mVMC/slater.c:100`
+> - C: `SlaterElmDiff_fsz` — `extern/mVMC-1.4.0/src/mVMC/slater_fsz.c:119`
+> - C: `RBMDiff` — `extern/mVMC-1.4.0/src/mVMC/rbm.c:323`
+> - C: `calculateOptTransDiff` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:652`
 > - Rust: `set_projection_diff` — `crates/mvmc-core/src/observables.rs:201`
 > - Rust: `set_rbm_diff` — `crates/mvmc-core/src/sampling/rbm.rs:692`
 > - Rust: `slater_elm_diff_with_scratch_timed` — `crates/mvmc-core/src/slater_derivative.rs:176`
@@ -86,9 +86,9 @@ $$
 同期されます([3.7](03-theory-wavefunction.md#37-初期値と同期))。
 
 > **実装**
-> - C: `StochasticOpt` (cut, diag shift via `stcOptInit`, solve, update) — `extern/mVMC-1.3.0/src/mVMC/stcopt.c:33`
-> - C: `stcOptInit` (builds $S$ and $g$) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:53`
-> - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c:33`
+> - C: `StochasticOpt` (cut, diag shift via `stcOptInit`, solve, update) — `extern/mVMC-1.4.0/src/mVMC/stcopt.c:33`
+> - C: `stcOptInit` (builds $S$ and $g$) — `extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c:53`
+> - C: `stcOptMain` (LAPACK `dposv`) — `extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c:33`
 > - Rust: `stochastic_opt_real_timed` — `crates/mvmc-core/src/sr.rs:78`
 > - Rust: `stochastic_opt_complex_timed` — `crates/mvmc-core/src/sr.rs:184`
 > - Rust: `assemble_s_g` (C-order backend, real and complex layouts) — `crates/mvmc-core/src/sr_backend.rs:280`
@@ -110,12 +110,12 @@ $O(N_pN_{\rm smp})$ の追加メモリを要しますが、はるかに高速で
 合計され、総重み $W$ で割られます(`WeightAverageSROpt`)。
 
 > **実装**
-> - C: `calculateOO` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:769`
-> - C: `calculateOO_real` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:796`
-> - C: `calculateOO_Store` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:692`
-> - C: `calculateOO_Store_real` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:656`
-> - C: `WeightAverageSROpt` — `extern/mVMC-1.3.0/src/mVMC/average.c:78`
-> - C: `WeightAverageSROpt_real` — `extern/mVMC-1.3.0/src/mVMC/average.c:115`
+> - C: `calculateOO` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:814`
+> - C: `calculateOO_real` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:841`
+> - C: `calculateOO_Store` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:721`
+> - C: `calculateOO_Store_real` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:669`
+> - C: `WeightAverageSROpt` — `extern/mVMC-1.4.0/src/mVMC/average.c:78`
+> - C: `WeightAverageSROpt_real` — `extern/mVMC-1.4.0/src/mVMC/average.c:115`
 > - Rust: `calculate_oo` — `crates/mvmc-core/src/observables.rs:263`
 > - Rust: `calculate_oo_real` — `crates/mvmc-core/src/observables.rs:219`
 > - Rust: `calculate_oo_store` — `crates/mvmc-core/src/observables.rs:394`
@@ -124,7 +124,7 @@ $O(N_pN_{\rm smp})$ の追加メモリを要しますが、はるかに高速で
 > - Rust: `weight_average_sr_opt` — `crates/mvmc-core/src/average.rs:31`
 > - Rust: `weight_average_sr_opt_real` — `crates/mvmc-core/src/average.rs:50`
 > - Rust: `reduce_accumulators` — `crates/mvmc-core/src/run.rs:1818`
-> - 整合性: C は保存するサンプルを `sqrt(w)` でスケールし(`SROptO_Store[...] = sqrtw*SROptO[...]`、`vmccal.c:241,248`)、グラム積はステップごとに一度だけ形成します。実数の保存行列については、Rust は Julia の SYRK ディスパッチと上三角コピーに従います。複素の保存積は逐次的なサンプル和を保ちます(`sr_store_gram_julia`、`observables.rs:497`。テスト `stored_direct_sr_gram_matches_sampled_julia_values`、`real_gram_matches_julia_generic_and_syrk_dispatch_boundary`)。これらの浮動小数点の総和順序は BLAS プロバイダーによって異なるため、許容誤差付きで比較されます。`vmcmain.c` が `WeightAverageSROpt` の一方の分岐を選ぶのと同様に、MPI で縮約されるのはアクティブな分岐(実または複素)だけです。
+> - 整合性: C は保存するサンプルを `sqrt(w)` でスケールし(`SROptO_Store[...] = sqrtw*SROptO[...]`、`vmccal.c:250,257`)、グラム積はステップごとに一度だけ形成します。実数の保存行列については、Rust は Julia の SYRK ディスパッチと上三角コピーに従います。複素の保存積は逐次的なサンプル和を保ちます(`sr_store_gram_julia`、`observables.rs:497`。テスト `stored_direct_sr_gram_matches_sampled_julia_values`、`real_gram_matches_julia_generic_and_syrk_dispatch_boundary`)。これらの浮動小数点の総和順序は BLAS プロバイダーによって異なるため、許容誤差付きで比較されます。`vmcmain.c` が `WeightAverageSROpt` の一方の分岐を選ぶのと同様に、MPI で縮約されるのはアクティブな分岐(実または複素)だけです。
 
 ## 5.4 共役勾配法ソルバー(`NSRCG = 1`)
 
@@ -154,18 +154,18 @@ $\mathrm{OO}_{aa}-\mathrm{OO}_{0a}^2$ です。CG の反復回数は `zvo_SRinfo
 Rust では CG に対して `NSplitSize = 1` のみサポートされます(グループ CG は C で未定義)([7.5](07-input-files.md#75-サポートされる入力と拒否される入力))。
 
 > **実装**
-> - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg.c:42`
-> - C: `fn_StochasticOptCG` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:73`
-> - C: `fn_StochasticOptCG_Main` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:258`
-> - C: `fn_operate_by_S` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:356`
-> - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.3.0/src/mVMC/stcopt_cg_impl.c:428`
+> - C: `StochasticOptCG` (wrapper selecting real/complex) — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg.c:56`
+> - C: `fn_StochasticOptCG` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:81`
+> - C: `fn_StochasticOptCG_Main` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:484`
+> - C: `fn_operate_by_S` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:598`
+> - C: `fn_StochasticOptCG_Init` — `extern/mVMC-1.4.0/src/mVMC/stcopt_cg_impl.c:670`
 > - Rust: `stochastic_opt_cg_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:101`
 > - Rust: `solve_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:330`
 > - Rust: `apply_with_reducer` — `crates/mvmc-core/src/sr_cg.rs:517`
 > - Rust: `sequential_dot` — `crates/mvmc-core/src/sr_cg.rs:268`
 > - Rust: `SampledSrOperator` — `crates/mvmc-core/src/sr_cg.rs:292`
-> - 整合性: ここは演算順序が最も重要になる箇所です。C は `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat`(`stcopt_cg_impl.c:265`)を計算し、漸化式は `beta = xdot(r,r)/delta; delta = beta*delta;` です。古い $\delta$ は $r\!\cdot\!r$ で置き換えられ*ません*(`stcopt_cg_impl.c:333-336`)。Rust は両方を再現します(`crates/mvmc-core/src/sr_cg.rs:346`、`crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm")。内積は BLAS の `ddot` ではなく逐次(`sequential_dot`)で、積は C と同じ `dgemv` の組を使います。このため CG は FMA と縮約順序に敏感であり、打ち切られた CG の結果はビット単位の整合ではなく許容誤差のゲートで検証します。
-> - 整合性: 対角シフトは、行列を修正するのではなく `z += sdiag[si]*DSROptStaDel*x[si]`(`stcopt_cg_impl.c:420`)として現れます。$\langle O\rangle\cdot x$ には `xdot` を使います。サンプル積の MPI 縮約は、大域的な重み、平均、シフトの補正より前に行われます(`apply_with_reducer` のドキュメント)。
+> - 整合性: ここは演算順序が最も重要になる箇所です。C は `cg_thresh = DSROptCGTol*DSROptCGTol * (double)nSmat * (double)nSmat`(`stcopt_cg_impl.c:492`)を計算し、漸化式は `beta = xdot(r,r)/delta; delta = beta*delta;` です。古い $\delta$ は $r\!\cdot\!r$ で置き換えられ*ません*(`stcopt_cg_impl.c:565-575`)。Rust は両方を再現します(`crates/mvmc-core/src/sr_cg.rs:346`、`crates/mvmc-core/src/sr_cg.rs:387`: "C:336 rounds the quotient and then multiplies it by the old norm")。内積は BLAS の `ddot` ではなく逐次(`sequential_dot`)で、積は C と同じ `dgemv` の組を使います。このため CG は FMA と縮約順序に敏感であり、打ち切られた CG の結果はビット単位の整合ではなく許容誤差のゲートで検証します。
+> - 整合性: 対角シフトは、行列を修正するのではなく `z += sdiag[si]*DSROptStaDel*x[si]`(`stcopt_cg_impl.c:662`)として現れます。$\langle O\rangle\cdot x$ には `xdot` を使います。サンプル積の MPI 縮約は、大域的な重み、平均、シフトの補正より前に行われます(`apply_with_reducer` のドキュメント)。
 
 ## 5.5 最適化ループと最終平均ウィンドウ
 
@@ -184,9 +184,9 @@ Rust では CG に対して `NSplitSize = 1` のみサポートされます(グ�
 後の PhysCal 実行の入力になります([第6章](06-theory-observables-lanczos.md)、[8.2](08-running.md#82-固定パラメータでの物理量計算))。
 
 > **実装**
-> - C: `VMCParaOpt` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:331`
-> - C: `StoreOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:82`
-> - C: `OutputOptData` — `extern/mVMC-1.3.0/src/mVMC/avevar.c:94`
+> - C: `VMCParaOpt` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:333`
+> - C: `StoreOptData` — `extern/mVMC-1.4.0/src/mVMC/avevar.c:82`
+> - C: `OutputOptData` — `extern/mVMC-1.4.0/src/mVMC/avevar.c:94`
 > - Rust: `vmc_para_opt_timed` — `crates/mvmc-core/src/run.rs:1181`
 > - Rust: `vmc_para_opt` — `crates/mvmc-core/src/run.rs:1160`
 > - Rust: `run_para_opt_from_namelist` — `crates/mvmc-core/src/run.rs:1512`

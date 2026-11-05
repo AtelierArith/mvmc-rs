@@ -167,7 +167,7 @@ fn check(case: &str) {
         let rsa_old = hop.ri as usize + (hop.spin as usize) * fx.n_site;
         let rsa_new = hop.rj as usize + (hop.spin as usize) * fx.n_site;
         // Apply ele_num update then incremental proj_cnt update -- matches
-        // the upstream C call order in vmcmake.c:164-165.
+        // the upstream C call order in vmcmake.c:173-165.
         ele_num[rsa_old] = 0;
         ele_num[rsa_new] = 1;
         assert_eq!(ele_num, hop.ele_num, "{case} hop {idx} ele_num");

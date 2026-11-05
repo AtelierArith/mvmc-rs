@@ -1,6 +1,6 @@
 //! Pure-Rust port of the mVMC C ComplexUHF initial-orbital tool.
 //!
-//! Authoritative source: `extern/mVMC-1.3.0/src/ComplexUHF/` (`UHFmain.c`,
+//! Authoritative source: `extern/mVMC-1.4.0/src/ComplexUHF/` (`UHFmain.c`,
 //! `readdef.c`, `initial.c`, `makeham.c`, `diag.c`, `green.c`,
 //! `cal_energy.c`, `output.c`). The tool builds a random (or `Initial`-file)
 //! Green matrix, iterates `makeham` -> `diag` (LAPACK `zheev`) -> `green`

@@ -1,7 +1,7 @@
 # C reference toolbox
 
 Reusable comparison programs and verbatim source excerpts from the authoritative
-`extern/mVMC-1.3.0/` snapshot live here. They are optional tools for investigating
+`extern/mVMC-1.4.0/` snapshot live here. They are optional tools for investigating
 contracts and generating expected values. Cargo builds and Rust tests do not
 compile, invoke or read this directory. Checked-in expectations live separately
 under `tests/fixtures/`; normal Rust tests retain their usual Rust toolchain,
@@ -279,7 +279,7 @@ NBlockSize_RBMRatio block of `ReadDefFileNInt` (lines 375-380) wrapped in
 every value the reader sets. This is a standalone reader-kernel check, not a
 full C executable, MPI or sampling validation. Header hashes, compiler and
 platform are recorded in the fixture header. Regenerate or verify (needs `cc`
-and the `extern/mVMC-1.3.0` checkout; compiled with `cc -O0`):
+and the `extern/mVMC-1.4.0` checkout; compiled with `cc -O0`):
 
 ```sh
 uv run --no-project python scripts/check_modpara_reader_c_parity.py --write
@@ -301,11 +301,11 @@ distinct from the standalone fixed-operand CG oracle (`ctest_cg_refresh.c`).
 
 ## Grouped `NSplitSize` runs (#349)
 
-`grouped_nsplit_349/generate.sh` builds the unmodified `extern/mVMC-1.3.0`
+`grouped_nsplit_349/generate.sh` builds the unmodified `extern/mVMC-1.4.0`
 `vmc.out` and runs it on the `physcal_181` inputs at 1/2/4 ranks and
 `NSplitSize` 1/2/4 for FSZ PhysCal and ParaOpt (`NQPFull = 2`), Lanczos PhysCal
 and OptTrans (`-o`). Outputs go to `tests/fixtures/grouped_nsplit_349/` with
 `PROVENANCE.txt`; see that directory's `README.md` for the per-combination
 findings, including the C defect that keeps grouped SR-CG rejected. This is a
 full native C/MPI run, not a kernel check. Run inside the Dev Container:
-`SOURCE_COMMIT=$(git -C extern/mVMC-1.3.0 rev-parse HEAD) c_toolbox/grouped_nsplit_349/generate.sh /tmp/mvmc-349-c`.
+`SOURCE_COMMIT=$(git -C extern/mVMC-1.4.0 rev-parse HEAD) c_toolbox/grouped_nsplit_349/generate.sh /tmp/mvmc-349-c`.

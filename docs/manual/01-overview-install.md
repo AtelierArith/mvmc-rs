@@ -20,7 +20,7 @@ manual (see [AGENTS.md](../../AGENTS.md)):
 
 | Question | Authority |
 |----------|-----------|
-| Physics, algorithms, input contract, output formats, parameter layout, RNG draw order, arithmetic order and signs | the C implementation `extern/mVMC-1.3.0` |
+| Physics, algorithms, input contract, output formats, parameter layout, RNG draw order, arithmetic order and signs | the C implementation `extern/mVMC-1.4.0` |
 | Public Rust API shape, runner structure, lifecycle, test organization | the Julia port `extern/Julia-mVMC` |
 | Floating-point comparison | explicit absolute/relative tolerances; never bitwise (see [11.4](11-compatibility.md#114-numerical-comparison-policy)) |
 

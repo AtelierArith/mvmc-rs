@@ -61,7 +61,7 @@ source_hashes() {
     uname -a
     rustc -Vv
     cargo nextest --version
-    git submodule status extern/Julia-mVMC extern/mVMC-1.3.0
+    git submodule status extern/Julia-mVMC extern/mVMC-1.4.0
     [[ ! -f extern/Julia-mVMC/Manifest-v1.13.toml ]] || sha256sum extern/Julia-mVMC/Manifest-v1.13.toml
     printf 'BLAS runtime not inferred from environment; binary linkage captured separately\n'
 } > "$artifact/metadata.txt"

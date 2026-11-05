@@ -12,7 +12,7 @@ stop === nothing && error("C flag enumeration end missing")
 Base.include_string(Main,source[first(start):prevind(source,first(stop))],"mpi179_C_definition_flags")
 flags, written = c_definition_flags(ARGS[1])
 length(flags) == length(written) > 0 || error("empty/incomplete C flags contract")
-reader = joinpath(repo,"extern","mVMC-1.3.0","src","mVMC","readdef.c")
+reader = joinpath(repo,"extern", "mVMC-1.4.0","src","mVMC","readdef.c")
 open(ARGS[2],"w") do io
     println(io,"flags ",join(flags," "))
     println(io,"written ",join(written," "))

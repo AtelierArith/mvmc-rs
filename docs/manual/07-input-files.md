@@ -5,7 +5,7 @@
 `mvmc` reads **Expert-mode** input exactly as the C program does: one list file
 (`namelist.def`) names a set of definition files, each introduced by a fixed
 keyword. The authoritative description of every file format is the C manual,
-[`extern/mVMC-1.3.0/doc/en/source/expert.rst`](../../extern/mVMC-1.3.0/doc/en/source/expert.rst)
+[`extern/mVMC-1.4.0/doc/en/source/expert.rst`](../../extern/mVMC-1.4.0/doc/en/source/expert.rst)
 (Japanese: `doc/ja`). This chapter summarizes the structure, records where the
 Rust implementation differs, and gives the supported/rejected matrix, which is
 taken directly from `crates/mvmc-core/src/validation.rs`.
@@ -19,7 +19,7 @@ otherwise generate Expert-mode files with the C tools, or use the committed exam
 
 Each non-comment line is `Keyword filename`; keywords may appear in any order, lines starting
 with `#` are skipped, and keyword matching is ASCII case-insensitive (`CheckWords`).
-The C keyword list is `cKWListOfFileNameList` (`extern/mVMC-1.3.0/src/mVMC/include/readdef.h:33`):
+The C keyword list is `cKWListOfFileNameList` (`extern/mVMC-1.4.0/src/mVMC/include/readdef.h:33`):
 
 ```text
 ModPara LocSpin Trans CoulombIntra CoulombInter Hund PairHop Exchange Gutzwiller Jastrow DH2 DH4
@@ -54,10 +54,10 @@ TransSym qptransidx.def
 Lines are `Key value` (an optional `Key = value` is also accepted by the Rust parser; lines starting
 with `-` are decoration). The parser is `parse_modpara_content`
 (`crates/mvmc-expert-parsers/src/parsers/modpara.rs:20`) with the key table in `apply_param`
-(`modpara.rs:45`); the C reader is `GetInfoFromModPara` (`readdef.c:1825`).
+(`modpara.rs:45`); the C reader is `GetInfoFromModPara` (`readdef.c:2145`).
 
 **Defaults.** Keys that are absent take the values below. The C values come from
-`SetDefaultValuesModPara` (`readdef.c:1756`) and **differ from the C manual text** for several keys
+`SetDefaultValuesModPara` (`readdef.c:2064`) and **differ from the C manual text** for several keys
 (manual: `NSPGaussLeg` 8, `NVMCSample` 1000; code: 1 and 10); the code is authoritative. The Rust values are
 `impl Default for ModParaParameters` (`crates/mvmc-expert-parsers/src/types.rs:233`), which follow the Julia
 parser and **differ from C**. Always specify every key that matters explicitly.
@@ -120,8 +120,8 @@ Notes:
   start at 0 and must cover $0\ldots N-1$.
 - `Trans`, `Hund`, `Exchange`, `CoulombInter`, `CoulombIntra` and `PairHop` are parsed by the typed loaders in
   `crates/mvmc-expert-parsers/src/parsers/` (`coulomb.rs`, `hund.rs`, `exchange.rs`, `pairhop.rs`, `trans.rs`); the C
-  readers are `GetTransferInfo` (`readdef.c:1973`), `ReadPairHopValue` (`readdef.c:2038`), `ReadPairDValue`
-  (`readdef.c:2063`) and `GetInfoInterAll` (`readdef.c:2420`). The `load_hamiltonian_definition` API
+  readers are `GetTransferInfo` (`readdef.c:2304`), `ReadPairHopValue` (`readdef.c:2369`), `ReadPairDValue`
+  (`readdef.c:2394`) and `GetInfoInterAll` (`readdef.c:2834`). The `load_hamiltonian_definition` API
   (`crates/mvmc-expert-parsers/src/definition.rs`) loads one of these families into an `ExpertModeData`.
 - The `ComplexType` line of an index file selects real (0) or complex (1) parameters of that block and
   therefore the real/complex execution mode ([3.3](03-theory-wavefunction.md#33-real-and-complex-modes)).
@@ -198,7 +198,7 @@ Optimization and PhysCal share the namelist admission check. See `crates/mvmc-cl
 
 | Condition | Result |
 |-----------|--------|
-| Optimization with `NSRCG != 0` (CG) | rejected: undefined in C (`vmccal.c:241,248` writes the stored `O` at the global sample slot, `vmccal.c:314-318` reads it from column 0 with the local count) |
+| Optimization with `NSRCG != 0` (CG) | rejected: undefined in C (`vmccal.c:250,257` writes the stored `O` at the global sample slot, `vmccal.c:323-327` reads it from column 0 with the local count) |
 | PhysCal / optimization with general (FSZ) orbitals, any `NQPFull` | accepted (C defines it; checked against native C at 2 and 4 ranks, #349) |
 | `NLanczosMode > 0` PhysCal | accepted (C defines it) |
 | `NQPOptTrans > 1` / `OptTrans` | accepted (C defines it) |
@@ -222,7 +222,7 @@ The C-source rationale for rejecting BackFlow, `SpinJastrow` and grouped CG is i
 ## 7.6 Standard mode (StdFace)
 
 `mvmc -s <stan.in>` ports the C `-s` option: the Standard-mode keyword file is read by the pure-Rust
-`mvmc-stdface` crate (a port of `extern/mVMC-1.3.0/src/StdFace/src`, mVMC solver branches only), the Expert
+`mvmc-stdface` crate (a port of `extern/mVMC-1.4.0/src/StdFace/src`, mVMC solver branches only), the Expert
 files (`modpara.def`, `namelist.def`, `locspn.def`, `trans.def`, interaction files, `gutzwilleridx.def`,
 `jastrowidx.def`, `orbitalidx*.def`, `qptransidx.def`, `greenone.def`, `greentwo.def`, `geometry.dat`,
 `lattice.gp`) are written into `--out-dir` (default: the current directory, as in C), and the generated

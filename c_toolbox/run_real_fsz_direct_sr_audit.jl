@@ -5,7 +5,7 @@ length(ARGS)==2 || error("usage: reference-stage NEW-external-audit-stage")
 root=realpath(ARGS[1]); dest=abspath(ARGS[2]); repo=realpath(dirname(@__DIR__))
 startswith(dest*"/",repo*"/") && error("external destination required")
 ispath(dest) && error("fresh destination required")
-source=joinpath(repo,"extern/mVMC-1.3.0/src/mVMC")
+source=joinpath(repo,"extern/mVMC-1.4.0/src/mVMC")
 for (file,hash) in (("stcopt.c","43ed8790cff2715284849f0f8906e4645179dcbb100b51f819918b279d6a36f2"),
                     ("stcopt_dposv.c","2bd48d880dcbd95ea1b1b92931178c07fd08f981b8ebf04e7db1709e909e57ca"))
     bytes2hex(sha256(read(joinpath(source,file))))==hash || error("C source changed")

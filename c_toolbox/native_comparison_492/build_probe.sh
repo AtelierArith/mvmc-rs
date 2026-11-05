@@ -5,7 +5,7 @@ out=${1:?new isolated build directory}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 test ! -e "$out" || { echo "requires a new output directory: $out" >&2; exit 1; }
 mkdir -p "$out"
-cp -r "$root/extern/mVMC-1.3.0" "$out/src"
+cp -r "$root/extern/mVMC-1.4.0" "$out/src"
 patch -d "$out/src" -p1 < "$root/c_toolbox/sr_operand_dump/dump_sr_operands.patch"
 patch -d "$out/src" -p1 < "$root/c_toolbox/physcal_native/state_dump.patch"
 uv run --no-project python "$root/c_toolbox/native_comparison_492/add_probe.py" "$out/src"

@@ -13,7 +13,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-COPIED = ("scripts", "c_toolbox", "tests/fixtures", "extern/mVMC-1.3.0", "extern/Julia-mVMC")
+COPIED = ("scripts", "c_toolbox", "tests/fixtures", "extern/mVMC-1.4.0", "extern/Julia-mVMC")
 OUTPUTS = ("tests/fixtures/", "c_toolbox/")
 
 
@@ -63,7 +63,7 @@ def git_metadata(root):
               "worktree": command(prefix + ["status", "--short"], required=True),
               "gitlinks": command(prefix + ["ls-tree", "-r", "HEAD", "extern/"], required=True)}
     result["reference_heads"] = {}
-    for name in ("extern/mVMC-1.3.0", "extern/Julia-mVMC"):
+    for name in ("extern/mVMC-1.4.0", "extern/Julia-mVMC"):
         source = root / name
         if (source / ".git").exists():
             result["reference_heads"][name] = command(

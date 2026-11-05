@@ -12,13 +12,13 @@ int main(int argc, char **argv) {
     if (argc != 3) return 2;
     int bufInt[2] = {atoi(argv[1]), atoi(argv[2])};
     if (bufInt[0] < 1 || bufInt[1] < 1 || bufInt[0] > 10000 || bufInt[1] > 10000) return 2;
-    /* Verbatim readdef.c:683-684, no clamp. */
+    /* Verbatim readdef.c:818-819, no clamp. */
     NSROptItrStep = bufInt[IdxSROptItrStep];
     NSROptItrSmp = bufInt[IdxSROptItrSmp];
     written = calloc((size_t)NSROptItrSmp, sizeof(*written));
     if (!written) return 3;
     int step;
-    /* Verbatim vmcmain.c:339 loop header and :511-513 collection body. */
+    /* Verbatim vmcmain.c:341 loop header and :511-513 collection body. */
     for(step=0;step<NSROptItrStep;step++) {
         if(step >= NSROptItrStep-NSROptItrSmp) {
             StoreOptData(step-(NSROptItrStep-NSROptItrSmp));

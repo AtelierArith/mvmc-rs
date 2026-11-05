@@ -120,12 +120,12 @@ of using a broad `condition * epsilon` allowance. The Rust direct test checks
 ## Complex FSZ accepted exchange: C rank-two update (#679)
 
 C applies an accepted complex FSZ exchange with the rank-two update
-`UpdateMAllTwo_fsz` (`vmcmake_fsz.c:295`, `pfupdate_two_fsz.c`). Rust used
+`UpdateMAllTwo_fsz` (`vmcmake_fsz.c:321`, `pfupdate_two_fsz.c`). Rust used
 Julia's full recalculation (`update_m_all_two_fsz!`) instead. Rust now ports
 the C update (`sampling::updates::update_m_all_two_fsz_complex_flat`) with
 C's operation order. It shares the rank-two kernel `update_two_complex` with
 the normal complex path. `rsbOld` follows mVMC 1.4.0 (`rbOld + t*Nsite`,
-upstream #100), the C target for new work and the choice of the normal
+upstream #100), the C reference and the choice of the normal
 complex path. The 1.3.0 `raOld` agrees to roundoff
 (`complex_fsz_rank_two_update_is_independent_of_the_old_ab_element`). The
 proposal, ratio and Metropolis draws are unchanged, so RNG draw order and
@@ -272,7 +272,7 @@ tests (`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
 
 ## OptTrans optimization flags (#676)
 
-C 1.3.0 `GetInfoOptTrans` (`readdef.c:1067-1068, 2385-2402`) writes
+C `GetInfoOptTrans` (1.3.0 and 1.4.0) (`readdef.c:1327-1328, 2799-2816`) writes
 `OptFlag[NProj + NOrbitalIdx + i] = 1`: the index is not doubled and the offset
 has no RBM term. The OptTrans weights are therefore never optimized, and
 unrelated projection/Slater component flags are set instead (in the real
@@ -310,7 +310,7 @@ and Rust's moves them, so no multi-step `-o` C trajectory is compared.
 
 ## C `-b` varbin parameter blocks (#347)
 
-C's `-b` output (`vmcmain.c:658`) is `fwrite(Para, sizeof(double), NPara, FileVar)` on a
+C's `-b` output (`vmcmain.c:660`) is `fwrite(Para, sizeof(double), NPara, FileVar)` on a
 `double complex` array, which writes only `NPara` doubles: the first `ceil(NPara/2)`
 parameters (the last cut to its real part for odd `NPara`). Rust deliberately differs and
 writes all `2*NPara` doubles per block under the same header. The comparison against the
@@ -413,7 +413,7 @@ multiply-adds. Rust never contracts `a * b + c`, so a plain loop is bit-identica
 
 **`two_hop_bilinear_real`** (the `b^T M a` form of the two-electron Pfaffian ratio, used by the
 two-body Green functions and the sampler's two-hop proposals). C counterpart:
-`calculateNewPfMTwo_child_real`, `extern/mVMC-1.3.0/src/mVMC/pfupdate_two_real.c:167-177`
+`calculateNewPfMTwo_child_real`, `extern/mVMC-1.4.0/src/mVMC/pfupdate_two_real.c:169-180`
 (`tmp += invM_i[msj] * vec_a[msj]` sequential in `msj`, then `bMa += vec_b[msi] * tmp` in `msi`
 order). The Rust default is now exactly this order (it was Julia's four-lane, six-accumulator
 FMA tree, plus a #444 hardware-FMA dispatch). Speed is kept without changing a single
@@ -430,9 +430,9 @@ cases, so the contract is "default C build". The archived Julia values
 
 | site | C counterpart | Julia style | action |
 |---|---|---|---|
-| `sampling/updates.rs` `two_hop_bilinear_real` | `pfupdate_two_real.c:167-177` | lane-split, FMA | fixed (above) |
+| `sampling/updates.rs` `two_hop_bilinear_real` | `pfupdate_two_real.c:169-180` | lane-split, FMA | fixed (above) |
 | complex `CalculateMAll` of the sampler's periodic recalculation and the PhysCal refresh (`pfapack` `zsktf2_turbo`: FMA rank-2 update, reciprocal pivot) | `ZSKTRF` order (`zsktf2_c_compat`) | FMA, Julia pivot inverse | default is now the C order (`calc_m_all_complex_production`); Julia's kernel is the opt-in `pfaffian::use_julia_complex_kernel()` (thread-local guard) used only by the archived Julia 1.11 SR prefix tests |
-| `sr_backend.rs` real Gram `O O^T` | `calculateOO_Store_real`: `DGEMM('N','T')` for every size (`vmccal.c:685-689`) | `DSYRK` for `max(n, samples) >= 4`, `muladd` loop below (Julia `mul!` dispatch) | now `DGEMM('N','T')`, full matrix; the Julia small-case `mul_add` is gone |
+| `sr_backend.rs` real Gram `O O^T` | `calculateOO_Store_real`: `DGEMM('N','T')` for every size (`vmccal.c:714-718`) | `DSYRK` for `max(n, samples) >= 4`, `muladd` loop below (Julia `mul!` dispatch) | now `DGEMM('N','T')`, full matrix; the Julia small-case `mul_add` is gone |
 | `c_complex.rs` `divide` (`mul_add` on macOS aarch64) | native ARM compiler-rt contraction | C behaviour on that target | kept (it is the C-faithful emulation) |
 | `mvmc-stdface/ccomplex.rs` `x2y2m1` | glibc `__x2y2m1` exact error-free sum | none (C emulation) | kept |
 | `mvmc-expert-parsers/utils/julia_{trig,log,exp,hypot}.rs` polynomial `mul_add` | glibc libm | emulation of Julia's libm | replaced by the platform libm in #457 (below); Julia's implementations are an explicit opt-in |
@@ -471,7 +471,7 @@ the system libm on macOS). Julia's implementations (`julia_exp`, `julia_log`, `j
 
 | helper | callers on the parity path | C call site |
 |---|---|---|
-| `exp` | Metropolis weight `sampling/metropolis.rs:48`, FSZ real accept `sampling/fsz_real.rs:452`, projection ratio and Green ratios `observables.rs` (`c_exp`), `observables/fsz_green.rs:353,358`, RBM `cexp` real part `sampling/rbm_math.rs` | `w = exp(2.0*(x + logIpNew - logIpOld))` `vmcmake_real.c:176,251,496,560`, `vmcmake.c:194,278,721,783`, `vmcmake_fsz*.c`; `ProjRatio` `projection.c:56`; `cexp` in `rbm.c` |
+| `exp` | Metropolis weight `sampling/metropolis.rs:48`, FSZ real accept `sampling/fsz_real.rs:452`, projection ratio and Green ratios `observables.rs` (`c_exp`), `observables/fsz_green.rs:353,358`, RBM `cexp` real part `sampling/rbm_math.rs` | `w = exp(2.0*(x + logIpNew - logIpOld))` `vmcmake_real.c:185,260,587,651`, `vmcmake.c:203,287,918,980`, `vmcmake_fsz*.c`; `ProjRatio` `projection.c:56`; `cexp` in `rbm.c` |
 | `log` | `LogIP` `sampling/driver.rs:72`, `observables.rs:175`, RBM `clog` real part | `log(fabs(ip))`; `clog` in `rbm.c` |
 | `log1p`, `tan`, `atan2`, `sinh` | Julia complex algorithms only under the opt-in (the default RBM path uses `glibc_complex`, #470) | `clog`, `ctanh` in `rbm.c:345-369` |
 | `sin`, `cos` | `qp_weight.rs` (Gauss-Legendre nodes and `SPGLCos/SPGLSin`), `parameter_init.rs:105-106` | `gauleg.c:42`, `qp.c:67-73`; RBM initialization `cexp(2 I pi u)` `parameter.c:53` |

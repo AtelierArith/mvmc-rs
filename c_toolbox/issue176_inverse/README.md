@@ -28,7 +28,7 @@ It also cannot exercise the n>2 poisoned-workspace issue investigated under
 ## Primary-source boundaries and hashes
 
 Files are compiled in place, not extracted or repaired. Upstream files retain
-their MPL-2.0 notices. In `extern/mVMC-1.3.0/src/ltl2inv/`:
+their MPL-2.0 notices. In `extern/mVMC-1.4.0/src/ltl2inv/`:
 
 - `ltl2inv.cc`: lines 18 and 20 export the real and complex wrappers;
   SHA `d2b954765728a864a3729ac62016eec20c03f75b706b2c19eb8497774a3ea5dd`.

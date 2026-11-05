@@ -62,7 +62,7 @@ def main():
     ap.add_argument("--vmc", required=True)
     ap.add_argument("--vmc-dump", help="probe build (build.sh ... dump); adds native-state/")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mvmc-commit", default="unknown", help="extern/mVMC-1.3.0 submodule commit (from the host)")
+    ap.add_argument("--mvmc-commit", default="unknown", help="extern/mVMC-1.4.0 submodule commit (from the host)")
     ap.add_argument("--only", nargs="*")
     args = ap.parse_args()
     out_root = os.path.abspath(args.out)
@@ -199,8 +199,8 @@ def main():
             f"zqp_perturb {perturb} class {klass} variant [{variant}]",
             f"vmc.out sha256 {sha(vmc)}",
             f"probe vmc.out sha256 {sha(vmc_dump) if vmc_dump else 'none'}",
-            f"extern/mVMC-1.3.0 commit {args.mvmc_commit}",
-            *[f"source sha256 {rel} {sha(os.path.join(ROOT, 'extern/mVMC-1.3.0/src', rel))}"
+            f"extern/mVMC-1.4.0 commit {args.mvmc_commit}",
+            *[f"source sha256 {rel} {sha(os.path.join(ROOT, 'extern/mVMC-1.4.0/src', rel))}"
               for rel in ("mVMC/vmcmain.c", "mVMC/physcal_lanczos.c", "mVMC/vmcmake.c", "mVMC/vmcmake_fsz.c", "sfmt/SFMT.c")],
             f"host {platform.machine()} {platform.platform()}",
             "gcc " + subprocess.run(["gcc", "--version"], capture_output=True, text=True).stdout.splitlines()[0],

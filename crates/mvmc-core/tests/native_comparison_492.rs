@@ -53,7 +53,7 @@ fn native_rbm_sr_operands_active_components_and_rng_match_c_capture() {
         .iter()
         .map(|v| v.as_f64().unwrap() as usize)
         .collect();
-    // C 1.3.0 `GetInfoOptTrans` never flags the OptTrans weights (#676,
+    // C `GetInfoOptTrans` (1.3.0 and 1.4.0) never flags the OptTrans weights (#676,
     // tmisawa/Julia-mVMC#94); on this input its stray writes land on
     // components that are already active. Rust additionally optimizes the
     // real weight components, which follow C's active set and are excluded
@@ -113,7 +113,7 @@ fn native_rbm_sr_operands_active_components_and_rng_match_c_capture() {
 }
 
 // C `calculateOptTransDiff` writes sector `i` into consecutive slot `i`
-// (`vmccal.c:639-655`); Rust keeps each sector's (value, i*value) component
+// (`vmccal.c:652-668`); Rust keeps each sector's (value, i*value) component
 // pair (#370, tmisawa/Julia-mVMC#55), the layout that the OptTrans flags
 // address (#676, tmisawa/Julia-mVMC#94). The C slot layout is excluded from
 // this comparison; the C sector values are compared at Rust's real slots.

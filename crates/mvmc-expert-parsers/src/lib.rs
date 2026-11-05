@@ -208,7 +208,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             &mut orbital_flags,
             &mut rbm_flags,
         ) {
-            // C aborts when GetInfoFromModPara fails (readdef.c:352-357).
+            // C aborts when GetInfoFromModPara fails (readdef.c:379-384).
             if matches!(
                 file_type.as_str(),
                 "ModPara"
@@ -273,7 +273,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
             .insert("Orbitals".to_string(), raw != 0);
     }
     set_orbital_opt_flags(&mut data, &orbital_flags);
-    // C 1.3.0 `GetInfoOptTrans` writes undoubled flags at `NProj + NSlater + i`
+    // C `GetInfoOptTrans` (1.3.0 and 1.4.0) writes undoubled flags at `NProj + NSlater + i`
     // (no RBM term), which freezes the weights and activates unrelated
     // projection/Slater components. That is a C defect (#676,
     // tmisawa/Julia-mVMC#94); Rust optimizes the real weight components.
@@ -299,7 +299,7 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
         data.ensure_orbital_idx_matrix();
     }
 
-    // `ncond` propagation (matches `readdef.c:593`): Ne = (Nlocspin + Ncond) / 2.
+    // `ncond` propagation (matches `readdef.c:661`): Ne = (Nlocspin + Ncond) / 2.
     if data.modpara.ncond != -1 {
         if data.modpara.ncond % 2 != 0 {
             tracing::warn!("NCond must be even, got {}", data.modpara.ncond);

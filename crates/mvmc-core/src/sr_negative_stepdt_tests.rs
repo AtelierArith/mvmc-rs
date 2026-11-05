@@ -1,5 +1,5 @@
 //! #367: a negative `DSROptStepDt` is normalized by the modpara reader
-//! (readdef.c:749-755) and the direct SR update then equals C's
+//! (readdef.c:959-965) and the direct SR update then equals C's
 //! `stcOptInit` + `dposv` on fixed operands. Expected values come from
 //! `tests/fixtures/negative_stepdt/c_sr.txt` (`scripts/check_negative_stepdt_c_parity.py`).
 //! This test reads the fixture only; it never compiles or runs C.

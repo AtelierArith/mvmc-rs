@@ -37,7 +37,7 @@ fn c_disabled_opttrans_ignores_definition_and_keeps_default_layout() {
     assert!(data.optimization_flags.is_empty());
 }
 
-// C 1.3.0 `GetInfoOptTrans` (`readdef.c:2385-2402`) writes undoubled flags at
+// C `GetInfoOptTrans` (1.3.0 and 1.4.0) (`readdef.c:2799-2816`) writes undoubled flags at
 // `NProj + NSlater + i`, freezing the weights and activating unrelated
 // projection/Slater components. That is a C defect (#676,
 // tmisawa/Julia-mVMC#94); Rust activates only the real weight components.

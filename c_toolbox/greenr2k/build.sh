@@ -1,12 +1,12 @@
 #!/bin/bash
 # Build the authoritative Fortran greenr2k and the C StdFace driver (issue #351).
 # Usage (Linux, from the repository root): c_toolbox/greenr2k/build.sh <out-dir>
-# The vendored extern/mVMC-1.3.0 tree is only read, never modified.
+# The vendored extern/mVMC-1.4.0 tree is only read, never modified.
 set -euo pipefail
 out=${1:?output directory}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 mkdir -p "$out"
-src="$root/extern/mVMC-1.3.0"
+src="$root/extern/mVMC-1.4.0"
 # greenr2k.F90 exactly as upstream (tool/CMakeLists.txt links LAPACK).
 gfortran -O2 -J "$out" "$src/tool/greenr2k.F90" -llapack -lblas -o "$out/greenr2k"
 # StdFace dry-run driver (mvmc_dry.out) used to generate geometry.dat and the

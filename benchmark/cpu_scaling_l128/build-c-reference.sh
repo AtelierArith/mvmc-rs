@@ -7,7 +7,7 @@ bench_out=$(realpath -m "${3:?fresh reference directory}")
 [[ ! -e "$bench_out" ]]
 mkdir -p "$bench_out"
 docker run --rm \
- -v "$bench_repo/extern/mVMC-1.3.0:/source:ro" -v "$bench_out:/reference" \
+ -v "$bench_repo/extern/mVMC-1.4.0:/source:ro" -v "$bench_out:/reference" \
  "$bench_image" bash -lc '
  set -euo pipefail
  cp -a /source /reference/src

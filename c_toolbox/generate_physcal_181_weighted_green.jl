@@ -3,7 +3,7 @@ using SHA, Printf
 VERSION == v"1.13.1" || error("Julia 1.13.1 required")
 repo = dirname(@__DIR__)
 root = joinpath(repo, "tests/fixtures/physcal_181")
-source_path = joinpath(repo, "extern/mVMC-1.3.0/src/mVMC/average.c")
+source_path = joinpath(repo, "extern/mVMC-1.4.0/src/mVMC/average.c")
 source = read(source_path, String)
 first_pos = first(findlast("void weightAverageReduce_fcmp(int n", source))
 last_pos = first(findnext("void weightAverageReduce_real(int n", source, first_pos)) - 1
@@ -114,7 +114,7 @@ mktempdir() do work
     push!(report, "input_sha256=$(bytes2hex(sha256(read(joinpath(root,"weighted-average/accumulated.txt"))))) weighted-average/accumulated.txt")
     write(joinpath(destination, "comparison.txt"), join(report, '\n') * "\n")
     write(joinpath(destination, "provenance.txt"),
-        "source=extern/mVMC-1.3.0/src/mVMC/average.c\nsource_sha256=$(bytes2hex(sha256(read(source_path))))\n" *
+        "source=extern/mVMC-1.4.0/src/mVMC/average.c\nsource_sha256=$(bytes2hex(sha256(read(source_path))))\n" *
         "generator_sha256=$(bytes2hex(sha256(read(@__FILE__))))\ndriver_sha256=$(bytes2hex(sha256(driver)))\n" *
         "boundaries=weightAverageReduce_fcmp through before weightAverageReduce_real\n" *
         "architecture=$(Sys.MACHINE)\njulia=$VERSION\nmanifest_sha256=$(bytes2hex(sha256(read(joinpath(repo,"extern/Julia-mVMC/Manifest-v1.13.toml")))))\n" *

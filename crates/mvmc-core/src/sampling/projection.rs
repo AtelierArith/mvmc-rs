@@ -31,7 +31,7 @@ fn recompute_dh_counts(
         proj_cnt[layout.dh2_offset..stop].fill(0);
     }
     let n_site = data.modpara.nsite as usize;
-    // C `projection.c:97,123` `omp parallel for` over the DH definitions `xn`: each
+    // C `projection.c:111,137` `omp parallel for` over the DH definitions `xn`: each
     // definition owns disjoint counters. The pooled path computes every definition's
     // incremented slots concurrently and applies the +1 increments serially in
     // definition order, which equals the serial counters exactly (integer adds). The
@@ -269,7 +269,7 @@ pub fn make_proj_cnt(proj_cnt: &mut [i64], ele_num: &[i64], data: &ExpertModeDat
 ///
 /// **Call ordering**: this function expects the **post-hop**
 /// occupancy in `ele_num`, matching the upstream C call order
-/// (`vmcmake.c:164-165`):
+/// (`vmcmake.c:173-174`):
 ///
 /// ```text
 /// updateEleConfig(mi, ri, rj, s, ele_idx, ele_cfg, ele_num);  // updates ele_num
@@ -648,7 +648,7 @@ mod tests {
         make_proj_cnt(&mut proj_cnt_old, &ele_num, &data);
 
         // Apply the hop (up electron 0 -> 1) before calling update_proj_cnt,
-        // matching the upstream C convention (vmcmake.c:164-165).
+        // matching the upstream C convention (vmcmake.c:173-174).
         ele_num[0] = 0;
         ele_num[1] = 1;
 

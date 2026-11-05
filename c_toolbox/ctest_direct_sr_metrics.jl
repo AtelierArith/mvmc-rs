@@ -78,8 +78,8 @@ open(joinpath(METRICS_STAGE, "direct-sr-provenance.txt"), "w") do io
     println(io, "Julia=$VERSION platform=$(Sys.MACHINE) BLAS=$(BLAS.get_config()) threads=$(BLAS.get_num_threads())")
     for path in (source, @__FILE__, joinpath(@__DIR__, "ctest_prefix_oracle.jl"),
             joinpath(@__DIR__, "ctest_direct_sr_capture.jl"),
-            joinpath(METRICS_REPO, "extern/mVMC-1.3.0/src/mVMC/stcopt.c"),
-            joinpath(METRICS_REPO, "extern/mVMC-1.3.0/src/mVMC/stcopt_dposv.c"))
+            joinpath(METRICS_REPO, "extern/mVMC-1.4.0/src/mVMC/stcopt.c"),
+            joinpath(METRICS_REPO, "extern/mVMC-1.4.0/src/mVMC/stcopt_dposv.c"))
         println(io, bytes2hex(sha256(read(path))), "  ", relpath(path, METRICS_REPO))
     end
     println(io, "Extraction: complete stochastic_opt! through top-level end; hooks immediately before POTRF U and after POTRS/catch; originals unchanged")

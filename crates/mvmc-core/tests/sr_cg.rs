@@ -224,7 +224,7 @@ fn cg_preserves_c_zero_gradient_and_ieee_breakdown_iteration_counts() {
     assert_eq!(zero.iterations, 0);
     assert_eq!(zero.solution, [0.0, 0.0]);
     let breakdown = op.solve(&[1.0, 0.0], 1.0, 0.0, 1e-6, 10);
-    // stcopt_cg_impl.c:306-310 has only the residual-norm stop test,
+    // stcopt_cg_impl.c:534-539 has only the residual-norm stop test,
     // not Julia's abs(dq) < 1e-30 extension. With a zero operator and a
     // nonzero gradient, alpha is infinite and the subsequent IEEE NaNs
     // do not satisfy delta < threshold; C exhausts the iteration limit.

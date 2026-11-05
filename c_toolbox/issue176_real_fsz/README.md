@@ -20,7 +20,7 @@ Only passive observation is added: `CalculateMAll_fsz_real` is wrapped to log it
 101-attempt `MPI_Abort` becomes a recorded `longjmp`. MPI is replaced by a single-rank shim
 (`mpi_single_rank_stub.c`) when no MPI runtime is installed; set `MPICC` to use a real wrapper.
 Matrix cases use the literal operands of `tests/fixtures/real_fsz/setup.txt` (only `creal` of each
-Slater element enters the native kernel, as in `vmcmain.c:372`); the five initializer cases
+Slater element enters the native kernel, as in `vmcmain.c:374`); the five initializer cases
 (retry, failure, zero, localspin, magnetized) use the Slater tables built in
 `crates/mvmc-core/tests/real_fsz_setup.rs`, seed 1, and print the complete next 624 SFMT words.
 

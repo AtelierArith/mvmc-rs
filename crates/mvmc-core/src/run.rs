@@ -2960,7 +2960,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     let n_vmc_sample = data.modpara.nvmc_sample.max(0) as usize;
     let n_proj = data.projection_layout().n_proj;
     let sr_opt_size = state.sr_opt.sr_opt_size;
-    // C setmemory.c:394: SROptO storage exists iff NSRCG == 1 || NStoreO != 0.
+    // C setmemory.c:428: SROptO storage exists iff NSRCG == 1 || NStoreO != 0.
     // NSRCG >= 2 with NStore == 0 is rejected by validation (undefined in C).
     let use_store = data.modpara.nstore_o != 0 || data.modpara.nsrcg == 1;
     state.sr_opt.sr_opt_o_store.fill(Complex64::new(0.0, 0.0));
@@ -3428,7 +3428,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
                 timer.stop_diag(946, diag);
                 timer.stop_diag(940, diag);
                 // C `VMCMainCal` builds the SR `O` vector, `SlaterElmDiff` and the
-                // OO/HO accumulators only for NVMCCalMode==0 (`vmccal.c:195`). PhysCal
+                // OO/HO accumulators only for NVMCCalMode==0 (`vmccal.c:204`). PhysCal
                 // (NVMCCalMode=1) computes the Green functions only, so skip this
                 // wasted per-sample work.
                 if data.modpara.vmc_calc_mode == 0 {
@@ -3592,7 +3592,7 @@ fn accumulate_observables_local<const TIMED: bool, R: Reducer + ?Sized>(
     state.measurement_batch = batch;
     observe_physcal_green(data, state, use_fsz);
     normalize_physcal_green(state, use_fsz, all_complex);
-    // C finalizes the stored OO only for NVMCCalMode==0 (`vmccal.c:309`).
+    // C finalizes the stored OO only for NVMCCalMode==0 (`vmccal.c:318`).
     if use_store && data.modpara.vmc_calc_mode == 0 {
         timer.start(45);
         let options = crate::observables::StoreFinalization {
@@ -6101,7 +6101,7 @@ mod callback_tests {
                 // One final printed quantum can differ at a rounding boundary.
                 // Dimensions, cuts, index and iteration count remain exact.
                 // The Julia fixtures print OFFSET*NPara in column 0; C prints NPara
-                // (stcopt_cg_impl.c:202), which the Rust writer follows.
+                // (stcopt_cg_impl.c:285), which the Rust writer follows.
                 let offset = if get_all_complex_flag(&data).unwrap() {
                     2
                 } else {
@@ -6871,8 +6871,8 @@ mod callback_tests {
 
     #[test]
     fn nsrcg_two_with_store_follows_nsrcg_one_control_path() {
-        // C treats every nonzero NSRCG as CG (vmcmain.c:461,485; vmccal.c:582,591)
-        // and allocates SROptO storage for NSRCG==1 || NStoreO!=0 (setmemory.c:394),
+        // C treats every nonzero NSRCG as CG (vmcmain.c:463,487; vmccal.c:591,602)
+        // and allocates SROptO storage for NSRCG==1 || NStoreO!=0 (setmemory.c:428),
         // so NSRCG=2,NStore=1 and NSRCG=1,NStore=1 execute identical code in C.
         // This is a same-implementation equivalence, not a C numerical reference.
         for case in [

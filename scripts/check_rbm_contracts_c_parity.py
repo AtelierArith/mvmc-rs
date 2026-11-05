@@ -75,7 +75,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    source = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC/readdef.c"
+    source = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC/readdef.c"
     materialize_readers(root, source, args.write)
     output = f"# actual C nine-section RBM readers; untouched index=-1 and imaginary=0 sentinels; Apple clang 17 -O0; readdef.c sha256={hashlib.sha256(source.read_bytes()).hexdigest()}\n"
     accepted = rejected = 0

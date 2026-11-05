@@ -25,7 +25,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-STD = ROOT / "extern/mVMC-1.3.0/src/StdFace"
+STD = ROOT / "extern/mVMC-1.4.0/src/StdFace"
 UPSTREAM = STD / "test/mvmc"
 FIXTURES = ROOT / "tests/fixtures/stdface"
 
@@ -345,11 +345,11 @@ def main():
         "- Flags: `-O3 -DNDEBUG -ffp-contract=off -w -D_mVMC -DMEXP=19937` (the upstream CMake",
         "  Release flags are `-O3 -DNDEBUG`; contraction is disabled to match the baseline x86-64",
         "  target and the portable numerical policy). `build_reference.sh` documents the exact line.",
-        "- Upstream: `extern/mVMC-1.3.0` (git tag v1.3.0), StdFace submodule",
+        "- Upstream: `extern/mVMC-1.4.0` (git tag v1.3.0), StdFace submodule",
         "  `6fa4ef1f6809001a24b6501bd08f988bdc8cb7c4`.",
         "- BLAS/MPI: none (StdFace is plain C; `StdFace_exit` calls `MPI_Abort` only with `-DMPI`).",
         "",
-        "## C source SHA-256 (`extern/mVMC-1.3.0/src/StdFace/src/`)",
+        "## C source SHA-256 (`extern/mVMC-1.4.0/src/StdFace/src/`)",
         "",
     ]
     for source in sources:

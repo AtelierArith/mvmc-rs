@@ -8,7 +8,7 @@ tests/fixtures/time_srinfo_c/. Rust tests read only the checked-in fixture.
     uv run --no-project python scripts/check_time_srinfo_c_parity.py --write
     uv run --no-project python scripts/check_time_srinfo_c_parity.py        # verify
 
-Pass --source <mVMC-1.3.0 checkout> when extern/mVMC-1.3.0 is not populated.
+Pass --source <mVMC-1.3.0 checkout> when extern/mVMC-1.4.0 is not populated.
 """
 import argparse
 import filecmp
@@ -45,7 +45,7 @@ def main():
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    mvmc = (args.source or root / "extern/mVMC-1.3.0") / "src/mVMC"
+    mvmc = (args.source or root / "extern/mVMC-1.4.0") / "src/mVMC"
     tool = root / "c_toolbox"
     parts = {
         "time_srinfo_upstream.inc": [

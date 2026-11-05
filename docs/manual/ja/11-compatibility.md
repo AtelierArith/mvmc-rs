@@ -6,7 +6,7 @@
 
 Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ライフサイクル、テスト)と**Cの数値規約**
 (パラメータのレイアウト、乱数の初期化と抽出順序、演算順序、符号、ファイル形式)に従っています。CとJuliaが食い違う場合、RustはJuliaのアーキテクチャを保ちつつ、Cの
-挙動を採用します([AGENTS.md](../../../AGENTS.md))。各実装は次のように対応します(Cの名前は `extern/mVMC-1.3.0/src/mVMC` から、Juliaの名前は
+挙動を採用します([AGENTS.md](../../../AGENTS.md))。各実装は次のように対応します(Cの名前は `extern/mVMC-1.4.0/src/mVMC` から、Juliaの名前は
 `extern/Julia-mVMC/docs/src/en/compatibility.md` から、Rustのパスは `crates/mvmc-core/src` 配下です)。
 
 | C関数 | Julia | Rust |
@@ -55,7 +55,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 5 | `zvo_time_NNN.dat`, `zvo_varbin_NNN.dat` | 書き出し(`-b` でバイナリ) | どちらも書き出し(`-b` は C のヘッダーで、C の切り詰められたブロックの代わりに完全な `2*NPara` ブロック。[8.1](08-running.md#バイナリ出力-b)) |
 | 6 | タイマーファイルの接頭辞 | `CDataFileHead` | 常に `zvo` |
 | 7 | `modpara.def` のパーサーの既定値 | `SetDefaultValuesModPara` | `ModParaParameters::default`([7.2](07-input-files.md#72-modparadef)) |
-| 8 | `NMPTrans = 0` | リーダーでは拒否されない(既定値0で `NQPFix = 0` となる、`readdef.c:778`) | 拒否 |
+| 8 | `NMPTrans = 0` | リーダーでは拒否されない(既定値0で `NQPFix = 0` となる、`readdef.c:1016`) | 拒否 |
 | 9 | `NSROptItrSmp > NSROptItrStep` | 行が書き出されないまま残る | 拒否 |
 | 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし(Cも拒否)、スピンを変える `Trans` なし。スピン保存 `InterAll` はサポート。`NSplitSize>1` はCと同様にサポート。$\alpha$ が失敗すると `NaN` を書き出す |
 | 11 | 最適化における `TwoBodyGEx` | 読み込まれ、オプティマイザでは無視される | 読み込まれ無視される(`validate_para_opt` は PhysCal と同様に受理) |
@@ -92,8 +92,8 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 
 本マニュアルの執筆中に気づいた項目で、別々のissueで扱う予定のものです。「観測」とは `mvmc` のリリースビルドで再現したことを、「コード読解」とはソースで確認したが実行はしていないことを意味します。
 
-1. **2電子更新、複素数の通常経路。** Cは4つのすべての2電子更新関数で `rsbOld = raOld + t*Nsite` を定義しています(`pfupdate_two_fcmp.c:227`、`pfupdate_two_real.c:227`、
-   `pfupdate_two_fsz.c:232`、`pfupdate_two_fsz_real.c:218`)。すなわち、古い行列要素 $M^{\rm old}_{ab}$ の第2添字に*電子 a の古いサイト*を用います。Rustの*実数*版の更新は
+1. **2電子更新、複素数の通常経路。** Cは4つのすべての2電子更新関数で `rsbOld = raOld + t*Nsite` を定義しています(`pfupdate_two_fcmp.c:230`、`pfupdate_two_real.c:230`、
+   `pfupdate_two_fsz.c:235`、`pfupdate_two_fsz_real.c:221`)。すなわち、古い行列要素 $M^{\rm old}_{ab}$ の第2添字に*電子 a の古いサイト*を用います。Rustの*実数*版の更新は
    これを意図的に保っています(`crates/mvmc-core/src/sampling/updates.rs:588`)が、Rustの*複素数の通常*版の更新
    `update_m_all_two_complex_flat` は、Juliaと同様に電子 b の古いサイトを用います(`crates/mvmc-core/src/sampling/updates.rs:537`)。これが複素数の交換更新の数値に影響するかどうかは**検証していません**(コード読解)。
 2. **PhysCal のネームリスト検証。** 以前の検証漏れは #366 で修正され、最適化と PhysCal は共通の検査で未対応セクションを拒否します。
@@ -102,16 +102,16 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 5. **`--mode`** は検証されるだけのラベルであり、一致しないラベル(たとえば実数モデルでの `--mode fsz`)も黙って受け付けられます(観測)。
 6. **タイマーのファイル名**は `CDataFileHead` を無視します([9.5](09-output-files.md#95-タイマー))。
 7. **直接法ソルバーの `zvo_SRinfo.dat`** は書き出されません([9.4](09-output-files.md#94-ソルバー情報-zvo_srinfodat))。
-8. **実数モードでのOptTransの微分のレイアウト**(決定は #370 に記録)。C の `calculateOptTransDiff`(`vmccal.c:639`)は `double complex *` のポインタオフセット付きで呼ばれる(`vmccal.c:466`)ため、微分 *i* はパラメータスロット *i* ではなく複素スロット `offset + i` に書かれます。`NQPOptTrans = 3` の実数モード実行では、ネイティブCのステップ1オペランド(`tests/fixtures/c_order_sr_operands/opt_real-cg-store0.txt`、観測)で、微分1が欠落し、微分2が微分1のスロットに入り、最後のスロットは0になります。Rust の `opt_trans_diff`(`observables.rs:957`)は数学的に正しいレイアウトを保ち、`real_mode_opttrans_derivatives_use_their_own_slots`(`sum_i w_i O_i = 1`)で固定されています。この欠陥は tmisawa/Julia-mVMC#55 として報告済みで、各オペランド配列の影響を受ける末尾2要素はC比較から除外しています([NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md))。複素モードは調べていません。
+8. **実数モードでのOptTransの微分のレイアウト**(決定は #370 に記録)。C の `calculateOptTransDiff`(`vmccal.c:652`)は `double complex *` のポインタオフセット付きで呼ばれる(`vmccal.c:475`)ため、微分 *i* はパラメータスロット *i* ではなく複素スロット `offset + i` に書かれます。`NQPOptTrans = 3` の実数モード実行では、ネイティブCのステップ1オペランド(`tests/fixtures/c_order_sr_operands/opt_real-cg-store0.txt`、観測)で、微分1が欠落し、微分2が微分1のスロットに入り、最後のスロットは0になります。Rust の `opt_trans_diff`(`observables.rs:957`)は数学的に正しいレイアウトを保ち、`real_mode_opttrans_derivatives_use_their_own_slots`(`sum_i w_i O_i = 1`)で固定されています。この欠陥は tmisawa/Julia-mVMC#55 として報告済みで、各オペランド配列の影響を受ける末尾2要素はC比較から除外しています([NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md))。複素モードは調べていません。
 9. **Lanczos法の失敗時の出力**が異なります([6.2](06-theory-observables-lanczos.md#62-1ステップ-lanczos-波動関数))。
 10. **Rustの `modpara.def` の既定値**はCと異なります([7.2](07-input-files.md#72-modparadef))。したがって、キーを省略した実行の結果は、2つのプログラム間で互換ではありません。
 11. **負の `DSROptStepDt`** は C と同様に正に変換され、`SRFlag` が設定されます。
 12. **`Nelectron`／`Ne`** は ModPara パーサーで受理されます。
 13. **Cは実数モードでRBMパラメータを無視します**(#379、tmisawa/Julia-mVMC#59 として報告済み)。実数モデル(軌道が `ComplexType 0`)がRBMセクションを宣言しても、Cは `FlagRBM=1` を黙って受理しますが、実数用サンプラー `vmcmake_real.c` にはRBMのコードがなく(`RBM` の出現は0回。複素用の `vmcmake.c` には27回)、RBMの重みは一度も適用されません。`tests/fixtures/c_orbital_inputs/namelist_rbm_real.def`(シード1、ステップ1)での観測:Cは NPara = 55(NProj 7、NRBM 36、NSlater 12)、ステップ1のエネルギー 5.984544891656925 を報告し、RBMの初期値を 0.125/-0.25 から全て0に変えても変化せず、RBM値を全て0にしたRustとビット単位で一致します。Rustは実数モードでもRBMの正しい数学を維持します(#669)。実数サンプラーは全ての提案にCの複素経路の `UpdateRBMCnt`/`LogRBMRatio` を加え、局所エネルギーは実数InterAllカーネルを含む全ての演算子でRBM比を適用します。そのため、実数軌道で実係数RBMを使う実行は `Orbital ComplexType 1` の同じ実行と一致します(エネルギー 6.224968242401510。#669以前はRustの実数サンプラーもRBM因子を省き、測定側だけが適用していたため 6.228711216019723 でした)。そのため `rbm_real` にはネイティブCのオペランド参照がなく、`crates/mvmc-core/tests/issue669_real_rbm_*.rs` が実数経路を複素経路と比較します。
 14. **CはFSZ/一般軌道の実行でもRBMパラメータを無視します**(#397/#403、tmisawa/Julia-mVMC#59 に追記済み)。`vmcmake_fsz.c`、`calham_fsz.c`、`locgrn_fsz.c`、`calgrn_fsz.c`、`vmccal_fsz.c`、`slater_fsz.c` のいずれにもRBMのコードはなく(出現は0回。複素用の `vmcmake.c` には27回)、それでも `FlagRBM` は設定され、RBMパラメータは読み込まれ数えられます。そのためネイティブCはFSZ + RBM入力をRBMの重みなしでサンプリング・測定します(ネイティブCの `fsz_rbm_physcal` シナリオでの観測:`In*RBM*` オーバーレイを0にするとRustは 1.4e-14 で一致し、0でない値ではエネルギーがO(1)で異なります)。Rustは、FSZサンプラー(採択比、スピンを変える手の後に再構築するRBMカウンタ)、FSZハミルトニアン、FSZグリーン関数のすべてでRBM因子を一貫して適用します。#403以前は、RustのFSZサンプラーがCの欠陥をそのまま踏襲し、測定側は踏襲していませんでした。Rustは正しい数学を維持するため、0でないRBM値のFSZ + RBMにはネイティブCの数値参照がありません。値を0にしたオーバーレイのシナリオはネイティブCとの比較を保ち、`crates/mvmc-core/tests/issue403_fsz_rbm_sampler.rs` はサンプリングされた全ての手を、Pfaffian × 射影 × RBM の完全再計算と照合します。
-15. **C は OptTrans の重みを最適化しない**(#676、[tmisawa/Julia-mVMC#94](https://github.com/tmisawa/Julia-mVMC/issues/94) として報告済み)。C 1.3.0 の `GetInfoOptTrans`(`readdef.c:1067-1068, 2385-2402`)は `OptFlag[NProj + NOrbitalIdx + i] = 1` と書きます。インデックスが二重化されておらず、オフセットに RBM 項もないため、`-o` を指定しても OptTrans の重みは入力値のまま固定され、代わりに無関係な射影/Slater 成分にフラグが立ちます(`tests/fixtures/physcal_181/hubbard_chain_dh_opttrans/optimization-flags.txt` で観測: 成分 35-37 が立ち、OptTrans の末尾 70-75 は0)。Rust は Julia や常駐 GPU ランナーと同じく数学的に正しい挙動を保ちます。`-o` で各重みの実部成分を最適化し、虚部成分は固定し、他のフラグは変更しません(`set_opt_trans_opt_flags`)。以前の Rust は C の書き込みを再現していました(#100)が、その経路は削除しました。C との比較では、影響を受けるフラグのセル、SR の行/列、微分スロットのレイアウトを除外しており、その理由は [NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md#opttrans-optimization-flags-676) にあります。`-o` の複数ステップの軌道は C と比較しません。
-16. **0-3 以外の `NExUpdatePath`**(#681)。C 1.3.0 の `getUpdateType`(`vmcmake.c:606-629`)はそれ以外の値に `NONE` を返し、`readdef.c:621-631` は局在スピンがある場合しかこの値を検査しません。そのためCは実行を開始しても一度も手を提案せず、初期配置を全サンプルとして保存します。C 1.4.0 は 4/5 を t-J のスピンホッピング更新、6 をダブロンのみのペアホッピングに割り当てました(上流 #94、#97、#98)が、それ以外の値には依然として手がありません。Rustは 1.4.0 の更新も何もしない動作も移植しません。`validate_ex_update_path`(`crates/mvmc-core/src/validation.rs`)が、Opt と PhysCal、CPU と常駐GPUのすべてで、出力の前に 0-3 以外の値を拒否します。4/5/6 の場合は、1.4.0 の更新が未移植であることをメッセージで示します。
-17. **ComplexUHF のレコード数**(#680)。C 1.3.0 の `ReadDefFileError`(`extern/mVMC-1.3.0/src/ComplexUHF/readdef.c:70-74`)は `Error: <file> (Broken file or Not exist)` を表示しますが 0 を返すため、宣言より少ないレコードの定義ファイルでも、0で埋めた項のまま実行が続きます。上流は 1.4.0 で修正しました(#81)。Rustは同じ行を表示してから、出力の前にエラーで停止します。宣言より多いレコードは警告付きで捨て、末尾の空行はレコードとして数えません([COMPLEX_UHF](../../COMPLEX_UHF.md))。
+15. **C は OptTrans の重みを最適化しない**(#676、[tmisawa/Julia-mVMC#94](https://github.com/tmisawa/Julia-mVMC/issues/94) として報告済み)。C(1.3.0 と 1.4.0)の `GetInfoOptTrans`(`readdef.c:1327-1328, 2799-2816`)は `OptFlag[NProj + NOrbitalIdx + i] = 1` と書きます。インデックスが二重化されておらず、オフセットに RBM 項もないため、`-o` を指定しても OptTrans の重みは入力値のまま固定され、代わりに無関係な射影/Slater 成分にフラグが立ちます(`tests/fixtures/physcal_181/hubbard_chain_dh_opttrans/optimization-flags.txt` で観測: 成分 35-37 が立ち、OptTrans の末尾 70-75 は0)。Rust は Julia や常駐 GPU ランナーと同じく数学的に正しい挙動を保ちます。`-o` で各重みの実部成分を最適化し、虚部成分は固定し、他のフラグは変更しません(`set_opt_trans_opt_flags`)。以前の Rust は C の書き込みを再現していました(#100)が、その経路は削除しました。C との比較では、影響を受けるフラグのセル、SR の行/列、微分スロットのレイアウトを除外しており、その理由は [NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md#opttrans-optimization-flags-676) にあります。`-o` の複数ステップの軌道は C と比較しません。
+16. **0-3 以外の `NExUpdatePath`**(#681)。C 1.3.0 の `getUpdateType` は 0-3 以外の値に `NONE` を返し、`readdef.c:714-724` は局在スピンがある場合しかこの値を検査しません。そのためCは実行を開始しても一度も手を提案せず、初期配置を全サンプルとして保存します。C 1.4.0(`vmcmake.c:797-826`)は 4/5 を t-J のスピンホッピング更新、6 をダブロンのみのペアホッピングに割り当てました(上流 #94、#97、#98)が、それ以外の値には依然として手がありません。Rustは 1.4.0 の更新も何もしない動作も移植しません。`validate_ex_update_path`(`crates/mvmc-core/src/validation.rs`)が、Opt と PhysCal、CPU と常駐GPUのすべてで、出力の前に 0-3 以外の値を拒否します。4/5/6 の場合は、1.4.0 の更新が未移植であることをメッセージで示します。
+17. **ComplexUHF のレコード数**(#680)。C 1.3.0 の `ReadDefFileError` は `Error: <file> (Broken file or Not exist)` を表示しても 0 を返していたため、宣言より少ないレコードの定義ファイルでも、0で埋めた項のまま実行が続きました。上流は 1.4.0 で修正しました(#81。`extern/mVMC-1.4.0/src/ComplexUHF/readdef.c:70-74` は 1 を返します)。Rustはこの修正に従い、同じ行を表示してから、出力の前にエラーで停止します。宣言より多いレコードは警告付きで捨て、末尾の空行はレコードとして数えません([COMPLEX_UHF](../../COMPLEX_UHF.md))。
 
 ## 11.6 本マニュアルで検証しなかったこと
 

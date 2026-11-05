@@ -1,4 +1,4 @@
-/* Optional standalone probe of mVMC-1.3.0 vmccal.c:639-655.
+/* Optional standalone probe of mVMC-1.3.0 vmccal.c:652-655.
  * Upstream University of Tokyo (2016), GPL-3.0-or-later.
  * Reproduction: gcc -std=c11 -O3 opttrans_derivative.c -o /tmp/opttrans492;
  * /tmp/opttrans492. No numerical changes to the extracted function.

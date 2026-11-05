@@ -28,7 +28,7 @@ $$
 $$
 
 (with $w=1$). The factored (`TwoBodyGEx`) quantity is the product-form estimator
-$\langle F^\dagger(x,A)F(x,B)\rangle$ of the C manual ([*Power Lanczos method*](../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst)):
+$\langle F^\dagger(x,A)F(x,B)\rangle$ of the C manual ([*Power Lanczos method*](../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst)):
 it is built from the **one-body** local values of the *same* sample (each `TwoBodyGEx` row stores the two positions in the one-body list: `CisAjsCktAltIdx[idx][0..1]` in C and `green_two_ex_indices` in Rust), so it needs no two-electron
 amplitude. All local values are first stored per
 sample (`LocalCisAjs`, `LocalCisAjsCktAltDC`) and then accumulated.
@@ -37,12 +37,12 @@ PhysCal repeats `NDataQtySmp` times: sample (the first call includes the `NVMCWa
 and write one numbered set of output files (`NDataIdxStart`, `NDataIdxStart+1`, ...).
 
 > **Implementation**
-> - C: `VMCPhysCal` — `extern/mVMC-1.3.0/src/mVMC/vmcmain.c:531`
-> - C: `CalculateGreenFunc` — `extern/mVMC-1.3.0/src/mVMC/calgrn.c:32`
-> - C: `WeightAverageGreenFunc` — `extern/mVMC-1.3.0/src/mVMC/average.c:209`
-> - C: `GreenFunc1` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:41`
-> - C: `GreenFunc2` — `extern/mVMC-1.3.0/src/mVMC/locgrn.c:86`
-> - C: `CalculateGreenFunc_fsz` — `extern/mVMC-1.3.0/src/mVMC/calgrn_fsz.c:33`
+> - C: `VMCPhysCal` — `extern/mVMC-1.4.0/src/mVMC/vmcmain.c:533`
+> - C: `CalculateGreenFunc` — `extern/mVMC-1.4.0/src/mVMC/calgrn.c:32`
+> - C: `WeightAverageGreenFunc` — `extern/mVMC-1.4.0/src/mVMC/average.c:209`
+> - C: `GreenFunc1` — `extern/mVMC-1.4.0/src/mVMC/locgrn.c:41`
+> - C: `GreenFunc2` — `extern/mVMC-1.4.0/src/mVMC/locgrn.c:92`
+> - C: `CalculateGreenFunc_fsz` — `extern/mVMC-1.4.0/src/mVMC/calgrn_fsz.c:33`
 > - Rust: `vmc_phys_cal_in_place_timed` — `crates/mvmc-core/src/run.rs:908`
 > - Rust: `prepare_phys_cal_from_namelist` — `crates/mvmc-core/src/run.rs:518`
 > - Rust: `ordinary_green_values` — `crates/mvmc-core/src/observables/green_measurements.rs:233`
@@ -50,7 +50,7 @@ and write one numbered set of output files (`NDataIdxStart`, `NDataIdxStart+1`, 
 > - Rust: `normalize_physcal_green` — `crates/mvmc-core/src/run.rs:250`
 > - Rust: `calculate_green_func_fsz` — `crates/mvmc-core/src/observables/fsz_measurements.rs:17`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`
-> - Parity: C accumulates `PhysCisAjsCktAlt[idx] += w*LocalCisAjs[idx0]*conj(LocalCisAjs[idx1])` (`calgrn.c:110`); Rust `accumulate_two_body_gex_sample` forms `weight * one_body[first] * one_body[second].conj()` in the same order. The normalization multiplies by a precomputed reciprocal of $W$ (`const double complex invW = 1.0/Wc`, `average.c:278`, applied after `SafeMpiReduce_fcmp` on rank 0, `average.c:287-290`), and Rust uses the C99-style `c_complex::divide(1, wc)` and multiplies each value (`run.rs:249-278`), not a per-element division. In C the averaged Green functions exist only on the root rank (`weightAverageReduce` reduces to rank 0) and only the root writes the files. Per-sample results go to the *same* numbered file set; files are re-created (`"w"`) for each `NDataIdxStart + sample`.
+> - Parity: C accumulates `PhysCisAjsCktAlt[idx] += w*LocalCisAjs[idx0]*conj(LocalCisAjs[idx1])` (`calgrn.c:117`); Rust `accumulate_two_body_gex_sample` forms `weight * one_body[first] * one_body[second].conj()` in the same order. The normalization multiplies by a precomputed reciprocal of $W$ (`const double complex invW = 1.0/Wc`, `average.c:279`, applied after `SafeMpiReduce_fcmp` on rank 0, `average.c:288-291`), and Rust uses the C99-style `c_complex::divide(1, wc)` and multiplies each value (`run.rs:249-278`), not a per-element division. In C the averaged Green functions exist only on the root rank (`weightAverageReduce` reduces to rank 0) and only the root writes the files. Per-sample results go to the *same* numbered file set; files are re-created (`"w"`) for each `NDataIdxStart + sample`.
 
 ## 6.2 The single-step Lanczos wave function
 
@@ -72,7 +72,7 @@ $$
 E_{\rm LS}(\alpha)=\frac{h_1+\alpha\,(h_{2(11)}+h_{2(20)})+\alpha^2h_{3(12)}}{1+2\alpha h_1+\alpha^2h_{2(11)}}
 $$
 
-([C manual, *Determination of $\alpha$*](../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst)). Setting $dE_{\rm LS}/d\alpha=0$ gives a quadratic
+([C manual, *Determination of $\alpha$*](../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst)). Setting $dE_{\rm LS}/d\alpha=0$ gives a quadratic
 equation (derived directly from the quotient rule):
 
 $$
@@ -126,15 +126,15 @@ hopped configuration $x'$ times the conjugated amplitude ratio (`calHCA1`), with
 two-body counterparts `calHCACA`.
 
 > **Implementation**
-> - C: `LSLocalQ` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:76`
-> - C: `calculateHK` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:122`
-> - C: `calculateHW` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:139`
-> - C: `calHCA` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:180`
-> - C: `calHCACA` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:449`
-> - C: `calculateQQQQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:832`
-> - C: `CalculateEne` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:270`
-> - C: `CalculateEneByAlpha` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:298`
-> - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:149`
+> - C: `LSLocalQ` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:76`
+> - C: `calculateHK` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:122`
+> - C: `calculateHW` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:139`
+> - C: `calHCA` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:180`
+> - C: `calHCACA` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:449`
+> - C: `calculateQQQQ` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:877`
+> - C: `CalculateEne` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:270`
+> - C: `CalculateEneByAlpha` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:298`
+> - C: `PhysCalLanczos_fcmp` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:149`
 > - Rust: `accumulate_lanczos_qqqq` — `crates/mvmc-core/src/lanczos.rs:44`
 > - Rust: `lanczos_energy` — `crates/mvmc-core/src/lanczos.rs:73`
 > - Rust: `energy_by_alpha` — `crates/mvmc-core/src/lanczos.rs:128`
@@ -151,7 +151,7 @@ A_{\rm LS}(\alpha)=\frac{\langle\phi|A|\phi\rangle}{\langle\phi|\phi\rangle}
 $$
 
 with $A_0=\langle F(A)\rangle$, $A_{1(10)}=\langle F^\dagger(H)F(A)\rangle$, $A_{1(01)}=\langle F(AH)\rangle$,
-$A_{2(11)}=\langle F^\dagger(H)F(AH)\rangle$ ([C manual](../../extern/mVMC-1.3.0/doc/en/source/algorithm.rst)). For
+$A_{2(11)}=\langle F^\dagger(H)F(AH)\rangle$ ([C manual](../../extern/mVMC-1.4.0/doc/en/source/algorithm.rst)). For
 $A=c^\dagger_ic_j$ and $A=c^\dagger_ic_jc^\dagger_kc_l$ the local values
 $F(A)$ and $F(HA)=\langle\psi|HA|x\rangle/\langle\psi|x\rangle$ are `LSLCisAjs` and `LSLCisAjsCktAlt`
 (`LSLocalCisAjs`, `calHCA`, `calHCACA`); the moment tensors `QCisAjsQ`, `QCisAjsCktAltQ` and
@@ -167,11 +167,11 @@ additionally writes the Lanczos one-body, direct two-body and factored two-body 
 (`zvo_ls_cisajs_NNN.dat`, `zvo_ls_cisajscktalt_NNN.dat`, `zvo_ls_cisajscktaltex_NNN.dat`, see [chapter 9](09-output-files.md)).
 
 > **Implementation**
-> - C: `CalculatePhysVal_fcmp` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:336`
-> - C: `CalculatePhysVal_real` — `extern/mVMC-1.3.0/src/mVMC/physcal_lanczos.c:313`
-> - C: `LSLocalCisAjs` — `extern/mVMC-1.3.0/src/mVMC/lslocgrn.c:98`
-> - C: `calculateQCAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:852`
-> - C: `calculateQCACAQ` — `extern/mVMC-1.3.0/src/mVMC/vmccal.c:871`
+> - C: `CalculatePhysVal_fcmp` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:336`
+> - C: `CalculatePhysVal_real` — `extern/mVMC-1.4.0/src/mVMC/physcal_lanczos.c:313`
+> - C: `LSLocalCisAjs` — `extern/mVMC-1.4.0/src/mVMC/lslocgrn.c:98`
+> - C: `calculateQCAQ` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:897`
+> - C: `calculateQCACAQ` — `extern/mVMC-1.4.0/src/mVMC/vmccal.c:916`
 > - Rust: `lanczos_phys_values` — `crates/mvmc-core/src/io.rs:537`
 > - Rust: `calculate_lanczos_green` — `crates/mvmc-core/src/observables.rs:2484`
 > - Rust: `output_phys_data` — `crates/mvmc-core/src/io.rs:259`

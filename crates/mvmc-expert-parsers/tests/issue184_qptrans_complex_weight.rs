@@ -2,7 +2,7 @@
 //! Complete C TransSym contract, independent literal dyadic coefficient.
 //! Actual independent C reader acquired 1+0.5i for both AP modes; expectations
 //! below are literal input coefficients. No toolbox access from normal tests.
-//! C authority: mVMC1.3.0 readdef.c2232–2265, source SHA256
+//! C authority (historical, #682): mVMC 1.3.0 readdef.c 2232–2265, source SHA256
 //! 6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9.
 //! Standalone GCC13.3.0 -O0 -ffp-contract=off observed STATUS0 and
 //! WEIGHT 0x1p+0 0x1p-1 under AP0/AP1; no BLAS/RNG/MPI execution.

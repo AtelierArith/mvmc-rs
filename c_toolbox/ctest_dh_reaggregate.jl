@@ -24,7 +24,7 @@ for name in ("dh2_real", "dh2_cmp", "dh2_fsz", "dh4_real", "dh4_cmp", "dh4_fsz",
         println(io, "compiler=GCC_13.3.0 flags=-O0,-ffp-contract=off,-lm backend=libm/libc_no_BLAS Linux_x86_64")
         for path in (history, probe, @__FILE__, joinpath(@__DIR__, "ctest_dh_opt_window.c"),
                 joinpath(@__DIR__, "ctest_opt_window.c"), joinpath(@__DIR__, "ctest_opt_window_upstream.inc"),
-                joinpath(repo, "extern/mVMC-1.3.0/src/mVMC/avevar.c"))
+                joinpath(repo, "extern/mVMC-1.4.0/src/mVMC/avevar.c"))
             println(io, bytes2hex(sha256(read(path))), "  ", relpath(path, repo))
         end
     end

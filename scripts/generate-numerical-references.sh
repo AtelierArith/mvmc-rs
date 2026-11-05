@@ -159,7 +159,7 @@ for suite in "${selected[@]}"; do
 done
 command -v uv >/dev/null || { echo 'uv is required; install it before generating' >&2; exit 2; }
 if $needs_c; then
-    [[ -f "$root/extern/mVMC-1.3.0/src/mVMC/readdef.c" ]] || { echo 'Initialize extern/mVMC-1.3.0 with git submodule update --init' >&2; exit 2; }
+    [[ -f "$root/extern/mVMC-1.4.0/src/mVMC/readdef.c" ]] || { echo 'Initialize extern/mVMC-1.4.0 with git submodule update --init' >&2; exit 2; }
     compiler=$(command -v "$compiler") || { echo 'C compiler must name one executable' >&2; exit 2; }
 fi
 julia_command=()

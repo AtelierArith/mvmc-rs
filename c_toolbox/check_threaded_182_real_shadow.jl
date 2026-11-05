@@ -16,7 +16,7 @@ sources = (
 )
 texts = Dict{String,String}()
 for (name, expected) in sources
-    text = read(joinpath(repo, "extern/mVMC-1.3.0/src/mVMC", name), String)
+    text = read(joinpath(repo, "extern/mVMC-1.4.0/src/mVMC", name), String)
     bytes2hex(sha256(text)) == expected || error("upstream source changed: $name")
     texts[name] = text
 end

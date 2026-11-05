@@ -254,7 +254,7 @@ impl Model {
             return Err("resident GPU projection supports Gutzwiller/Jastrow/DH2/DH4".into());
         }
         // C setmemory.c: OptTrans = Para + NProj + NRBM + NSlater, one weight
-        // per sector of NQPFull = NQPFix * NQPOptTrans (readdef.c:763-779).
+        // per sector of NQPFull = NQPFix * NQPOptTrans (readdef.c:984-1017).
         let nopt = data.count_opt_trans_parameters();
         let slater_end = np - nopt.min(np);
         if nopt > 0
@@ -273,7 +273,7 @@ impl Model {
             real_flags.clone()
         };
         let shift = ng > 0 && nj > 0 && real_flags[..ng + nj].iter().all(|&f| f != 0);
-        // C SetFlagShift (parameter.c:255-310), as the C-order sync applies it:
+        // C SetFlagShift (parameter.c:255-313), as the C-order sync applies it:
         // DH shifts need every Gutzwiller and every DH component optimized.
         let all = |range: std::ops::Range<usize>| real_flags[range].iter().all(|&f| f != 0);
         let gutz_free = ng > 0 && all(0..ng);

@@ -7,7 +7,7 @@
 #
 #   c_toolbox/grouped_nsplit_349/generate.sh /tmp/mvmc-349-c
 #
-# The vendored extern/mVMC-1.3.0 tree is copied and built unmodified (no
+# The vendored extern/mVMC-1.4.0 tree is copied and built unmodified (no
 # patch); only the stock vmc.out is used. For every case in
 # tests/fixtures/grouped_nsplit_349/cases.txt it runs the C executable on the
 # physcal_181 inputs with the case's modpara overrides at world sizes 1/2/4 and
@@ -21,7 +21,7 @@ inputs=$root/tests/fixtures/physcal_181
 export CC=gcc CXX=g++ FC=gfortran OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 rm -rf "$work"
 mkdir -p "$work/build"
-cp -r "$root/extern/mVMC-1.3.0" "$work/src"
+cp -r "$root/extern/mVMC-1.4.0" "$work/src"
 (cd "$work/build" &&
   cmake ../src -DCMAKE_BUILD_TYPE=Release -DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF \
     -DMPI_C_COMPILER=/opt/mpich/bin/mpicc > cmake.log 2>&1 &&
@@ -71,7 +71,7 @@ done < "$fx/cases.txt"
 {
   echo "generator=c_toolbox/grouped_nsplit_349/generate.sh"
   echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "source=extern/mVMC-1.3.0 (unmodified copy), submodule commit ${SOURCE_COMMIT:-unknown}"
+  echo "source=extern/mVMC-1.4.0 (unmodified copy), submodule commit ${SOURCE_COMMIT:-unknown}"
   echo "vmc_out_sha256=$(sha256sum "$vmc" | cut -d' ' -f1)"
   echo "arch=$(uname -m) kernel=$(uname -sr)"
   echo "gcc=$(gcc --version | head -1)"

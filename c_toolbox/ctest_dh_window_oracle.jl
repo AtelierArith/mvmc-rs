@@ -52,7 +52,7 @@ for name in MODELS
         for path in (input, history, @__FILE__, joinpath(@__DIR__, "ctest_prefix_oracle.jl"),
                 DH_PROBE, joinpath(@__DIR__, "ctest_dh_opt_window.c"), joinpath(@__DIR__, "ctest_opt_window.c"),
                 joinpath(@__DIR__, "ctest_opt_window_upstream.inc"),
-                joinpath(REPO, "extern/mVMC-1.3.0/src/mVMC/avevar.c"),
+                joinpath(REPO, "extern/mVMC-1.4.0/src/mVMC/avevar.c"),
                 joinpath(REPO, "extern/Julia-mVMC/Manifest-v1.13.toml"))
             println(io, bytes2hex(sha256(read(path))), "  ", relpath(path, REPO))
         end
