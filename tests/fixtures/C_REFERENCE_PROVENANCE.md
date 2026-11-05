@@ -17,7 +17,7 @@ and are not listed. Benchmark results under `benchmark/**/results/` and other
 dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historical
 1.3.0 records as well.
 
-39 C sources under `src/` changed between the releases. 353 files are historical 1.3.0 and 99 files cite only 1.4.0 hashes.
+39 C sources under `src/` changed between the releases. 339 files are historical 1.3.0 and 111 files cite only 1.4.0 hashes.
 
 ## Historical 1.3.0
 
@@ -49,17 +49,11 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `c_toolbox/ctest_window_bounds.md` | `avevar.c`, `readdef.c`, `setmemory.c`, `vmcmain.c` |
 | `c_toolbox/generate_threaded_182_real_fsz.jl` | `readdef.c`, `vmccal.c` |
 | `c_toolbox/issue183_ls_empty/README.md` | `initfile.c`, `readdef.c`, `vmcmain.c` |
-| `c_toolbox/issue274_initializer/README.md` | `vmcmake.c` |
-| `c_toolbox/issue274_initializer/extract_shared_initializer.pl` | `vmcmake.c` |
-| `c_toolbox/issue342_negative_info/extract_initializers.pl` | `vmcmake.c` |
 | `c_toolbox/issue347_varbin/README.md` | `initfile.c`, `vmcmain.c` |
 | `c_toolbox/issue_605/README.md` | `stcopt_cg_impl.c`, `vmccal_fsz.c`, `vmcmain.c` |
 | `c_toolbox/mpi_issue179_store.md` | `setmemory.c`, `vmccal.c` |
-| `c_toolbox/native13_initialization/extract-family.pl` | `vmcmain.c` |
 | `c_toolbox/native13_initialization/generate-fixtures.pl` | `readdef.c`, `vmcmain.c` |
-| `c_toolbox/native13_initialization/reproduce-native-init.sh` | `vmcmain.c` |
 | `c_toolbox/real_fsz_direct_sr_audit.md` | `parameter.c` |
-| `c_toolbox/reviewed_parameter_c_audit.md` | `parameter.c`, `readdef.c` |
 | `c_toolbox/run_real_fsz_direct_sr_audit.jl` | `parameter.c` |
 | `c_toolbox/two_hop_bilinear_449/README.md` | `pfupdate_two_real.c` |
 | `crates/mvmc-cli/tests/physcal_lifecycle.rs` | `parameter.c`, `readdef.c` |
@@ -257,8 +251,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/interall/c_fsz_real_hamiltonian.txt` | `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c` |
 | `tests/fixtures/interall/c_real_green.txt` | `locgrn_real.c`, `pfupdate_real.c`, `pfupdate_two_real.c`, `projection.c` |
 | `tests/fixtures/issue184_heisenberg_parser/README.md` | `readdef.c` |
-| `tests/fixtures/issue274_caller_control/PROVENANCE.txt` | `vmcmake.c` |
-| `tests/fixtures/issue342_negative_info/PROVENANCE.txt` | `projection.c`, `vmcmake.c` |
 | `tests/fixtures/issue347_varbin/PROVENANCE.md` | `initfile.c`, `vmcmain.c` |
 | `tests/fixtures/jastrow/README.md` | `projection.c`, `readdef.c` |
 | `tests/fixtures/macos_arm_julia/neoversen1/c_kernel_order/sr_cg/rbm_reference_cmp_runner/reference.txt` | `rbm.c` |
@@ -271,7 +263,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/macos_arm_julia/vortexm4/c_kernel_order/sr_direct/rbm_reference_cmp_store_runner/reference.txt` | `rbm.c` |
 | `tests/fixtures/multidef_348/PROVENANCE.txt` | `vmcmain.c` |
 | `tests/fixtures/multidef_348/split_PROVENANCE.txt` | `vmcmain.c` |
-| `tests/fixtures/native13_initialization/provenance.json` | `readdef.c`, `vmcmain.c` |
 | `tests/fixtures/native_c_lanczos_576/README.md` | `readdef.c` |
 | `tests/fixtures/native_c_lanczos_576/interall_complex1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
 | `tests/fixtures/native_c_lanczos_576/interall_complex2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
@@ -347,8 +338,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/native_c_physcal_181/rerun_truncate/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
 | `tests/fixtures/native_c_physcal_181/spin_chain_lanczos1/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
 | `tests/fixtures/native_c_physcal_181/spin_chain_lanczos2/provenance.txt` | `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c` |
-| `tests/fixtures/native_comparison_492/full_probe_provenance.json` | `readdef.c`, `vmccal.c`, `vmcmain.c` |
-| `tests/fixtures/native_comparison_492/provenance.txt` | `vmccal.c` |
 | `tests/fixtures/original_heisenberg_parser_184/README.md` | `readdef.c` |
 | `tests/fixtures/physcal_181/all-terms-reader/provenance.txt` | `readdef.c` |
 | `tests/fixtures/physcal_181/duplicate-reader/provenance.txt` | `readdef.c` |
@@ -373,9 +362,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/physcal_181/unnormalized-reserved-slater/native-c-stages/provenance.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/physcal_callbacks_175/CONTRACT.txt` | `average.c`, `global.h`, `readdef.c`, `vmcmain.c` |
 | `tests/fixtures/real_fsz/c_setup.txt` | `projection.c`, `vmcmake_fsz_real.c` |
-| `tests/fixtures/reviewed_parameter_c_audit/canonical_general_rbm/provenance.txt` | `parameter.c`, `readdef.c` |
-| `tests/fixtures/reviewed_parameter_c_audit/compiler-inputs.sha256` | `readdef.h` |
-| `tests/fixtures/reviewed_parameter_c_audit/dh_rbm_opttrans/provenance.txt` | `parameter.c`, `readdef.c` |
 
 ## 1.4.0
 
@@ -414,13 +400,18 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `c_toolbox/issue184_inverse/README.md` | `ilaenv_lauum.cc`, `ilaenv_wrap.f90`, `invert.tcc` |
 | `c_toolbox/issue184_inverse/factorization-README.md` | `matrix.c` |
 | `c_toolbox/issue184_inverse/factorization-provenance.txt` | `blalink_fort.h`, `blalink_gemmt.c`, `blis.h`, `ilaenv.h`, `ilaenv_lauum.cc`, `ilaenv_wrap.f90`, `invert.tcc`, `ltl2inv.cc`, +5 |
+| `c_toolbox/issue274_initializer/README.md` | `vmcmake.c` |
 | `c_toolbox/issue274_initializer/SOURCE-AUTHORITY.txt` | `matrix.c` |
+| `c_toolbox/issue274_initializer/extract_shared_initializer.pl` | `vmcmake.c` |
+| `c_toolbox/issue342_negative_info/extract_initializers.pl` | `vmcmake.c` |
 | `c_toolbox/jastrow_contracts_upstream.inc` | `readdef.c` |
 | `c_toolbox/jastrow_projection_upstream.inc` | `projection.c` |
 | `c_toolbox/modpara_reader_upstream.inc` | `global.h`, `readdef.c`, `readdef.h` |
 | `c_toolbox/mpi_issue179_cg_replay.md` | `safempi.c` |
 | `c_toolbox/mpi_issue179_store_upstream.inc` | `vmccal.c` |
 | `c_toolbox/mpi_rng_496/README.md` | `SFMT.c`, `SFMT.h` |
+| `c_toolbox/native13_initialization/extract-family.pl` | `vmcmain.c` |
+| `c_toolbox/native13_initialization/reproduce-native-init.sh` | `SFMT.c`, `vmcmain.c` |
 | `c_toolbox/negative_stepdt_upstream.inc` | `global.h`, `initfile.c`, `readdef.c`, `stcopt_dposv.c` |
 | `c_toolbox/orbital_ap_headers.inc` | `readdef.c` |
 | `c_toolbox/orbital_contracts_upstream.inc` | `readdef.c` |
@@ -443,6 +434,7 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `c_toolbox/time_srinfo_rows_direct.inc` | `stcopt.c` |
 | `c_toolbox/time_srinfo_upstream.inc` | `initfile.c`, `vmcclock.c` |
 | `c_toolbox/weighted_oo.c` | `vmccal.c` |
+| `crates/mvmc-core/tests/fixtures/normalization_c_literals.README.txt` | `average.c` |
 | `docs/reference/c-to-julia/verification/issue-179-qp-literals.md` | `qp.c`, `qp_real.c` |
 | `docs/reference/c-to-julia/verification/issue-274-real-zero-ip.md` | `qp_real.c` |
 | `tests/fixtures/complex_uhf/PROVENANCE.txt` | `Def.h`, `SFMT.c`, `UHFmain.c`, `cal_energy.c`, `cal_energy.h`, `diag.c`, `diag.h`, `green.c`, +13 |
@@ -458,9 +450,15 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/interall/c_fsz_real_hamiltonian_linux_gnu.txt` | `calham_fsz_real.c`, `locgrn_fsz_real.c`, `pfupdate_fsz_real.c`, `pfupdate_two_fsz_real.c`, `projection.c`, `qp_real.c` |
 | `tests/fixtures/interall/c_reader.txt` | `readdef.c` |
 | `tests/fixtures/interall/c_real_green_linux_gnu.txt` | `calham_real.c`, `locgrn_real.c`, `pfupdate_real.c`, `pfupdate_two_real.c`, `projection.c`, `qp_real.c` |
+| `tests/fixtures/issue274_caller_control/PROVENANCE.txt` | `vmcmake.c` |
+| `tests/fixtures/issue274_native_boundaries.PROVENANCE.md` | `SFMT.c`, `matrix.c`, `vmcmake.c`, `vmcmake_real.c` |
+| `tests/fixtures/issue342_negative_info/PROVENANCE.txt` | `SFMT.c`, `matrix.c`, `projection.c`, `vmcmake.c` |
 | `tests/fixtures/jastrow/c_projection_counts.txt` | `projection.c`, `readdef.c` |
 | `tests/fixtures/jastrow/c_reader_contracts.txt` | `readdef.c` |
 | `tests/fixtures/modpara_reader/c_reader.txt` | `global.h`, `readdef.c`, `readdef.h` |
+| `tests/fixtures/native13_initialization/provenance.json` | `SFMT.c`, `readdef.c`, `vmcmain.c` |
+| `tests/fixtures/native_comparison_492/full_probe_provenance.json` | `readdef.c`, `stcopt_dposv.c`, `vmccal.c`, `vmcmain.c` |
+| `tests/fixtures/native_comparison_492/provenance.txt` | `vmccal.c` |
 | `tests/fixtures/negative_stepdt/c_sr.txt` | `global.h`, `initfile.c`, `readdef.c`, `stcopt_dposv.c` |
 | `tests/fixtures/optimization_flags/c_dh_flags.txt` | `parameter.c`, `readdef.c` |
 | `tests/fixtures/optimization_flags/c_integer_flags.txt` | `SFMT.c`, `parameter.c`, `readdef.c`, `stcopt.c` |

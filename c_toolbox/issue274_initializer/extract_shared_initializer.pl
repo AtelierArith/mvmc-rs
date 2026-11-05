@@ -9,7 +9,7 @@ die "args vmcmake.c exclusive_output_directory\n" unless @ARGV == 2 && -d $out;
 open my $f, '<:raw', $input or die "IO input: $!";
 my $source = do { local $/; <$f> };
 close $f or die "IO close: $!";
-my $expected = '8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed';
+my $expected = 'a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9';
 die "source pin mismatch\n" unless sha256_hex($source) eq $expected;
 my $start = 'int makeInitialSample(int *eleIdx, int *eleCfg, int *eleNum, int *eleProjCnt,';
 my $end = 'void copyFromBurnSample(int *eleIdx, int *eleCfg, int *eleNum, int *eleProjCnt)';
@@ -29,6 +29,6 @@ sub write_new {
     print {$o} $bytes or die "IO write: $!";
     close $o or die "IO output close: $!";
 }
-write_new('shared-initializer.inc', $license . "\n/* Unmodified body from vmcmake.c:439 through before copyFromBurnSample.\n * Original source SHA256 $expected; GPL-3.0-or-later. */\n" . $body);
+write_new('shared-initializer.inc', $license . "\n/* Unmodified body from vmcmake.c makeInitialSample through before copyFromBurnSample.\n * Original source SHA256 $expected; GPL-3.0-or-later. */\n" . $body);
 write_new('source-provenance.txt', "original_sha256=$expected\nbody_sha256=" . sha256_hex($body)
     . "\nbody_bytes=" . length($body) . "\nboundaries=makeInitialSample signature -> copyFromBurnSample signature\n");

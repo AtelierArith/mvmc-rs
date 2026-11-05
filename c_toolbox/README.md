@@ -357,3 +357,14 @@ and OptTrans (`-o`). Outputs go to `tests/fixtures/grouped_nsplit_349/` with
 findings, including the C defect that keeps grouped SR-CG rejected. This is a
 full native C/MPI run, not a kernel check. Run inside the Dev Container:
 `SOURCE_COMMIT=$(git -C extern/mVMC-1.4.0 rev-parse HEAD) c_toolbox/grouped_nsplit_349/generate.sh /tmp/mvmc-349-c`.
+
+## Probe reacquisition under 1.4.0 (#695)
+
+The issue274 caller-control, issue342, native13 initialization, #492 OptTrans derivative
+and #492 full probe were rerun against `extern/mVMC-1.4.0` with updated source pins
+(and `NExUpdatePath = 0` where the 1.4.0 initializer needs it). Their outputs are
+byte-identical to the 1.3.0 acquisitions except the #492 S/g operands (last bits, see
+`tests/fixtures/native_comparison_492/README.md`). `normalization_literals/` regenerates
+`crates/mvmc-core/tests/fixtures/normalization_c_literals.tsv` (identical). The
+unadopted parameter-stage audit (`reviewed_parameter_c_audit`) was removed; its SFMT
+snapshot test now reads the reacquired native13 GeneralRBM capture.
