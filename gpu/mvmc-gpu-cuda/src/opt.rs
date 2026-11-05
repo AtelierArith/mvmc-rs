@@ -365,7 +365,7 @@ impl State {
         )?;
         let mut resident = ResidentInterval::from_sampler(backend, sampler, model.seed)?;
         resident.set_moves(backend, &model.localspins, model.exchange)?;
-        resident.set_fsz(model.fsz, model.spin_free);
+        resident.set_fsz(model.fsz, model.spin_free, model.flip)?;
         resident.set_doublon_holon(backend, &model.dh, model.n2, model.n4)?;
         resident.set_rbm(
             backend,

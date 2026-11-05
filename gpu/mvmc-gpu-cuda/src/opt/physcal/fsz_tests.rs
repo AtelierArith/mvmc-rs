@@ -222,9 +222,9 @@ fn assert_physcal(name: &str) {
         assert_eq!(last, host.cfg, "{name}: supplied-tape configurations");
         assert_eq!(accepted, host.accepted, "{name}: acceptance counts");
         println!(
-            "{name}: PhysCal accepted {accepted:?}, {} spin-changing moves, smallest decision \
-             margin {:e}",
-            host.spin_moves, host.margin
+            "{name}: PhysCal accepted {accepted:?}, {} spin-changing moves ({} local spin \
+             flips), smallest decision margin {:e}",
+            host.spin_moves, host.local_flips, host.margin
         );
         assert_values(name, "final", backend, &state, &measurement, &mut cpu);
         Ok(())
@@ -251,9 +251,34 @@ fn resident_physcal_fsz_l128_matches_cpu_c_order() {
 }
 
 #[test]
+#[ignore = "requires CUDA; FSZ KondoGC PhysCal (NExUpdatePath=3) against the CPU C-order path"]
+fn resident_physcal_fsz_kondo_kgc_matches_cpu_c_order() {
+    assert_physcal("kondo_fsz_kgc");
+}
+
+#[test]
+#[ignore = "requires CUDA; FSZ KondoGC 64+64 PhysCal against the CPU C-order path"]
+fn resident_physcal_fsz_kondo_kgc_l128_matches_cpu_c_order() {
+    assert_physcal("kondo_fsz_kgc_L128");
+}
+
+#[test]
+#[ignore = "requires CUDA; FSZ Heisenberg PhysCal (local spin flips) against the CPU C-order path"]
+fn resident_physcal_fsz_heisenberg_matches_cpu_c_order() {
+    assert_physcal("heisenberg_fsz_L16");
+}
+
+#[test]
 #[ignore = "requires CUDA; 20-window FSZ PhysCal repeatability and residency"]
 fn resident_physcal_fsz_repeats_twenty_windows() {
-    for name in ["hubbard_fsz_L16", "kondo_fsz_2sz2", "hubbard_fsz_L128"] {
+    for name in [
+        "hubbard_fsz_L16",
+        "kondo_fsz_2sz2",
+        "hubbard_fsz_L128",
+        "kondo_fsz_kgc",
+        "heisenberg_fsz_L16",
+        "kondo_fsz_kgc_L128",
+    ] {
         let config = PhysCalConfig {
             walkers: Some(64),
             nsamples: Some(20),

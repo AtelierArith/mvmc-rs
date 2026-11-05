@@ -133,6 +133,9 @@ pub struct ResidentInterval {
     pub(crate) fsz: bool,
     /// FSZ with `2Sz = -1`: hops may change the spin.
     pub(crate) spin_free: bool,
+    /// FSZ local-spin-flip probability (C getUpdateType LOCALSPINFLIP),
+    /// decided by tape word 3 after the exchange threshold.
+    pub(crate) flip_fraction: f64,
 }
 
 /// Device RBM state of one ensemble (`resident_rbm.cuh`). The tables and the
@@ -250,6 +253,7 @@ impl ResidentInterval {
                 rbm: None,
                 fsz: false,
                 spin_free: false,
+                flip_fraction: 0.0,
             })
         })
         .map_err(|e| e.to_string())
@@ -289,10 +293,24 @@ impl ResidentInterval {
 
     /// Select the FSZ walker contract (#714): slots hold `rs = site +
     /// spin*nsite` and the proposals follow `interval_kernels.cu`'s FSZ words.
-    /// `spin_free` is C's `2Sz = -1`. No device state is involved.
-    pub(crate) fn set_fsz(&mut self, fsz: bool, spin_free: bool) {
+    /// `spin_free` is C's `2Sz = -1`; `flip_fraction` the local-spin-flip
+    /// probability. No device state is involved.
+    pub(crate) fn set_fsz(
+        &mut self,
+        fsz: bool,
+        spin_free: bool,
+        flip_fraction: f64,
+    ) -> Result<(), String> {
+        if !(0.0..=1.0).contains(&flip_fraction)
+            || (!fsz && flip_fraction != 0.0)
+            || self.exchange_fraction + flip_fraction > 1.0
+        {
+            return Err("invalid resident FSZ proposal configuration".into());
+        }
         self.fsz = fsz;
         self.spin_free = fsz && spin_free;
+        self.flip_fraction = flip_fraction;
+        Ok(())
     }
 
     /// First slot whose Slater row carries the down-spin offset: `Ne` for
@@ -532,6 +550,7 @@ impl ResidentInterval {
                     .chain([
                         Arg::I(i32::from(self.fsz)),
                         Arg::I(i32::from(self.spin_free)),
+                        Arg::D(self.flip_fraction),
                     ])
                     .collect::<Vec<_>>(),
                 )?;

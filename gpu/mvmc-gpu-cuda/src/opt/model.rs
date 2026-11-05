@@ -75,6 +75,9 @@ pub(super) struct Model {
     /// `2Sz = -1`: hops may change the spin (C `makeCandidate_hopping_fsz`
     /// and `makeCandidate_LocalSpinFlip_conduction`).
     pub spin_free: bool,
+    /// FSZ local-spin-flip probability of C getUpdateType (`vmcmake.c`):
+    /// 0.5 for NExUpdatePath=2 with 2Sz=-1, 0.25 for NExUpdatePath=3.
+    pub flip: f64,
 }
 
 /// Device optimization flags (0/1) and the C SetFlagShift predicates.
@@ -239,10 +242,12 @@ impl Model {
         // General orbitals / FSZ follow C's FSZ path (#714). C requires them
         // for 2Sz != 0 (readdef.c:691-696), so normal orbitals need 2Sz = 0.
         let fsz = data.i_flg_orbital_general != 0;
-        if !(0..=2).contains(&m.nex_update_path) || m.nsplit_size != 1 || (!fsz && m.two_sz != 0) {
+        // NExUpdatePath=3 (KondoGC local spin flips) needs general orbitals.
+        let paths = if fsz { 0..=3 } else { 0..=2 };
+        if !paths.contains(&m.nex_update_path) || m.nsplit_size != 1 || (!fsz && m.two_sz != 0) {
             return Err(
-                "resident GPU requires NExUpdatePath<=2, serial execution, and general \
-                 orbitals for 2Sz != 0"
+                "resident GPU requires NExUpdatePath<=2 (3 with general orbitals), serial \
+                 execution, and general orbitals for 2Sz != 0"
                     .into(),
             );
         }
@@ -255,14 +260,6 @@ impl Model {
             // the Rust parser keeps the input value, so require it here.
             if m.nsp_gauss_leg > 1 {
                 return Err("resident GPU FSZ requires NSPGaussLeg=1 (no spin projection)".into());
-            }
-            // C getUpdateType: path 2 with 2Sz=-1 draws local spin flips.
-            if m.nex_update_path == 2 && m.two_sz == -1 {
-                return Err(
-                    "resident GPU FSZ does not support local spin flips (NExUpdatePath=2 \
-                     with 2Sz=-1)"
-                        .into(),
-                );
             }
             if !physcal && m.nsrcg != 0 {
                 return Err("resident GPU FSZ Opt requires direct SR (NSRCG=0)".into());
@@ -351,11 +348,17 @@ impl Model {
         }
         .filter(|&x| x <= 2 * ne && x <= ns && 2 * ne - x <= ns)
         .ok_or("unsupported FSZ spin sectors (2Sz)")?;
-        let exchange = match data.modpara.nex_update_path {
-            0 => 0.0,
-            1 => 0.5,
-            2 => 1.0,
-            _ => return Err("resident GPU requires NExUpdatePath in 0:2".into()),
+        // C getUpdateType (vmcmake.c:797-826) as (exchange, local spin flip)
+        // probabilities of one tape uniform: path 1 exchange or hop; path 2
+        // exchange, or for FSZ with 2Sz=-1 exchange or local spin flip; path 3
+        // (KondoGC) hop 1/2, exchange 1/4, local spin flip 1/4.
+        let (exchange, flip) = match (data.modpara.nex_update_path, fsz, spin_free) {
+            (0, _, _) => (0.0, 0.0),
+            (1, _, _) => (0.5, 0.0),
+            (2, true, true) => (0.5, 0.5),
+            (2, _, _) => (1.0, 0.0),
+            (3, true, _) => (0.25, 0.25),
+            _ => return Err("resident GPU requires NExUpdatePath in 0:2 (3 with FSZ)".into()),
         };
         let mut loc = vec![0i64; ns];
         mvmc_core::sampling::init_loc_spn(&mut loc, &data);
@@ -815,6 +818,7 @@ impl Model {
             fsz,
             nup,
             spin_free,
+            flip,
         })
     }
 }

@@ -2,7 +2,7 @@
 
 uv run --no-project gpu/mvmc-gpu-cuda/tests/fixtures/fsz/gen_inputs.py
 
-Writes three deterministic Expert-mode inputs next to this script:
+Writes six deterministic Expert-mode inputs next to this script:
 
 * hubbard_fsz_L16: 16-site Hubbard chain, Ncond=12 (2Ne=12, doped), 2Sz not
   set (C's default -1, Sz not conserved), NExUpdatePath=1 (hop/exchange
@@ -13,6 +13,16 @@ Writes three deterministic Expert-mode inputs next to this script:
 * kondo_fsz_2sz2: Kondo chain with 8 conduction sites (0-7) and 8 local spins
   (8-15), Ncond=6 (2Ne=14), 2Sz=2 (8 up, 6 down), NExUpdatePath=1,
   OrbitalAntiParallel + OrbitalParallel (C selects general orbitals).
+* kondo_fsz_kgc: the same Kondo chain with 2Sz not set and NExUpdatePath=3
+  (C KondoGC: hop 1/2, exchange 1/4, local spin flip 1/4), OrbitalGeneral,
+  and a spin-flip conduction hopping.
+* kondo_fsz_kgc_L128: 64 conduction sites and 64 local spins, Ncond=64
+  (2Ne=128), as kondo_fsz_kgc, so local spin flips run through the Opt
+  delayed queue and the paired factor.
+* heisenberg_fsz_L16: 16 local spins (2Ne=16), 2Sz not set,
+  NExUpdatePath=2 (C: exchange or local spin flip for 2Sz=-1),
+  OrbitalGeneral, Heisenberg exchange plus a Hermitian pair of
+  spin-changing InterAll terms (S+_i S+_j type) that break Sz conservation.
 
 C reads 2Sz=-1 only as the default: an explicit "2Sz -1" is an error
 (readdef.c:2215-2218), so the Sz-free inputs omit the 2Sz line.
@@ -186,8 +196,14 @@ def hubbard(name, length, ncond, path):
     files += [("OneBodyG", "greenone.def"), ("TwoBodyG", "greentwo.def"),
               ("TwoBodyGEx", "greentwoex.def")]
     projection(out, ns, files, length)
-    # One Slater class per (spin_i, spin_j, (j - i) mod L) of the pairs
-    # rsi < rsj, numbered in order of first appearance.
+    general_orbitals(out, ns, files)
+    transsym(out, ns, files)
+    finish(out, files)
+
+
+def general_orbitals(out, ns, files):
+    """One Slater class per (spin_i, spin_j, (j - i) mod ns) of the pairs
+    rsi < rsj, numbered in order of first appearance."""
     classes = {}
     mapping = []
     for rsi in range(2 * ns):
@@ -199,11 +215,9 @@ def hubbard(name, length, ncond, path):
           header("NOrbitalIdx", len(classes), ["ComplexType          0"])
           + mapping + [f"{k:5d} {1:6d}" for k in range(len(classes))])
     files.append(("OrbitalGeneral", "orbitalidxgen.def"))
-    transsym(out, ns, files)
-    finish(out, files)
 
 
-def kondo(name, ring, ncond, path, two_sz):
+def kondo(name, ring, ncond, path, two_sz, general=False):
     out = HERE / name
     out.mkdir(exist_ok=True)
     ns = 2 * ring
@@ -217,6 +231,11 @@ def kondo(name, ring, ncond, path, two_sz):
         for sp in (0, 1):
             trans.append(f"{j:5d} {sp:5d} {i:5d} {sp:5d} {1.0:25.15f} {0.0:25.15f}")
             trans.append(f"{i:5d} {sp:5d} {j:5d} {sp:5d} {1.0:25.15f} {0.0:25.15f}")
+        if two_sz is None:
+            # Sz-free inputs: the spin-flip conduction hopping of the chains.
+            for (a, sa, b, sb, v) in ((j, 1, i, 0, LAMBDA), (j, 0, i, 1, -LAMBDA)):
+                trans.append(f"{a:5d} {sa:5d} {b:5d} {sb:5d} {v:25.15f} {0.0:25.15f}")
+                trans.append(f"{b:5d} {sb:5d} {a:5d} {sa:5d} {v:25.15f} {0.0:25.15f}")
     write(out, "trans.def", header("NTransfer", len(trans)) + trans)
     write(out, "coulombintra.def",
           header("NCoulombIntra", ring) + [f"{i:5d} {4.0:25.15f}" for i in range(ring)])
@@ -230,18 +249,24 @@ def kondo(name, ring, ncond, path, two_sz):
     files += [("Trans", "trans.def"), ("CoulombIntra", "coulombintra.def"),
               ("Exchange", "exchange.def"), ("Hund", "hund.def"),
               ("CoulombInter", "coulombinter.def")]
-    one = [(i, s_, i, s_) for i in (0, 1, 8) for s_ in (0, 1)]
-    one += [(0, 0, 1, 0), (1, 1, 0, 1), (8, 0, 8, 1), (0, 1, 0, 0), (9, 0, 1, 1)]
+    r = ring
+    one = [(i, s_, i, s_) for i in (0, 1, r) for s_ in (0, 1)]
+    one += [(0, 0, 1, 0), (1, 1, 0, 1), (r, 0, r, 1), (0, 1, 0, 0), (r + 1, 0, 1, 1)]
     write(out, "greenone.def", header("NCisAjs", len(one)) + rows(one))
     two = [
-        (0, 0, 0, 0, 8, 1, 8, 1),
-        (0, 0, 8, 0, 8, 1, 0, 1),
-        (8, 0, 8, 1, 0, 1, 0, 0),
-        (1, 0, 0, 0, 9, 1, 9, 1),
+        (0, 0, 0, 0, r, 1, r, 1),
+        (0, 0, r, 0, r, 1, 0, 1),
+        (r, 0, r, 1, 0, 1, 0, 0),
+        (1, 0, 0, 0, r + 1, 1, r + 1, 1),
     ]
     write(out, "greentwo.def", header("NCisAjsCktAltDC", len(two)) + rows(two))
     files += [("OneBodyG", "greenone.def"), ("TwoBodyG", "greentwo.def")]
     projection(out, ns, files, ns)
+    if general:
+        general_orbitals(out, ns, files)
+        transsym(out, ns, files)
+        finish(out, files)
+        return
     write(out, "orbitalidx.def",
           header("NOrbitalIdx", ns, ["ComplexType          0"])
           + [f"{i:5d} {j:6d} {(j - i) % ns:6d} {1:3d}" for i in range(ns) for j in range(ns)]
@@ -255,6 +280,43 @@ def kondo(name, ring, ncond, path, two_sz):
     finish(out, files)
 
 
+def heisenberg(name, ns, path):
+    out = HERE / name
+    out.mkdir(exist_ok=True)
+    files = [("ModPara", "modpara.def"), ("LocSpin", "locspn.def")]
+    write(out, "modpara.def", modpara(ns, 0, path, None))
+    write(out, "locspn.def",
+          header("NlocalSpin", ns) + [f"{i:5d} {1:6d}" for i in range(ns)])
+    bonds = [(i, (i + 1) % ns) for i in range(ns)]
+    write(out, "exchange.def",
+          header("NExchange", ns) + [f"{i:5d} {j:5d} {0.5:25.15f}" for i, j in bonds])
+    write(out, "hund.def",
+          header("NHund", ns) + [f"{i:5d} {j:5d} {0.5:25.15f}" for i, j in bonds])
+    write(out, "coulombinter.def",
+          header("NCoulombInter", ns) + [f"{i:5d} {j:5d} {-0.25:25.15f}" for i, j in bonds])
+    # c+_{i up} c_{i dn} c+_{j up} c_{j dn} (S+_i S+_j) with 0.15 and its
+    # Hermitian conjugate (S-_j S-_i) on two bonds: Sz is not conserved.
+    inter = []
+    for i, j in bonds[:2]:
+        inter.append(f"{i:5d} {0:5d} {i:5d} {1:5d} {j:5d} {0:5d} {j:5d} {1:5d} {0.15:25.15f} {0.0:25.15f}")
+        inter.append(f"{j:5d} {1:5d} {j:5d} {0:5d} {i:5d} {1:5d} {i:5d} {0:5d} {0.15:25.15f} {0.0:25.15f}")
+    write(out, "interall.def", header("NInterAll", len(inter)) + inter)
+    files += [("Exchange", "exchange.def"), ("Hund", "hund.def"),
+              ("CoulombInter", "coulombinter.def"), ("InterAll", "interall.def")]
+    one = [(i, s_, i, s_) for i in (0, 1) for s_ in (0, 1)] + [(0, 0, 0, 1), (1, 1, 1, 0)]
+    write(out, "greenone.def", header("NCisAjs", len(one)) + rows(one))
+    two = [(0, 0, 0, 0, 1, 1, 1, 1), (0, 0, 0, 1, 1, 1, 1, 0), (0, 0, 0, 1, 1, 0, 1, 1)]
+    write(out, "greentwo.def", header("NCisAjsCktAltDC", len(two)) + rows(two))
+    files += [("OneBodyG", "greenone.def"), ("TwoBodyG", "greentwo.def")]
+    projection(out, ns, files, ns)
+    general_orbitals(out, ns, files)
+    transsym(out, ns, files)
+    finish(out, files)
+
+
 hubbard("hubbard_fsz_L16", 16, 12, 1)
 hubbard("hubbard_fsz_L128", 128, 128, 0)
 kondo("kondo_fsz_2sz2", 8, 6, 1, 2)
+kondo("kondo_fsz_kgc", 8, 6, 3, None, general=True)
+kondo("kondo_fsz_kgc_L128", 64, 64, 3, None, general=True)
+heisenberg("heisenberg_fsz_L16", 16, 2)

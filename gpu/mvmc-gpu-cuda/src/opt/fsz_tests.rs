@@ -191,10 +191,10 @@ impl Cpu {
 }
 
 /// Host replay of the resident FSZ tape contract (`interval_hop_impl` with
-/// `fsz`): slot `w0 % 2Ne`, exchange threshold `w3`, the `2Sz=-1` hop kind
-/// `w1 >> 31`, the destination rank or partner `w2`, and the log-space
-/// decision on `2 (LogProjRatio + log|ip_new| - log|ip_old|)` with the 1e-100
-/// floor.
+/// `fsz`): slot `w0 % 2Ne`, the update type from `w3` (exchange, local spin
+/// flip or hop, C getUpdateType), the `2Sz=-1` hop kind `w1 >> 31`, the
+/// destination rank or partner `w2`, and the log-space decision on
+/// `2 (LogProjRatio + log|ip_new| - log|ip_old|)` with the 1e-100 floor.
 pub(crate) struct Replay {
     pub cfg: Vec<i32>,
     pub accepted: Vec<i32>,
@@ -204,6 +204,8 @@ pub(crate) struct Replay {
     pub spin_moves: usize,
     /// Accepted exchanges.
     pub exchanges: usize,
+    /// Accepted local spin flips (C makeCandidate_LocalSpinFlip_localspin).
+    pub local_flips: usize,
 }
 
 pub(crate) fn replay(
@@ -219,7 +221,7 @@ pub(crate) fn replay(
     let loc = |r: usize| model.localspins[r % ns] == 1;
     let mut cfg = initial.to_vec();
     let mut accepted = vec![0i32; walkers];
-    let (mut margin, mut spin_moves, mut exchanges) = (f64::INFINITY, 0, 0);
+    let (mut margin, mut spin_moves, mut exchanges, mut local_flips) = (f64::INFINITY, 0, 0, 0);
     let scale = 4294967296.0;
     let log_abs = |x: f64| (x.abs() + 1e-100).ln();
     for w in 0..walkers {
@@ -232,9 +234,14 @@ pub(crate) fn replay(
             let mi = (t[0] % n as u32) as usize;
             let from = e[mi] as usize;
             let (ri, s) = (from % ns, from / ns);
-            let exchange = (t[3] as f64) / scale < model.exchange;
+            let u3 = (t[3] as f64) / scale;
+            let exchange = u3 < model.exchange;
+            let local_flip = !exchange && u3 < model.exchange + model.flip;
             let (mut partner, mut pfrom, mut pto) = (usize::MAX, 0, 0);
-            let (valid, to) = if exchange {
+            let (valid, to) = if local_flip {
+                let to = ri + (1 - s) * ns;
+                (loc(ri) && num[to] == 0, to)
+            } else if exchange {
                 partner = (t[2] % n as u32) as usize;
                 pfrom = e[partner] as usize;
                 let rj = pfrom % ns;
@@ -302,6 +309,7 @@ pub(crate) fn replay(
                 counts = proposed;
                 spin_moves += usize::from(!exchange && to / ns != s);
                 exchanges += usize::from(exchange);
+                local_flips += usize::from(local_flip);
             } else {
                 e.copy_from_slice(&previous.0);
                 num = previous.1;
@@ -322,6 +330,7 @@ pub(crate) fn replay(
         margin,
         spin_moves,
         exchanges,
+        local_flips,
     }
 }
 
@@ -504,10 +513,13 @@ fn assert_opt_stages(name: &str, steps_per_site: usize) {
     if state.model.exchange > 0.0 {
         assert!(host.exchanges > 0, "{name}: no exchange accepted");
     }
+    if state.model.flip > 0.0 {
+        assert!(host.local_flips > 0, "{name}: no local spin flip accepted");
+    }
     println!(
         "{name}: {steps} proposals x {walkers} walkers, accepted {accepted:?}, {} spin-changing \
-         moves and {} exchanges accepted, smallest decision margin {:e}",
-        host.spin_moves, host.exchanges, host.margin
+         moves ({} local spin flips) and {} exchanges accepted, smallest decision margin {:e}",
+        host.spin_moves, host.local_flips, host.exchanges, host.margin
     );
     assert_stage(name, "final", &mut cpu, &state, backend);
     // One SR update plus the gauge, against the CPU SR system and the
@@ -579,6 +591,24 @@ fn resident_opt_fsz_l128_matches_cpu_c_order() {
     assert_opt_stages("hubbard_fsz_L128", 1);
 }
 
+#[test]
+#[ignore = "requires CUDA; FSZ KondoGC chain (NExUpdatePath=3) against the CPU C-order path"]
+fn resident_opt_fsz_kondo_kgc_matches_cpu_c_order() {
+    assert_opt_stages("kondo_fsz_kgc", 8);
+}
+
+#[test]
+#[ignore = "requires CUDA; FSZ KondoGC 64+64 (local spin flips, delayed queue) against the CPU"]
+fn resident_opt_fsz_kondo_kgc_l128_matches_cpu_c_order() {
+    assert_opt_stages("kondo_fsz_kgc_L128", 1);
+}
+
+#[test]
+#[ignore = "requires CUDA; FSZ Heisenberg chain (exchange and local spin flips) against the CPU"]
+fn resident_opt_fsz_heisenberg_matches_cpu_c_order() {
+    assert_opt_stages("heisenberg_fsz_L16", 8);
+}
+
 /// #573 per-plane recovery with FSZ walkers. Marking one plane of every
 /// walker invalid routes the energies through `opt_energy_fallback` (full
 /// Pfaffians of every moved rs configuration) and the derivatives through
@@ -640,6 +670,9 @@ fn resident_opt_fsz_repeats_twenty_steps() {
         ("hubbard_fsz_L16", 64),
         ("kondo_fsz_2sz2", 64),
         ("hubbard_fsz_L128", 64),
+        ("kondo_fsz_kgc", 64),
+        ("heisenberg_fsz_L16", 64),
+        ("kondo_fsz_kgc_L128", 64),
     ] {
         let config = OptConfig {
             nsteps: 20,
