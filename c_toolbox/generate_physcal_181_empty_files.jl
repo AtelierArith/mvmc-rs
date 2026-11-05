@@ -15,6 +15,8 @@ mktempdir() do work
     #define D_FileNameMax 4096
     int NDataIdxStart=7, FlagBinary=0, NPara=14;
     int NCisAjs=0, NCisAjsCktAlt=0, NCisAjsCktAltDC=0, NLanczosMode;
+    int NTwist=0; /* mVMC 1.4.0 twist output, inactive here */
+    FILE *FileTwist;
     char *CDataFileHead="zvo";
     FILE *FileOut,*FileVar,*FileLS,*FileLSQQQQ,*FileCisAjs,*FileCisAjsCktAlt,*FileCisAjsCktAltDC;
     FILE *FileLSCisAjs,*FileLSCisAjsCktAlt,*FileLSCisAjsCktAltDC;

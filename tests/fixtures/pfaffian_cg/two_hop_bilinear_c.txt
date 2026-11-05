@@ -1,4 +1,4 @@
-# C two-hop bilinear form bMa (pfupdate_two_real.c:167-177), sequential, no FMA.
+# C two-hop bilinear form bMa (pfupdate_two_real.c:169-180), sequential, no FMA.
 # One '<n> <hex bits>' line per case of two_hop_bilinear.txt, same order.
 # Provenance: see c_toolbox/two_hop_bilinear_449/README.md
 6 3ff4f292783705e3

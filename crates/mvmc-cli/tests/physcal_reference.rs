@@ -133,12 +133,17 @@ fn empty_lanczos_gex_requires_exact_c_lf() {
 }
 
 fn check_lanczos(model: &str, mode: i32, arithmetic: &str) {
-    // Historical checked-in native C reference, revision and known numerical
-    // divergence documented in its metadata.txt. No Julia/C runtime invocation.
+    // Inputs and fixed parameters from the integration reference; expected outputs
+    // regenerated from C 1.4.0 (tests/fixtures/c_integration_reference/provenance.txt,
+    // c_toolbox/integration_reference). No Julia/C runtime invocation.
     let reference = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../extern/Julia-mVMC/test/integration/reference")
         .join(model)
         .join("physcal_ref");
+    let expected = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/c_integration_reference")
+        .join(model)
+        .join("physcal_ref/expected");
     let inputs = OutputDir::new();
     for entry in fs::read_dir(reference.join("inputs")).unwrap() {
         let entry = entry.unwrap();
@@ -187,7 +192,7 @@ fn check_lanczos(model: &str, mode: i32, arithmetic: &str) {
         String::from_utf8_lossy(&result.stderr)
     );
     let mut expected_names = Vec::new();
-    for entry in fs::read_dir(reference.join("expected")).unwrap() {
+    for entry in fs::read_dir(&expected).unwrap() {
         let entry = entry.unwrap();
         let name = entry.file_name().into_string().unwrap();
         if !name.starts_with("zvo_ls_") || (mode == 1 && name.contains("cisajs")) {

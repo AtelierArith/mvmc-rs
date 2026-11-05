@@ -2,8 +2,8 @@
 //! Complete C TransSym contract, independent literal dyadic coefficient.
 //! Actual independent C reader acquired 1+0.5i for both AP modes; expectations
 //! below are literal input coefficients. No toolbox access from normal tests.
-//! C authority (historical, #682): mVMC 1.3.0 readdef.c 2232–2265, source SHA256
-//! 6c53cb832f93d6cbfd7cea955fbb693738af5536b913d36af32b98eed38c32d9.
+//! C authority: mVMC 1.4.0 readdef.c 2646–2679 (unchanged from 1.3.0 2232–2265), source
+//! SHA256 9e1f2c635bffb2acdf3210613ab7330c5b28967fae928b303f3b151dfa1b7ef3.
 //! Standalone GCC13.3.0 -O0 -ffp-contract=off observed STATUS0 and
 //! WEIGHT 0x1p+0 0x1p-1 under AP0/AP1; no BLAS/RNG/MPI execution.
 use mvmc_expert_parsers::{parse_expert_mode_files, ExpertModeData};

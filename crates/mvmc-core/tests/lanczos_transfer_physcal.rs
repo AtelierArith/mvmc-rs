@@ -62,13 +62,17 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
             continue;
         }
         let fixture = root.join(format!("test/integration/reference/{model}/physcal_ref"));
+        // Expected outputs regenerated from C 1.4.0 (c_toolbox/integration_reference).
+        let expected_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "../../tests/fixtures/c_integration_reference/{model}/physcal_ref/expected"
+        ));
         let namelist = fixture.join("inputs/namelist.def");
         let opt_para = fixture.join("zqp_opt.dat");
         for path in [
             &namelist,
             &opt_para,
-            &fixture.join("expected/zvo_ls_qqqq_001.dat"),
-            &fixture.join("expected/zvo_ls_out_001.dat"),
+            &expected_dir.join("zvo_ls_qqqq_001.dat"),
+            &expected_dir.join("zvo_ls_out_001.dat"),
         ] {
             if !path.is_file() {
                 support::missing_fixture("lanczos-physcal", path.display().to_string());
@@ -86,7 +90,7 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         mvmc_core::vmc_phys_cal_to_dir(preparation, &output).unwrap();
 
         let actual_qqqq = values(&output.join("zvo_ls_qqqq_001.dat"));
-        let expected_qqqq = values(&fixture.join("expected/zvo_ls_qqqq_001.dat"));
+        let expected_qqqq = values(&expected_dir.join("zvo_ls_qqqq_001.dat"));
         assert_eq!(actual_qqqq.len(), 16, "{model}");
         assert_eq!(expected_qqqq.len(), 16, "{model}");
         for (actual, expected) in actual_qqqq.iter().zip(expected_qqqq.iter()) {
@@ -97,7 +101,7 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
         }
 
         let actual_ls = values(&output.join("zvo_ls_out_001.dat"));
-        let expected_ls = values(&fixture.join("expected/zvo_ls_out_001.dat"));
+        let expected_ls = values(&expected_dir.join("zvo_ls_out_001.dat"));
         assert_eq!(actual_ls.len(), 3, "{model}");
         assert_eq!(expected_ls.len(), 3, "{model}");
         for (actual, expected) in actual_ls.iter().zip(expected_ls.iter()) {
@@ -112,7 +116,7 @@ fn serial_lanczos_matches_hubbard_and_exchange_references() {
                 "zvo_ls_cisajscktalt_001.dat",
                 "zvo_ls_cisajscktaltex_001.dat",
             ] {
-                let expected_path = fixture.join("expected").join(name);
+                let expected_path = expected_dir.join(name);
                 if !expected_path.is_file() {
                     require_empty_dc_contract(name, parsed_gex_empty, &output.join(name));
                     println!("OPTIONAL183_DC model={model} mode={mode} file={name} status=EMPTY_CONTRACT");
