@@ -1,5 +1,11 @@
 # Issue #181: serial PhysCal and Lanczos scenario matrix against native C
 
+> **Historical record (C 1.3.0).** The numbers below were measured against mVMC
+> 1.3.0. The `native_c_physcal_181` references were regenerated from C 1.4.0 in
+> PR #703, and the Julia outputs under `tests/fixtures/physcal_181/` were removed
+> in PR #710 (#695). See `tests/fixtures/C_REFERENCE_PROVENANCE.md` for the
+> current provenance.
+
 Status vocabulary: **Pass** = compared with the native C `vmc.out` (exact for
 discrete data, toleranced for computed values), **Rejected** = C (and Rust)
 reject the input, **NotRun** = no native-C evidence in this slice, **Excluded**
