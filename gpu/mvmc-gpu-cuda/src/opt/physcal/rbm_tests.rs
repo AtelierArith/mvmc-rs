@@ -8,7 +8,7 @@
 use super::*;
 use crate::opt::dh_tests::{arrays, tape, Cpu};
 use crate::opt::rbm_tests::{
-    assert_theta_exact, device_theta, input, rbm_ratio_budget, replay, without_rbm,
+    accepted_moves, assert_theta_close, device_theta, input, rbm_ratio_budget, replay, without_rbm,
 };
 use mvmc_core::observables::{green_func1, green_func2};
 use num_complex::Complex64;
@@ -103,7 +103,7 @@ fn assert_values(
     measurement: &Measurement,
     cpu: &mut Cpu,
     plain: &mut Cpu,
-    expected_theta: Option<&[f64]>,
+    expected_theta: Option<(&[f64], &[usize])>,
 ) {
     let m = &state.model;
     let g = state.resident.sampler.geom;
@@ -158,10 +158,14 @@ fn assert_values(
             effect = effect.max((a - b).abs());
         }
     }
+    // Hidden fields within the MakeRBMCnt/UpdateRBMCnt rounding bound
+    // (opt::rbm_tests::theta_bound).
+    let weights = &m.parameters[m.nproj..m.nproj + m.nrbm];
+    let what = format!("{name} {stage}");
     match expected_theta {
-        Some(t) => assert_theta_exact(&format!("{name} {stage}"), &theta, t),
-        None => assert_theta_exact(&format!("{name} {stage}"), &theta, &fresh),
-    }
+        Some((t, updates)) => assert_theta_close(&what, m, weights, &theta, t, updates),
+        None => assert_theta_close(&what, m, weights, &theta, &fresh, &vec![0; g.walkers]),
+    };
     assert!(
         effect > 1e2 * bound_max,
         "{name} {stage}: the RBM factor must change the operator values ({effect:e})"
@@ -227,7 +231,7 @@ fn assert_physcal(name: &str) {
             &measurement,
             &mut cpu,
             &mut plain,
-            Some(&host.theta),
+            Some((&host.theta, &accepted_moves(&host.accepted))),
         );
         Ok(())
     })

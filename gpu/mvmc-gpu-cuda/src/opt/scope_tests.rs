@@ -7,6 +7,7 @@
 //! See `docs/design/gpu-resident-model-support.md`.
 use super::*;
 use crate::opt::model::flag_contract;
+use crate::opt::rbm_tests::assert_theta_close;
 use mvmc_core::ExpertModeData;
 use mvmc_expert_parsers::types::Spin;
 use std::fs;
@@ -390,7 +391,8 @@ fn table_theta(model: &Model, num: &[i64]) -> Vec<f64> {
 }
 
 /// #667: RBM factors keep the C parameter layout (projection, RBM, Slater).
-/// The device tables reproduce C MakeRBMCnt exactly on random occupations,
+/// The device tables reproduce C MakeRBMCnt on random occupations within the
+/// `rbm_tests::theta_bound` rounding bound (#699),
 /// and the In*RBM overlays reach the uploaded coefficients.
 #[test]
 fn resident_scope_accepts_rbm_factors() {
@@ -458,17 +460,16 @@ fn resident_scope_accepts_rbm_factors() {
                     *x = (state >> 63) as i64;
                 }
                 let cnt = mvmc_core::sampling::rbm::make_rbm_cnt(&num, &config);
-                let expected: Vec<u64> = cnt[cnt.len() - nneuron..]
-                    .iter()
-                    .map(|z| z.re.to_bits())
-                    .collect();
-                let actual: Vec<u64> = table_theta(&model, &num)
-                    .iter()
-                    .map(|x| x.to_bits())
-                    .collect();
-                assert_eq!(
-                    actual, expected,
-                    "{input:?}: MakeRBMCnt from the device tables"
+                let expected: Vec<f64> = cnt[cnt.len() - nneuron..].iter().map(|z| z.re).collect();
+                // A fresh MakeRBMCnt on both sides: the rounding bound of
+                // `rbm_tests::theta_bound` with no incremental updates (#699).
+                assert_theta_close(
+                    &format!("{input:?}: MakeRBMCnt from the device tables"),
+                    &model,
+                    &rbm,
+                    &table_theta(&model, &num),
+                    &expected,
+                    &[0],
                 );
             }
         }
@@ -584,14 +585,19 @@ fn resident_scope_accepts_opttrans() {
             // Normalized to maximum amplitude one; the definition flags
             // optimize every real component.
             let opt = &model.parameters[tail..];
-            assert_eq!(opt.iter().fold(0f64, |a, x| a.max(x.abs())), 1.0);
+            // C normalization multiplies by 1/max: the largest amplitude is
+            // 1 within the two roundings of the reciprocal and the product.
+            let largest = opt.iter().fold(0f64, |a, x| a.max(x.abs()));
+            assert!((largest - 1.0).abs() <= 2.0 * f64::EPSILON, "{largest}");
             assert!(model.flags[tail..].iter().all(|&f| f == 1));
             for (i, &o) in opt.iter().enumerate() {
                 for (j, &f) in model.fix.iter().enumerate() {
-                    assert_eq!(
-                        model.weights[i * nfix + j].to_bits(),
-                        (o * f).to_bits(),
-                        "C UpdateQPWeight"
+                    // One rounded product on each side (C UpdateQPWeight):
+                    // at most one ulp of relative difference.
+                    let (a, b) = (model.weights[i * nfix + j], o * f);
+                    assert!(
+                        a.is_finite() && (a - b).abs() <= f64::EPSILON * a.abs().max(b.abs()),
+                        "C UpdateQPWeight: {a} vs {b}"
                     );
                 }
             }
