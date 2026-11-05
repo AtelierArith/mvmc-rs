@@ -1,6 +1,6 @@
 //! Sampled SR operator contracts from Julia test_unit_stochastic_opt.jl.
-#[path = "../../../tests/support/julia_fixture.rs"]
-mod julia_fixture;
+#[path = "../../../tests/support/blas_kernel.rs"]
+mod blas_kernel;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
 use mvmc_core::sr_cg::{sequential_dot, SampledSrOperator};
@@ -317,7 +317,7 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
             CgVariant::DiagScale,
         ),
     ] {
-        let path = julia_fixture::fixture_path(&fixtures, format!("sr_cg/c_refresh/{file}"));
+        let path = fixtures.join(format!("sr_cg/c_refresh/{file}"));
         // The oracle runs on Linux x86_64 OpenBLAS (Haswell lineage). Hosts without a
         // platform-specific C 1.4.0 copy (the 1.3.0 Apple Silicon copies were removed in
         // #682) keep exact statuses and the backward-error check at every limit but
@@ -326,8 +326,8 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
             target_os = "linux",
             target_env = "gnu",
             target_arch = "x86_64"
-        ))) && path == fixtures.join(format!("sr_cg/c_refresh/{file}"));
-        let fixture = julia_fixture::read_text(path).unwrap();
+        )));
+        let fixture = std::fs::read_to_string(path).unwrap();
         let mut lines = fixture.lines().filter(|line| !line.starts_with('#'));
         let shape: Vec<usize> = lines
             .next()
@@ -493,8 +493,8 @@ fn cg_fixed_input_matches_c_through_residual_refresh() {
             // multiplies a one-ulp GEMV difference by up to 1/min(diag): on a host
             // that reads the Linux oracle (Apple: 3.5e-12 at limit 1 for complex
             // DiagScale) only the exact status and the backward error are portable.
-            let forward_limit = match julia_fixture::kernel_class(&fixtures) {
-                julia_fixture::KernelClass::Reference if !fallback => usize::MAX,
+            let forward_limit = match blas_kernel::kernel_class() {
+                blas_kernel::KernelClass::Reference if !fallback => usize::MAX,
                 _ if fallback && variant == CgVariant::DiagScale => 0,
                 _ => 5,
             };

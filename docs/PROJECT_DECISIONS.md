@@ -32,9 +32,9 @@ tmisawa/Julia-mVMC#95.
   lines that 1.4.0 changed were checked by hand.
 - **Fixtures and artifacts:** historical fixtures, benchmark results under
   `benchmark/**/results/` and other generated evidence stay labelled 1.3.0
-  (`d73d06bd`) until they are removed or regenerated (see "Removing 1.3.0 and
-  Julia CPU references" below, #695). They are records of the 1.3.0 reference,
-  not claims about 1.4.0.
+  (`d73d06bd`). They are records of the 1.3.0 reference, not claims about
+  1.4.0. The test fixtures among them were removed or regenerated in #695 (see
+  "Removing 1.3.0 and Julia CPU references" below).
 - **1.4.0 contract changes adopted** (#682):
   - SR-CG aborts by default at max iterations and on the new breakdown guards
     (`NSRCGAbortOnFail`, `NSRCGFallback`).
@@ -73,8 +73,12 @@ Tracked in #695.
   - Input files that other tests or the GPU tests still read.
 - **Replace** a reference a test still needs with a C 1.4.0-generated one with
   recorded provenance. Never use a Rust-generated expectation.
-- **Until #695 is done,** the registry `tests/fixtures/C_REFERENCE_PROVENANCE.md`
-  and the #682 inventory on the issue list what remains.
+- **Status (#695, done):** the Julia CPU and 1.3.0 references were removed in
+  #702, #704 and #710; the references tests still need were regenerated from
+  C 1.4.0 or rerun with unchanged data in #703, #705 and #706. No test reads a
+  C 1.3.0 or Julia CPU output. `tests/fixtures/C_REFERENCE_PROVENANCE.md` still
+  lists historical records kept on purpose: dated benchmark results,
+  investigation notes and tools that pin `d73d06bd` by design.
 
 ## Clear C defects are not reproduced
 
