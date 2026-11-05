@@ -534,6 +534,13 @@ mod mpi_matrix {
                 _ => {}
             }
         }
+        // The CG steps of these inputs meet the C 1.4.0 breakdown guard, which
+        // aborts by default; NSRCGAbortOnFail 0 (a 1.4.0 option) continues, so
+        // the multi-step run can be checked for repeatability.
+        if solver == "cg" && !c.overrides.iter().any(|(k, _)| k == "NSRCGAbortOnFail") {
+            c.overrides
+                .push(("NSRCGAbortOnFail".to_owned(), "0".to_owned()));
+        }
         c
     }
 
