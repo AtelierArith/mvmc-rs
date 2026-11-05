@@ -74,7 +74,7 @@ Tracked in #695.
 - **Replace** a reference a test still needs with a C 1.4.0-generated one with
   recorded provenance. Never use a Rust-generated expectation.
 - **Status (#695, done):** the Julia CPU and 1.3.0 references were removed in
-  #702, #704 and the closing PR of #695; the references tests still need were regenerated from
+  #702, #704 and #710; the references tests still need were regenerated from
   C 1.4.0 or rerun with unchanged data in #703, #705 and #706. No test reads a
   C 1.3.0 or Julia CPU output. `tests/fixtures/C_REFERENCE_PROVENANCE.md` still
   lists historical records kept on purpose: dated benchmark results,
