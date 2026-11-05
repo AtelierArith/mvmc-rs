@@ -7,7 +7,7 @@ directory; they read the checked-in fixtures in
 Scope: standalone native kernel check, NOT a full `vmc.out`/MPI trajectory.
 `probe.c` links the UNMODIFIED original `matrix.c` (`CalculateMAll_real/fcmp`),
 `projection.c`, `sfmt/SFMT.c`, the extracted original `makeInitialSample`
-(`vmcmake.c`, SHA-256 `8431b58e...`) and the real pfapack Fortran `dsktrf`/`zsktrf`
+(`vmcmake.c`, mVMC 1.4.0 SHA-256 `a9518a62...`) and the real pfapack Fortran `dsktrf`/`zsktrf`
 with OpenBLAS (whose `XERBLA` reports and returns). A real/complex x `Ne=0`/`Ne=1`
 matrix is run; `Ne=0` yields native INFO -5.
 

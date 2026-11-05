@@ -6,7 +6,7 @@ are in `tests/fixtures/issue274_caller_control/PROVENANCE.txt`.
 Cargo must not compile/invoke/read this directory.
 
 Original C vmcmake.c SHA256:
-`8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed`.
+`a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9`.
 Optional extraction preserves its complete shared initializer body and license.
 The standalone control supplies explicit synthetic INFO and placement word-call
 counters. It proves caller/control order ONLY, not actual SKTRF, MPI, SFMT

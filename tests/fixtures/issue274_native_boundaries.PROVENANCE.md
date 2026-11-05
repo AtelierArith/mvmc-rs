@@ -11,12 +11,19 @@ counts2/8/0/4/202; exhaustion101 placement/factor attempts. Baseline already
 contains common passive SFMT observation, not an unobserved original-RNG proof.
 Recovery is C's one nonfinite-IP recovery, not a loop until finite.
 
-Source authority hashes:
-vmcmake.c8431b58eaec53e5325c801b69aa8a56306ec6a154b54e099266f4e21e5dd42ed
-vmcmake_real.c8126fe03d3a1cb92df728adb66e18e43ec659fe9d2f1e638edfedec672213f4e
-matrix.c849488176375102fbc3bab7001e0dc27dfa7c8e049fd90ee1d6248ebfba10764
-SFMT.cb61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
-seedfixturedd52492086cdb043af1507774f75968f22645a38354682e5d03cae3511f3e1a4
+Source authority under mVMC 1.4.0 (#695), not reacquired:
+vmcmake.c a9518a622b4c170e0f0d6bca98270425a0042ccbe1c1deb1106c8bbec0a28fc9
+vmcmake_real.c cea894c8419b3a7fcc6dd1b94e8ac44ba64afb78f292ba6355389bf2d65d22a8
+matrix.c 849488176375102fbc3bab7001e0dc27dfa7c8e049fd90ee1d6248ebfba10764
+SFMT.c b61f0f0239193fd4c06f2879e6e8452225bec45b3bca426902c244fd31ad4e3a
+The JSON bytes are the 1.3.0 acquisition (its source/seed pins are in this file at
+commit 0e495984); the acquisition capsule is not in the repository, so it was not rerun.
+They remain valid for 1.4.0 because the code these prefixes execute is unchanged:
+matrix.c (CalculateMAll_*), SFMT.c, copyFromBurnSample/copyToBurnSample and the
+VMCMakeSample/VMCMakeSample_real prefixes before the update loop are byte-identical,
+and the 1.4.0 makeInitialSample adds only NExUpdatePath 4/5/6 branches (inactive for
+these inputs; otherwise whitespace). The same initializer was reacquired under 1.4.0
+with identical output by the issue274 caller-control, issue342 and native13 probes.
 Generated header authority manifest102 rows:
 d4ec67cfc08a19b0a959e2c96ffa1cb844178ac4efea2cfe97389d986ba4c39e
 Native product manifest:
