@@ -17,7 +17,7 @@ and are not listed. Benchmark results under `benchmark/**/results/` and other
 dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historical
 1.3.0 records as well.
 
-39 C sources under `src/` changed between the releases. 353 files are historical 1.3.0 and 99 files cite only 1.4.0 hashes.
+39 C sources under `src/` changed between the releases. 186 files are historical 1.3.0 and 96 files cite only 1.4.0 hashes.
 
 ## Historical 1.3.0
 
@@ -40,20 +40,14 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `benchmark/mpi_comparison/results/rank-thread-sweep-main-20261011/r2-t8/sha256.json` | `readdef.c`, `average.c`, `avevar.c`, `calgrn.c`, `calgrn_fsz.c`, `global.h`, `readdef.h`, `version.h`, `vmcmake.h`, `vmcmake_fsz.h`, `initfile.c`, `locgrn.c`, `locgrn_fsz.c`, `locgrn_fsz_real.c`, `locgrn_real.c`, `parameter.c`, `pfupdate.c`, `pfupdate_fsz.c`, `pfupdate_fsz_real.c`, `pfupdate_real.c`, `pfupdate_two_fcmp.c`, `pfupdate_two_fsz.c`, `pfupdate_two_fsz_real.c`, `pfupdate_two_real.c`, `projection.c`, `rbm.c`, `readdef.c`, `setmemory.c`, `stcopt_cg.c`, `stcopt_cg_impl.c`, `vmccal.c`, `vmccal_fsz.c`, `vmcclock.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c`, `vmcmake_fsz_real.c`, `vmcmake_real.c`, `workspace.c` |
 | `benchmark/mpi_comparison/results/rank-thread-sweep-main-20261011/r4-t4/sha256.json` | `readdef.c`, `average.c`, `avevar.c`, `calgrn.c`, `calgrn_fsz.c`, `global.h`, `readdef.h`, `version.h`, `vmcmake.h`, `vmcmake_fsz.h`, `initfile.c`, `locgrn.c`, `locgrn_fsz.c`, `locgrn_fsz_real.c`, `locgrn_real.c`, `parameter.c`, `pfupdate.c`, `pfupdate_fsz.c`, `pfupdate_fsz_real.c`, `pfupdate_real.c`, `pfupdate_two_fcmp.c`, `pfupdate_two_fsz.c`, `pfupdate_two_fsz_real.c`, `pfupdate_two_real.c`, `projection.c`, `rbm.c`, `readdef.c`, `setmemory.c`, `stcopt_cg.c`, `stcopt_cg_impl.c`, `vmccal.c`, `vmccal_fsz.c`, `vmcclock.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c`, `vmcmake_fsz_real.c`, `vmcmake_real.c`, `workspace.c` |
 | `benchmark/mpi_comparison/results/rank-thread-sweep-main-20261011/r8-t2/sha256.json` | `readdef.c`, `average.c`, `avevar.c`, `calgrn.c`, `calgrn_fsz.c`, `global.h`, `readdef.h`, `version.h`, `vmcmake.h`, `vmcmake_fsz.h`, `initfile.c`, `locgrn.c`, `locgrn_fsz.c`, `locgrn_fsz_real.c`, `locgrn_real.c`, `parameter.c`, `pfupdate.c`, `pfupdate_fsz.c`, `pfupdate_fsz_real.c`, `pfupdate_real.c`, `pfupdate_two_fcmp.c`, `pfupdate_two_fsz.c`, `pfupdate_two_fsz_real.c`, `pfupdate_two_real.c`, `projection.c`, `rbm.c`, `readdef.c`, `setmemory.c`, `stcopt_cg.c`, `stcopt_cg_impl.c`, `vmccal.c`, `vmccal_fsz.c`, `vmcclock.c`, `vmcmain.c`, `vmcmake.c`, `vmcmake_fsz.c`, `vmcmake_fsz_real.c`, `vmcmake_real.c`, `workspace.c` |
-| `c_toolbox/check_threaded_182_real_mat.jl` | `vmccal_fsz.c` |
-| `c_toolbox/check_threaded_182_real_shadow.jl` | `setmemory.c`, `vmccal_fsz.c` |
 | `c_toolbox/ctest_cg_refresh.md` | `stcopt_cg.c`, `stcopt_cg_impl.c` |
-| `c_toolbox/ctest_dh_window_oracle.md` | `avevar.c` |
-| `c_toolbox/ctest_general_pr54_adoption.md` | `avevar.c` |
 | `c_toolbox/ctest_orbital_contracts.md` | `readdef.c`, `vmcmain.c` |
 | `c_toolbox/ctest_window_bounds.md` | `avevar.c`, `readdef.c`, `setmemory.c`, `vmcmain.c` |
-| `c_toolbox/generate_threaded_182_real_fsz.jl` | `readdef.c`, `vmccal.c` |
 | `c_toolbox/issue183_ls_empty/README.md` | `initfile.c`, `readdef.c`, `vmcmain.c` |
 | `c_toolbox/issue274_initializer/README.md` | `vmcmake.c` |
 | `c_toolbox/issue274_initializer/extract_shared_initializer.pl` | `vmcmake.c` |
 | `c_toolbox/issue342_negative_info/extract_initializers.pl` | `vmcmake.c` |
 | `c_toolbox/issue347_varbin/README.md` | `initfile.c`, `vmcmain.c` |
-| `c_toolbox/issue_605/README.md` | `stcopt_cg_impl.c`, `vmccal_fsz.c`, `vmcmain.c` |
 | `c_toolbox/mpi_issue179_store.md` | `setmemory.c`, `vmccal.c` |
 | `c_toolbox/native13_initialization/extract-family.pl` | `vmcmain.c` |
 | `c_toolbox/native13_initialization/generate-fixtures.pl` | `readdef.c`, `vmcmain.c` |
@@ -93,161 +87,8 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `docs/reference/c-to-julia/verification/native13-initialization.md` | `parameter.c`, `vmcmain.c` |
 | `scripts/compare_mpi_issue179.py` | `readdef.c` |
 | `scripts/issue179_p02/c_written_mask.py` | `readdef.c` |
-| `scripts/reference_c_kernel_order.jl` | `rbm.c` |
 | `scripts/test_compare_mpi_issue179.py` | `readdef.c` |
-| `tests/fixtures/c_kernel_order/sr_cg/rbm_reference_cmp_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/c_kernel_order/sr_direct/opt_real_runner/fixed-input.txt` | `rbm.c` |
-| `tests/fixtures/c_kernel_order/sr_direct/opt_real_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/c_kernel_order/sr_direct/opt_real_store_runner/fixed-input.txt` | `rbm.c` |
-| `tests/fixtures/c_kernel_order/sr_direct/opt_real_store_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/c_kernel_order/sr_direct/rbm_reference_cmp_store_runner/fixed-input.txt` | `rbm.c` |
-| `tests/fixtures/c_kernel_order/sr_direct/rbm_reference_cmp_store_runner/reference.txt` | `rbm.c` |
 | `tests/fixtures/c_order_sr_operands/PROVENANCE.md` | `stcopt_cg_impl.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh24_cmp/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh24_cmp/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh24_fsz/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh24_fsz/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh24_real/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh24_real/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh2_cmp/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh2_cmp/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh2_fsz/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh2_fsz/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh2_real/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh2_real/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh4_cmp/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh4_cmp/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh4_fsz/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh4_fsz/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/dh4_real/orbital-aggregation-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_dh_windows/dh4_real/provenance.txt` | `avevar.c`, `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_dh_windows/provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_direct_sr_metrics/post-generation-source-audit.sha256` | `avevar.c`, `rbm.c`, `readdef.c` |
-| `tests/fixtures/ctest_direct_sr_metrics/provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/evidence/window-comparison-v2.json` | `avevar.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-1/source-provenance.txt` | `vmcmain.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-2/source-provenance.txt` | `vmcmain.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-20/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-20/source-provenance.txt` | `vmcmain.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/general_rbm_cmp/step-3/source-provenance.txt` | `vmcmain.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/provenance.txt` | `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_cmp/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_fsz/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/heisenberg_chain_real/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_cmp/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_fsz/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_chain_real/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_momentum_projection_real/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/hubbard_tetragonal_real/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_cmp/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_fsz/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_real/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-1/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-1/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-2/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-2/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-3/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-3/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-50/c-window-provenance.txt` | `avevar.c` |
-| `tests/fixtures/ctest_model_prefixes/kondo_chain_stot1_cmp/step-50/generation-provenance.txt` | `rbm.c`, `vmcmain.c` |
-| `tests/fixtures/ctest_model_prefixes/post-generation-source-audit.sha256` | `avevar.c`, `rbm.c`, `readdef.c` |
-| `tests/fixtures/ctest_model_prefixes/provenance.txt` | `rbm.c`, `vmcmain.c` |
 | `tests/fixtures/gutzwiller/README.md` | `readdef.c` |
 | `tests/fixtures/interall/c_complex_green.txt` | `locgrn.c`, `pfupdate.c`, `pfupdate_two_fcmp.c`, `projection.c` |
 | `tests/fixtures/interall/c_fsz_green.txt` | `locgrn_fsz.c`, `pfupdate_fsz.c`, `pfupdate_two_fsz.c`, `projection.c` |
@@ -261,14 +102,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `tests/fixtures/issue342_negative_info/PROVENANCE.txt` | `projection.c`, `vmcmake.c` |
 | `tests/fixtures/issue347_varbin/PROVENANCE.md` | `initfile.c`, `vmcmain.c` |
 | `tests/fixtures/jastrow/README.md` | `projection.c`, `readdef.c` |
-| `tests/fixtures/macos_arm_julia/neoversen1/c_kernel_order/sr_cg/rbm_reference_cmp_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/macos_arm_julia/neoversen1/c_kernel_order/sr_direct/opt_real_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/macos_arm_julia/neoversen1/c_kernel_order/sr_direct/opt_real_store_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/macos_arm_julia/neoversen1/c_kernel_order/sr_direct/rbm_reference_cmp_store_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/macos_arm_julia/vortexm4/c_kernel_order/sr_cg/rbm_reference_cmp_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/macos_arm_julia/vortexm4/c_kernel_order/sr_direct/opt_real_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/macos_arm_julia/vortexm4/c_kernel_order/sr_direct/opt_real_store_runner/reference.txt` | `rbm.c` |
-| `tests/fixtures/macos_arm_julia/vortexm4/c_kernel_order/sr_direct/rbm_reference_cmp_store_runner/reference.txt` | `rbm.c` |
 | `tests/fixtures/multidef_348/PROVENANCE.txt` | `vmcmain.c` |
 | `tests/fixtures/multidef_348/split_PROVENANCE.txt` | `vmcmain.c` |
 | `tests/fixtures/native13_initialization/provenance.json` | `readdef.c`, `vmcmain.c` |
@@ -383,7 +216,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | --- | --- |
 | `c_toolbox/README.md` | `readdef.c` |
 | `c_toolbox/c_timer_report_upstream.inc` | `vmcclock.c` |
-| `c_toolbox/ctest_direct_sr_metrics.md` | `stcopt.c`, `stcopt_dposv.c` |
 | `c_toolbox/ctest_opt_window.md` | `avevar.c` |
 | `c_toolbox/dh_flag_reader_upstream.inc` | `readdef.c` |
 | `c_toolbox/flag_shift_upstream.inc` | `parameter.c` |
@@ -446,8 +278,6 @@ dated evidence that name `d73d06bd` or `mVMC 1.3.0` without hashes are historica
 | `docs/reference/c-to-julia/verification/issue-179-qp-literals.md` | `qp.c`, `qp_real.c` |
 | `docs/reference/c-to-julia/verification/issue-274-real-zero-ip.md` | `qp_real.c` |
 | `tests/fixtures/complex_uhf/PROVENANCE.txt` | `Def.h`, `SFMT.c`, `UHFmain.c`, `cal_energy.c`, `cal_energy.h`, `diag.c`, `diag.h`, `green.c`, +13 |
-| `tests/fixtures/ctest_direct_sr_metrics/direct-sr-provenance.txt` | `stcopt.c`, `stcopt_dposv.c` |
-| `tests/fixtures/ctest_general_pr54_3d0fd263/evidence/result.json` | `stcopt.c`, `stcopt_dposv.c` |
 | `tests/fixtures/gutzwiller/c_reader_contracts.txt` | `readdef.c` |
 | `tests/fixtures/initial_records/c_records.txt` | `SFMT-params19937.h`, `SFMT.c`, `SFMT.h`, `parameter.c` |
 | `tests/fixtures/interall/c_complex_green_linux_gnu.txt` | `calham.c`, `locgrn.c`, `pfupdate.c`, `pfupdate_two_fcmp.c`, `projection.c`, `qp.c` |

@@ -8,13 +8,10 @@ mod historical_overlay_stage {
 mod c_orbital_rng;
 #[path = "../../../tests/support/numerical_comparison.rs"]
 mod numerical_comparison;
-#[path = "../../../tests/support/reference_slater.rs"]
-mod reference_slater;
 use historical_orbital_model::historical_kernel_model as parse_expert_mode_files;
 use historical_overlay_stage::read_input_parameters;
 use mvmc_core::initial_params::{read_initial_def, read_opt_para_file};
 use num_complex::Complex64;
-use reference_slater::declared_output;
 use std::path::{Path, PathBuf};
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/rbm")
@@ -237,82 +234,6 @@ fn rbm_initial_overlays_sync_and_rng_follow_source_phase_order() {
             "{case} invalid load restoration"
         );
         std::fs::remove_file(invalid).unwrap();
-    }
-}
-
-#[test]
-fn public_rbm_namelist_runner_matches_source_outputs_and_parameter_order() {
-    for case in [
-        "rbm_real",
-        "rbm_cmp",
-        "rbm_general_cmp",
-        "rbm_dh24_cmp",
-        "rbm_fsz",
-        "rbm_reference_cmp",
-    ] {
-        let reference = case == "rbm_reference_cmp";
-        let path = if reference {
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs/namelist.def")
-        } else {
-            root().join(format!("../c_orbital_inputs/namelist_{case}.def"))
-        };
-        for steps in [1, 3] {
-            let mut config = mvmc_core::RunConfig::new(
-                steps,
-                if case == "rbm_real" {
-                    "real"
-                } else if case == "rbm_fsz" {
-                    "fsz"
-                } else {
-                    "cmp"
-                },
-            );
-            config.nsmp = Some(steps);
-            if !reference {
-                config.seed = Some(1);
-            }
-            let data = parse_expert_mode_files(&path).unwrap();
-            let summary = mvmc_core::run_para_opt_from_namelist(&path, config).unwrap();
-            assert_eq!(summary.status, 0);
-            assert_eq!(summary.effective_nsteps, steps as usize);
-            assert_eq!(summary.effective_nsmp, steps as usize);
-            let fixture = root().join(format!("../sr_direct/{case}_store_runner"));
-            for name in [
-                "zvo_out.dat",
-                "zvo_var.dat",
-                "zqp_opt.dat",
-                "zqp_gutzwiller_opt.dat",
-                "zqp_jastrow_opt.dat",
-                "zqp_orbital_opt.dat",
-            ] {
-                if data.rbm_section_sizes().iter().any(|&width| width != 0)
-                    && (name.starts_with("zvo_") || name.starts_with("zqp_"))
-                {
-                    continue;
-                }
-                let actual = std::fs::read_to_string(summary.output_dir.join(name)).unwrap();
-                let expected = declared_output(
-                    &data,
-                    name,
-                    std::fs::read_to_string(fixture.join(format!("step-{steps}-{name}"))).unwrap(),
-                );
-                numerical_comparison::assert_numeric_text(
-                    &actual,
-                    &expected,
-                    1e-10,
-                    1e-10,
-                    if name == "zqp_opt.dat" {
-                        &[]
-                    } else if name.starts_with("zqp_") {
-                        &[0]
-                    } else {
-                        &[]
-                    },
-                    format!("{case} {steps} {name}"),
-                );
-            }
-            std::fs::remove_dir_all(summary.output_dir).unwrap();
-        }
     }
 }
 

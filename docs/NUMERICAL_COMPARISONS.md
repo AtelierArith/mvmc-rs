@@ -53,16 +53,11 @@ Rust follows these 1.4.0 contracts; each has independent C-derived tests:
 Historical references keep their 1.3.0 contract and are compared under the
 documented translation:
 
-- 1.3.0 continued after an SR-CG solve reached its limit, as 1.4.0 does with
-  `NSRCGAbortOnFail 0`. The historical CG harnesses set that switch, and their
-  `zqp_SRinfo.dat` comparisons map the 1.4.0 layout back to 1.3.0
-  (`as_historical_cg_srinfo`: drop ` info`, print `", %d"`, and decode a status
-  `-(iter+1)` to the count `iter`).
-- The `real` and `cmp` CG prefixes meet the `|d.q| < 1e-20` guard in their
-  first solve (status `-3` and `-6`); the Julia/1.3.0 references continue the
-  solve. Only their step-1 sampling, energy and SR diagnostic columns 0-5 are
-  compared, with the 1.4.0 status asserted; later steps check repeatability
-  (`c14_cg_breakdown`). C 1.4.0 aborts these inputs by default.
+- The 1.3.0/Julia SR-CG prefix references, their `zqp_SRinfo.dat` layout
+  translation (`as_historical_cg_srinfo`) and the step-1 breakdown map
+  (`c14_cg_breakdown`) were removed in #695. Tests that still run short CG
+  optimizations set `NSRCGAbortOnFail 0` only so that a solve that reaches its
+  limit does not stop the run; they check Rust repeatability, not a reference.
 - `native_c_lanczos_576`: with `rbOld` the largest Lanczos-output difference
   from the 1.3.0 native reference is `2.45e-10` absolute (`3.4e-13` relative);
   with `raOld` Rust reproduces the earlier `1.4e-12`. The Lanczos bound is
@@ -282,30 +277,20 @@ are identical.
 - Direct SR (Cholesky of the shifted S) is well conditioned for most families:
   hubbard, dh and pairhop direct prefixes still match Julia at 1e-11.
 
-**Policy for these families** (`callback_tests::c_order_amplified_family`):
+**Policy for these families.** The Julia-order SR prefix trajectories
+(`tests/fixtures/sr_cg/*_runner`, `sr_direct/*_runner`, `runner_opt_windows`,
+`c_kernel_order`, `reviewed_cg_62b`) and the `callback_tests::check_sr_prefixes`
+harness that compared them were removed in #695 (Julia CPU references are no
+longer kept). What remains:
 
-- Step 1 sampled operands (`<O>`, `<HO>`, S/OO, stored O) against native C at
-  `abs = 1e-14`, `rel = 1e-13` (about 100 times the observed 6e-16, covering
-  other BLAS/compiler summation orders on macOS ARM), plus step-1 energy
-  (`1e-12` against C, `1e-11` against the Julia fixture) and the S-diagonal
-  extrema/size columns of `zvo_SRinfo.dat`.
-- Configurations, occupancy, projection counts and the next 624 RNG words
-  stay exact against the existing fixtures at steps 1, 2 and 3 (they are
-  unchanged), including one-step-ahead acceptance decisions. The single
-  exception is `pairhop_real` step 3: the amplified step-1/2 updates flip one
-  Metropolis acceptance, so that prefix is repeatability-only.
-- The parameter, energy (step >= 2), `zvo_var`, `zqp_*` and window outputs of
-  these runs are not compared with a reference. They are checked for
-  same-implementation repeatability (parameters, energy and configurations
-  identical on rerun), for finite values and for a nonzero SR update.
-  Window aggregation is covered by `ctest_window_fixtures`.
-- The old Julia fixtures in `tests/fixtures/sr_cg`, `sr_direct` and
-  `runner_opt_windows` remain as **historical Julia-order references**, used
-  only for the exact sampling and step-1 checks above and for families not
-  affected by this change.
-- The CG solve itself is verified at fixed operands against the C recurrence
-  (`c_toolbox/ctest_cg_refresh.c`, `tests/fixtures/sr_cg/c_refresh`,
-  `real.txt`/`complex.txt`).
+- Step-1 sampled operands (`<O>`, `<HO>`, S/OO, stored O) and step-1 energy
+  against the native C `vmc.out` dumps (`tests/fixtures/c_order_sr_operands/`)
+  at `abs = 1e-14`, `rel = 1e-13` for the operands (about 100 times the
+  observed 6e-16) and `1e-12` for the energy.
+- The CG solve itself at fixed operands against the C 1.4.0 recurrence
+  (`c_toolbox/ctest_cg_refresh.c`, `tests/fixtures/sr_cg/c_refresh`).
+- Parameter trajectories after the amplified solve are checked only for
+  same-implementation repeatability.
 - `rbm_real` has no native C operand reference because native C ignores RBM in
   real mode (#379, tmisawa/Julia-mVMC#59). `vmcmake_real.c` has no RBM code
   (the complex `vmcmake.c` has 27 mentions) and C accepts `FlagRBM=1` for real
@@ -314,9 +299,7 @@ are identical.
   5.984544891656925, identical for RBM overlay 0.125/-0.25 and for all zeros, and
   bit-identical to Rust with all RBM values zero. Rust applies the RBM factor in
   real sampling and in every local-energy ratio (#669; 6.224968242401510);
-  initial parameters agree. The Julia-derived `rbm_real` prefix checks come from
-  a real sampler without the RBM factor, so they switch it off with the
-  unit-test hook also used for `rbm_fsz` (#403). The real path is checked
+  initial parameters agree. The real path is checked
   against the complex normal path (`Orbital ComplexType 1`) instead:
   `crates/mvmc-core/tests/issue669_real_rbm_sampler.rs` (identical saved
   configurations, counters and RNG state; smallest decision margin 8.1e-4) and

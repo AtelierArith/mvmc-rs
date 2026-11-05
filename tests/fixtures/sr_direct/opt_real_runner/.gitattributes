@@ -1,2 +1,0 @@
-# Preserve canonical Julia writer trailing spaces in numerical golden output.
-*.dat whitespace=-blank-at-eol
