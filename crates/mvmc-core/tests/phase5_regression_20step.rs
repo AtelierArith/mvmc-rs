@@ -163,6 +163,7 @@ fn preflight_rejects_metadata_substrings_duplicates_and_wrong_model_settings() {
         data.i_flg_orbital_general = i64::from(model_mode(model) == "fsz");
         assert!(validate_model(model, &data).is_ok());
         data.modpara.nsrcg = 1;
+        data.modpara.nsrcg_abort_on_fail = false; // 1.3.0 references continue past CG limits (#682)
         assert!(validate_model(model, &data).is_err());
         data.modpara.nsrcg = 0;
         data.modpara.nstore_o = 0;

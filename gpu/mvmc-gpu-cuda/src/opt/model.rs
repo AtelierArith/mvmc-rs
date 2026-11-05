@@ -147,7 +147,7 @@ impl Model {
         }
         // The resident CG ports the C 1.4.0 plain StochasticOptCG_Main with its
         // abort/continue policy (NSRCGAbortOnFail). DiagScale CG (NSRCG 2 or
-        // useDiagScale), the fallback solve and RescaleSmat are CPU-only (#682).
+        // useDiagScale), the fallback solve and RescaleSmat are CPU-only (#682, #694).
         if !physcal && m.nsrcg != 0 && (m.use_diag_scale || m.nsrcg_fallback || m.rescale_smat) {
             return Err(
                 "resident GPU SR-CG supports neither DiagScale CG (NSRCG=2, \

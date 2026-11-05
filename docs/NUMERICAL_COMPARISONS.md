@@ -73,7 +73,7 @@ documented translation:
 
 Deliberate deviations from 1.4.0: an SR-CG step with no active parameter is a
 no-op (C reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds);
-the resident GPU CG rejects DiagScale, the fallback and `RescaleSmat`. The
+the resident GPU CG rejects DiagScale, the fallback and `RescaleSmat` (#694). The
 earlier C-defect fixes (#370, #669, #676, #680, #681) are unchanged.
 
 ## Comparison rules
