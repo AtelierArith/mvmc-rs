@@ -1,0 +1,12 @@
+generator=c_toolbox/integration_reference/generate.sh
+generated_utc=2026-11-05T12:35:48Z
+source=extern/mVMC-1.4.0 (unmodified copy) commit e83aa6cb1e37bfc4876848787ed2f61721a7e972
+vmc_out_sha256=2e962ca316dca97d2f48f4e3e6362fb0ff885ff6a0bcc68e8b89ee48e6ae464c
+inputs=extern/Julia-mVMC 73140156ce813efb8b528516b4a9b5640247f23b (test/integration/reference, examples/inputs)
+arch=x86_64 kernel=Linux 6.8.0-147-generic
+gcc=gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+mpich=MPICH Version: 4.2.0
+openblas=0.3.26+ds-1ubuntu0.1
+cmake_flags=-DCMAKE_BUILD_TYPE=Release -DGIT_SUBMODULE_UPDATE=OFF -DTesting=OFF (c_toolbox/physcal_native/build.sh plain)
+threads=OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1, mpiexec -n 1
+image=503e36a6615e

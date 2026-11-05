@@ -276,7 +276,14 @@ actual compiler/libc/runtime archive provenance. GNU/Linux uses the pure-Rust
 libgcc quotient port; archived macOS fixtures and their LLVM operation order
 remain unchanged. Tests select their native platform fixtures and compare all
 non-NaN bits exactly. Real normal/FSZ numerical bodies agree across these two
-verified environments. See [Linux numerical contracts](../../../docs/LINUX_NUMERICAL_CONTRACTS.md)
+verified environments.
+
+The Apple copies (`c_*.txt` without the `_linux_gnu` suffix) were generated from
+the 1.3.0 source. Under 1.4.0 the Linux companions were regenerated with
+unchanged data lines (commit `814e0be5`, header lines only), so the Apple data
+lines are kept and their header source hashes were replaced by the 1.4.0
+hashes their Linux companions record (#695), as #682 did for `c_reader.txt`.
+See [Linux numerical contracts](../../../docs/LINUX_NUMERICAL_CONTRACTS.md)
 for reproduction, source/licensing provenance, scope and the separately
 classified reader/derivative/normalization differences.
 ## Complete native C FSZ Hamiltonians (Issue #186)

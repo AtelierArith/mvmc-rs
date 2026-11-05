@@ -1,4 +1,4 @@
-//! Port of canonical pairhop_equivalent.jl; exact Julia trajectories have separate gates.
+//! One-step PairHop optimization against C 1.4.0 (port of canonical pairhop_equivalent.jl).
 use std::fs;
 use std::path::Path;
 
@@ -18,7 +18,14 @@ fn real_and_fsz_pairhop_match_the_canonical_one_step_c_reference() {
             },
         )
         .unwrap();
-        let expected = fs::read_to_string(case.join("zvo_out_first1.dat")).unwrap();
+        // First optimization row of C 1.4.0 on these inputs with their initial.def
+        // (tests/fixtures/c_integration_reference, c_toolbox/integration_reference).
+        let expected = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+                "../../tests/fixtures/c_integration_reference/hubbard_chain_pairhop_{mode}/zvo_out_first1.dat"
+            )),
+        )
+        .unwrap();
         let row: Vec<f64> = expected
             .lines()
             .next()

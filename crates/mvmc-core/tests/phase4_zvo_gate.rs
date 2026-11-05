@@ -18,12 +18,11 @@ fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
         .join("inputs")
         .join("heisenberg_chain_real")
         .join("namelist.def");
-    let reference = julia
-        .join("test")
-        .join("integration")
-        .join("reference")
-        .join("heisenberg_chain_real")
-        .join("zvo_out_first10.dat");
+    // First ten optimization rows of C 1.4.0 on the same inputs
+    // (tests/fixtures/c_integration_reference, c_toolbox/integration_reference).
+    let reference = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../tests/fixtures/c_integration_reference/heisenberg_chain_real/zvo_out_first10.dat",
+    );
     if !namelist.is_file() || !reference.is_file() {
         support::missing_fixture(
             "phase4-real",
@@ -57,7 +56,12 @@ fn heisenberg_chain_real_zvo_out_first10_matches_reference() {
     for (row, (got_row, expected_row)) in got_rows.iter().zip(expected_rows.iter()).enumerate() {
         assert_eq!(got_row.len(), expected_row.len(), "row {row} width");
         for (col, (&g, &e)) in got_row.iter().zip(expected_row.iter()).enumerate() {
-            let tol = 1.0e-10_f64.max(e.abs() * 1.0e-10);
+            // Row 0 (step-1 sampling before any update) agrees to 3e-16. The first
+            // divergence is the step-1 direct-SR solve (last-bit DPOSV/BLAS differences),
+            // amplified by later sampling: C 1.4.0 Linux (OpenBLAS) and the former C 1.3.0
+            // macOS build differ by up to 9.6e-11 relative over rows 1-9, and Rust differs
+            // from the Linux C by up to 1.7e-10 (rows 2-4). 5e-10 is about three times that.
+            let tol = 5.0e-10_f64.max(e.abs() * 5.0e-10);
             assert!(
                 (g - e).abs() <= tol,
                 "row {row} col {col}: got {g:.18e}, expected {e:.18e}, tol {tol:.3e}"

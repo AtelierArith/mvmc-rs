@@ -1,10 +1,5 @@
 # Two-hop bilinear form of the C two-electron Pfaffian update (issue #449)
 
-> **Historical mVMC 1.3.0 record (#682).** The run or extraction below used the former
-> C reference `extern/mVMC-1.3.0` (`d73d06bd`). `pfupdate_two_real.c` changed in mVMC 1.4.0, so the
-> recorded hashes and results are kept as 1.3.0 evidence and are not claims about
-> 1.4.0. See `tests/fixtures/C_REFERENCE_PROVENANCE.md`.
-
 Standalone kernel check, not a full `vmc.out` run: it evaluates the reduction of the
 authoritative C kernel `calculateNewPfMTwo_child_real` for the inputs of
 `tests/fixtures/pfaffian_cg/two_hop_bilinear.txt` (size-6 cases of the Julia fixture plus sizes
@@ -14,13 +9,16 @@ authoritative C kernel `calculateNewPfMTwo_child_real` for the inputs of
 
 ## Origin
 
-* Upstream: `extern/mVMC-1.3.0` (submodule `v1.3.0`, commit
-  `d73d06bd529d3b2573f38eb5817c4a5f52971006`).
+* Upstream: `extern/mVMC-1.4.0` (submodule `v1.4.0`, commit
+  `e83aa6cb1e37bfc4876848787ed2f61721a7e972`).
 * Source file: `src/mVMC/pfupdate_two_real.c`, SHA-256
-  `e30feeb3d1710be4db69a792fbd73408bbb0e95438af0268745acf49556c1efe`.
-* Extraction boundary: lines 167-177 (the `bMa` double loop), copied verbatim into `probe.c`
+  `79c98d367003d1f2acb304dcddad6e7c2bfa7e3f0b0a4706099ebd84856b6513`.
+* Extraction boundary: lines 169-180 (the `bMa` double loop), copied verbatim into `probe.c`
   between the `--- ... ---` markers; only the surrounding I/O is new. The `p_a/p_b/q_a/q_b`
-  loop (lines 154-164) is not extracted (it is already sequential in Rust and not changed).
+  loop (lines 154-167) is not extracted (it is already sequential in Rust and not changed).
+  1.4.0 adds `#pragma omp simd reduction(+:tmp)` to the inner loop; the probe is compiled
+  without OpenMP, so C keeps the sequential order. Regenerated under 1.4.0 (#695): the data
+  lines are identical to the former 1.3.0 extraction (lines 167-177).
 
 ```c
 for(msi=0;msi<nsize;msi++) {

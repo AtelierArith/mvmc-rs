@@ -1,5 +1,5 @@
-# Native C calculateOO from vmccal.c:769-795; macOS ARM64; clang -O0 -ffp-contract=off
-# c_toolbox/weighted_oo.c SHA-256 ace5430dbcd22f78d73f86962e5826f6d78123979fd2832db7f23718c1ae10d7
+# Native C calculateOO from mVMC 1.4.0 vmccal.c:814-839; Linux x86_64; Ubuntu clang 18.1.3 -O0 -ffp-contract=off
+# c_toolbox/weighted_oo.c SHA-256 0c73f3fc86ee41d3df78e428d5315da82aa2a4d04cbd9e1fdf4cb80c303c365c; data lines identical to the former 1.3.0 macOS ARM64 run (#695)
 # Cases exercise overflowing/underflowing unweighted products and non-unit weights.
 16687e92154ef7ac 0000000000000000
 0000000000000000 0000000000000000 0000000000000000 0000000000000000 6974e718d7d7625a 6974e718d7d7625a 0000000000000000 0000000000000000

@@ -504,8 +504,11 @@ fn inventory_all_thirteen_ctest_input_contracts() {
             data.modpara.nsr_opt_itr_smp, data.orbital_terms.len(),
             mvmc_expert_parsers::utils::parameter_init::n_slater(&data),
             if model.prefix_reference_available { "existing model gate; not executed by inventory" } else { model.reason });
-        for file in ["ctest_ref/ref_mean.dat", "ctest_ref/ref_std.dat"] {
-            let values = read_values(&fixture.join(file));
+        let references = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/ctest_upstream_reference")
+            .join(model.fixture);
+        for file in ["ref_mean.dat", "ref_std.dat"] {
+            let values = read_values(&references.join(file));
             assert!(values.len() >= 2 && values.iter().all(|v| v.is_finite()));
         }
     }
