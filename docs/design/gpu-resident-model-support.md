@@ -18,6 +18,12 @@ Sources used (checked 2026-11-04):
   references remain the recorded revisions `47452f90…` (Opt) and
   `61103114…` (PhysCal). A family taken from a newer pin must record its own
   revision.
+- Pin update (2026-11-06, #725): the submodule now pins `6d73c187`. Between
+  `7314015` and `6d73c187`, `ext/*.jl` and `src/gpu.jl` differ only by one
+  comment in `ext/cuda_slater_assembly.jl`. The Julia GPU column and its
+  `ext/` line citations therefore hold at both pins. The shared entry check
+  `validate_supported_modpara` follows C 1.4.0 at the new pin (see
+  `docs/PROJECT_DECISIONS.md`, "Julia reference pin").
 - C: `extern/mVMC-1.4.0` (`v1.4.0`, `e83aa6cb`), `src/mVMC/*.c`.
 
 Authority follows AGENTS.md. For a resident GPU path, Julia GPU is the accepted

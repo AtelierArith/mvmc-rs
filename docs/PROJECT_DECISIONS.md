@@ -15,7 +15,9 @@ Add new decisions here, not in private notes.
 (`extern/mVMC-1.3.0`, `d73d06bd`) to mVMC 1.4.0 (`v1.4.0`, `e83aa6cb`).
 Implementation is tracked in #682. The survey of the differences is in #677
 (issuecomment-6648989108). The matching proposal for the Julia reference is
-tmisawa/Julia-mVMC#95.
+tmisawa/Julia-mVMC#95. tmisawa/Julia-mVMC#96 implemented it and merged on
+2026-11-06; the submodule pin was then moved (see "Julia reference pin"
+below).
 
 - **Submodule:** the C reference is updated as a submodule, nested submodules
   included. `extern/mVMC-1.3.0` is replaced by `extern/mVMC-1.4.0` at `v1.4.0`.
@@ -54,6 +56,42 @@ tmisawa/Julia-mVMC#95.
   Jastrow, t-J, `NExUpdatePath=6`, backflow) are tracked separately under the
   C-only features policy below.
 
+## Julia reference pin
+
+**Decision (2026-11-06, #725):** `extern/Julia-mVMC` moves from `7314015` to
+upstream `main` `6d73c18759a56d899214bdead74ed331a467516f`. That commit merged
+tmisawa/Julia-mVMC#96 (`julia-patch`, closes tmisawa/Julia-mVMC#95), which
+moved Julia's C reference to mVMC 1.4.0.
+
+- **Lock:** `Manifest-v1.13.toml` is byte-identical between the two pins, so
+  the recorded fixture hashes stay valid.
+- **CPU:** PR #96 changes only the CPU side: the SR-CG statuses, abort and
+  fallback, DiagScale and `RescaleSmat`; the strict Jastrow reader; the real
+  two-electron update reading `rbOld`; the PhysCal timer's `addPhysTwist`
+  line; and the regenerated C 1.4.0 integration references. Its regenerated
+  `test/integration/reference` files are byte-identical to the 37 files they
+  share with `tests/fixtures/c_integration_reference/`. The two sets were
+  generated independently from C 1.4.0. The inputs that Rust tests read from
+  the submodule are unchanged. The only changed input,
+  `heisenberg_chain_real_nsrcg/inputs/modpara.def`, gained the line
+  `NSRCGAbortOnFail 0`, and no Rust test reads that file.
+- **GPU:** the diff from `7314015` to `6d73c187` over
+  `MVMCOptimizers.jl/ext/`, `MVMCOptimizers.jl/src/gpu.jl` and
+  `benchmark/cuda/` changes one comment in `ext/cuda_slater_assembly.jl`,
+  which now cites the C source as 1.4.0. No GPU kernel, RNG or runner code
+  changed. The resident GPU fixtures therefore keep their recorded identifiers
+  (`7314015` and the per-fixture revisions) and remain the accepted GPU
+  reference. They were not regenerated at `6d73c187`. The shared entry check
+  `validate_supported_modpara` (called from `validate_cuda_data`) now follows
+  the C 1.4.0 rules:
+  - it accepts `NSRCG≥2` and `useDiagScale`, and accepts `RescaleSmat` with
+    `NSRCG=1`;
+  - it rejects `reweight=1`, and `NSRCG≠0` combined with `DSROptStepDt<0`;
+  - Julia GPU Opt still requires `NSRCG=0` (`ext/cuda_runners.jl:27-28`).
+- **Historical identifiers:** fixtures, benchmark results and survey records
+  that cite `7314015` keep that citation. Moving the pin does not regenerate or
+  reverify them.
+
 ## Removing 1.3.0 and Julia CPU references
 
 **Decision (owner, 2026-11-05):** once the move to mVMC 1.4.0 is complete
@@ -70,8 +108,10 @@ Tracked in #695.
   - Historical Julia CPU fixtures and goldens. Tests that compare Rust CPU
     with Julia CPU output are deleted or re-pointed to C 1.4.0 references.
 - **Keep:**
-  - The Julia GPU fixtures (pin `7314015`, XORWOW contract). They are the
-    accepted resident GPU reference (AGENTS.md), not 1.3.0 data.
+  - The Julia GPU fixtures (generated at Julia pin `7314015`, XORWOW
+    contract). They are the accepted resident GPU reference (AGENTS.md), not
+    1.3.0 data. They stay valid after the submodule moved to `6d73c187`
+    (see "Julia reference pin" below).
   - Input files that other tests or the GPU tests still read.
 - **Replace** a reference a test still needs with a C 1.4.0-generated one with
   recorded provenance. Never use a Rust-generated expectation.
