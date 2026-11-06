@@ -1,8 +1,9 @@
 //! Rust counterpart of Julia-mVMC's `test/integration/ctest_equivalent.jl`.
 //!
-//! Current long acceptance uses 20 steps and a matched 20-sample window.
-//! Independent reference generation is opt-in. Select fixtures with
-//! `MVMC_RS_CTEST_MODELS=heisenberg_chain_real,hubbard_chain_real`.
+//! The long gate runs each model at its upstream `NSROptItrStep`/`NSROptItrSmp`
+//! and applies the C/Julia ctest rule. Select models with
+//! `MVMC_RS_CTEST_UPSTREAM_MODELS=heisenberg_chain_real,hubbard_chain_real` (or `all`).
+//! The 20-step and prefix gates were removed with their fixtures in #702 (#689).
 
 use std::fs;
 use std::path::Path;

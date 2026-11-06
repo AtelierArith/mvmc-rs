@@ -18,14 +18,14 @@ class LongCtestDriver(unittest.TestCase):
 
     def test_selection_and_unknown_model_provenance(self):
         self.assertIn("heisenberg_chain_real", driver.requested_models("all"))
-        entry = driver.model_provenance("../etc")
-        self.assertFalse(entry["reference_present"])
-        self.assertFalse(driver.model_provenance("no_such_model")["reference_present"])
+        entry = driver.upstream_provenance("../etc")
+        self.assertFalse(entry["upstream_reference_present"])
+        self.assertFalse(driver.upstream_provenance("no_such_model")["upstream_reference_present"])
 
-    def test_verdict_gate_is_upstream_rule_and_supplementary_never_decides(self):
+    def test_verdict_gate_is_the_only_upstream_rule_gate(self):
         self.assertEqual(driver.VERDICT_GATE[1], "rust_ctest_upstream_rule_selected_models")
         self.assertEqual(driver.VERDICT_GATE[2], "MVMC_RS_CTEST_UPSTREAM_MODELS")
-        self.assertNotIn(driver.VERDICT_GATE, driver.SUPPLEMENTARY_GATES)
+        self.assertFalse(hasattr(driver, "SUPPLEMENTARY_GATES"))
         self.assertEqual(driver.classify(["MissingFixture"], [101]), "MissingFixture")
 
     def test_every_known_model_has_upstream_reference(self):

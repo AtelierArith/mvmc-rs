@@ -31,12 +31,10 @@ if [[ -n ${MVMC_RS_THREADED_FILTER:-} ]]; then
     filter="($filter) & (${MVMC_RS_THREADED_FILTER})"
 fi
 fixture_root=${MVMC_RS_THREADED_FIXTURE_ROOT:-$repo}
-paths=(tests/fixtures/ctest_model_prefixes/provenance.txt tests/fixtures/c_counter_605)
-paths+=(tests/fixtures/ctest_model_prefixes/general_rbm_cmp_cg/step-1
-    tests/fixtures/reviewed_cg_62b/canonical_general_rbm
-    extern/Julia-mVMC/test/integration/reference/general_rbm_cmp/inputs)
+# The inputs read by require_runner_fixtures() in threaded_issue182.rs. The
+# ctest prefix, c_counter_605 and reviewed_cg_62b fixtures were removed in #695.
+paths=()
 for model in heisenberg_chain_real heisenberg_chain_cmp heisenberg_chain_fsz hubbard_chain_real; do
-    paths+=("tests/fixtures/ctest_model_prefixes/$model/step-1")
     paths+=("extern/Julia-mVMC/test/integration/reference/$model/inputs")
     paths+=("extern/Julia-mVMC/test/integration/reference/$model/physcal_ref")
 done
