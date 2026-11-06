@@ -46,8 +46,10 @@ tmisawa/Julia-mVMC#95.
   - `rsbOld = rbOld + t*Nsite` on every two-electron update; the PhysCal timer
     report has the `addPhysTwist` line; `reweight 1` is rejected (not ported).
   - Deviations: an SR-CG step with no active parameter stays a no-op (1.4.0
-    aborts and reads `r[0]` out of bounds); the resident GPU CG supports plain
-    CG with the abort policy only. Details: `docs/NUMERICAL_COMPARISONS.md`.
+    aborts and reads `r[0]` out of bounds). The resident GPU CG ports plain and
+    DiagScale CG, the fallback and `RescaleSmat` with the abort policy for real
+    Opt (#694); complex and FSZ Opt stay direct SR. Details:
+    `docs/NUMERICAL_COMPARISONS.md`.
 - **Out of scope for #682:** the new 1.4.0 features (reweight, twist, spin
   Jastrow, t-J, `NExUpdatePath=6`, backflow) are tracked separately under the
   C-only features policy below.

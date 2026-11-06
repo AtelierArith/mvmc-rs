@@ -60,7 +60,7 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 | 10 | Lanczos法 | Cがサポートする任意の軌道/項の組(`InterAll` を含む) | FSZなし(Cも拒否)、スピンを変える `Trans` なし。スピン保存 `InterAll` はサポート。`NSplitSize>1` はCと同様にサポート。$\alpha$ が失敗すると `NaN` を書き出す |
 | 11 | 最適化における `TwoBodyGEx` | 読み込まれ、オプティマイザでは無視される | 読み込まれ無視される(`validate_para_opt` は PhysCal と同様に受理) |
 | 12 | BackFlow (`BF`, `BFRange`) | C は拒否(`_NOTBACKFLOW`) | 最適化と PhysCal の両方で拒否 |
-| 13 | `NSRCG`、`useDiagScale`、`RescaleSmat`、`NSRCGFallback`、`NSRCGAbortOnFail` | 1.4.0: `NSRCG 2` は `NSRCG 1` の DiagScale CG。その他の非ゼロ値は通常の CG で、`NSRCG=1` 以外では `NStore=0` のストレージが未定義。`RescaleSmat` には `NSRCG 1` が必要 | 同じ正規化、remark、エラー([5.4](05-theory-sr.md#54-共役勾配法ソルバーnsrcg--1))。未定義のストレージは拒否。常駐GPUは通常の CG のみ |
+| 13 | `NSRCG`、`useDiagScale`、`RescaleSmat`、`NSRCGFallback`、`NSRCGAbortOnFail` | 1.4.0: `NSRCG 2` は `NSRCG 1` の DiagScale CG。その他の非ゼロ値は通常の CG で、`NSRCG=1` 以外では `NStore=0` のストレージが未定義。`RescaleSmat` には `NSRCG 1` が必要 | 同じ正規化、remark、エラー([5.4](05-theory-sr.md#54-共役勾配法ソルバーnsrcg--1))。未定義のストレージは拒否。常駐GPUは実数 Opt でこれらすべてに対応(複素数と FSZ の常駐 Opt は直接法 SR のみ) |
 | 14 | `exp`, `cosh`, `hypot`, `sin/cos` | libm / C99の複素数 | Julia互換の移植(最下位ビットの差が生じうる) |
 | 15 | ローカルエネルギーと `NProj` の和におけるOpenMPのリダクション順序 | スレッド依存 | 固定された逐次順序 |
 | 16 | $\lvert\langle H\rangle\rvert\le10^{-14}$ のときの分散の列 | $\pm\infty$/NaN | `0.0`(最適化の出力のみ) |

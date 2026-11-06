@@ -78,12 +78,16 @@ const KERNELS: &[&str] = &[
     "opt_rbm_theta",
     "opt_rbm_diff",
     "cg_moments",
+    "cg_rescale",
+    "cg_rescale_samples",
     "cg_prepare",
+    "cg_diag_init",
     "cg_ty",
     "cg_oy",
     "cg_iterate",
     "cg_alpha",
     "cg_refresh",
+    "cg_fallback",
     "cg_finish",
     "opt_slater_c",
     "opt_slater_f_c",
@@ -161,11 +165,15 @@ pub struct OptResult {
     pub parameters_imag: Vec<f64>,
     pub seed: u64,
     pub walkers: usize,
-    /// SR-CG status of each step: the C 1.4.0 `StochasticOptCG_Main` return
-    /// value (iteration count, or `-(iter+1)` after a breakdown or
-    /// non-convergence that `NSRCGAbortOnFail = 0` continued), the last
-    /// `zqp_SRinfo.dat` column; empty for direct SR.
+    /// SR-CG info of each step, the last `zqp_SRinfo.dat` column: the C 1.4.0
+    /// return value of the first solve (`StochasticOptCG_Main`, or the
+    /// DiagScale Main with `useDiagScale`): its iteration count, or
+    /// `-(iter+1)` after a breakdown or non-convergence that the fallback or
+    /// `NSRCGAbortOnFail = 0` continued. Empty for direct SR.
     pub cg_iterations: Vec<i32>,
+    /// Status of the `NSRCGFallback` solve (the other CG variant from `x = 0`)
+    /// of each step, `None` where it did not run. Empty for direct SR.
+    pub cg_fallback: Vec<Option<i32>>,
 }
 
 /// Optimize real normal-orbital Gutzwiller/Jastrow inputs, including DH2/DH4,
@@ -439,7 +447,15 @@ impl State {
                 remaining: alloc(1, 4)?,
                 cg: match cg_limit {
                     Some(limit) => {
-                        Some(cg::CgBuffers::allocate(exec, np, w, config.nsteps, limit)?)
+                        let fallback = model.data.modpara.nsrcg_fallback;
+                        Some(cg::CgBuffers::allocate(
+                            exec,
+                            np,
+                            w,
+                            config.nsteps,
+                            limit,
+                            fallback,
+                        )?)
                     }
                     None => None,
                 },
@@ -1329,18 +1345,26 @@ impl State {
                 (values, zeros)
             };
             let mut cg_iterations = vec![];
+            let mut cg_fallback = vec![];
             if let Some(cg) = &self.buffers.cg {
                 cg_iterations = vec![0; self.steps];
-                // SAFETY: one i32 per optimization step.
+                let mut fallback = vec![0; self.steps];
+                // SAFETY: one i32 per optimization step in each buffer.
                 unsafe {
                     exec.download(&mut cg_iterations, exec.ptr(&cg.iterations)?)?;
+                    exec.download(&mut fallback, exec.ptr(&cg.fallback)?)?;
                 }
+                cg_fallback = fallback
+                    .into_iter()
+                    .map(|s| (s != i32::MIN).then_some(s))
+                    .collect();
             }
             Ok(OptResult {
                 energies,
                 parameters,
                 parameters_imag,
                 cg_iterations,
+                cg_fallback,
                 seed: self.model.seed,
                 walkers: self.resident.sampler.geom.walkers,
             })
