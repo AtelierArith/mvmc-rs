@@ -79,6 +79,14 @@ Tracked in #695.
   C 1.3.0 or Julia CPU output. `tests/fixtures/C_REFERENCE_PROVENANCE.md` still
   lists historical records kept on purpose: dated benchmark results,
   investigation notes and tools that pin `d73d06bd` by design.
+- **Opt-in ctest gates (#689, 2026-11-06):** the prefix gate
+  (`MVMC_RS_CTEST_PREFIX_MODELS`), the 20-step ctest gate (`MVMC_RS_CTEST_MODELS`)
+  and the 20-step phase5 gate (`MVMC_RS_PHASE5_20STEP`) are retired with their
+  Julia/1.3.0 fixtures (#702); they are not regenerated, because their references
+  were Julia CPU trajectories. The upstream-rule gate
+  (`MVMC_RS_CTEST_UPSTREAM_MODELS`, C-shipped references, byte-identical in 1.4.0)
+  is the only long ctest gate; it passes for all 13 models on main
+  (`docs/ISSUE180_UPSTREAM_CTEST_RULE.md`).
 
 ## Clear C defects are not reproduced
 

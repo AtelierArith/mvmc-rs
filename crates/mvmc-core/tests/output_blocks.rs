@@ -146,7 +146,7 @@ fn optimization_var_writes_complete_c_parameter_storage_and_truncates_on_first_s
 
 // Independent constant-history case of C avevar.c: two completed records,
 // measured energies -3 and 9, identical post-SR coefficients, zero deviations.
-// Full nonconstant C-window fixtures are covered by ctest_model_prefixes.
+// The nonconstant C-window prefix fixtures (ctest_model_prefixes) were removed in #702.
 fn constant_window(parameters: Vec<Complex64>) -> VmcOptimizationState {
     let mut state = VmcOptimizationState::zeros(0, 0, 0, 0, 0, 0, false, false);
     state.opt_data = vec![

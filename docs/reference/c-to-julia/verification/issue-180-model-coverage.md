@@ -111,18 +111,19 @@ cargo nextest run -p mvmc-core --cargo-profile test-fast \
 cargo nextest run -p mvmc-core --cargo-profile test-fast \
   --test ctest_equivalent --run-ignored only \
   -E 'test(audit_thirteen_ctest_one_step_execution_paths)' --success-output immediate
-MVMC_RS_CTEST_PREFIXES=1 cargo nextest run -p mvmc-core \
-  --cargo-profile test-fast --test ctest_model_prefixes --run-ignored only \
-  -E 'test(general_rbm_ctest_short_prefix_and_twenty_step_discrete_trajectory)' \
-  --no-fail-fast --retries 0 --success-output immediate
-MVMC_RS_CTEST_PREFIX_MODELS=all cargo nextest run -p mvmc-core --locked \
-  --cargo-profile test-fast --test ctest_model_prefixes --run-ignored only \
-  -E 'test(canonical_models_match_independent_prefix_oracles)' \
-  --no-fail-fast --retries 0 --success-output immediate
-MVMC_RS_CTEST_MODELS=heisenberg_chain_real cargo nextest run -p mvmc-core \
+MVMC_RS_CTEST_UPSTREAM_MODELS=all cargo nextest run -p mvmc-core \
   --cargo-profile test-fast --test ctest_equivalent --run-ignored only \
-  -E 'test(rust_ctest_equivalent_selected_models)' --success-output immediate
+  -E 'test(rust_ctest_upstream_rule_selected_models)' \
+  --no-fail-fast --retries 0 --success-output immediate
 ```
+
+The prefix gates described in this record (`ctest_model_prefixes`, selected
+with `MVMC_RS_CTEST_PREFIXES` / `MVMC_RS_CTEST_PREFIX_MODELS`) and the 20-step
+`rust_ctest_equivalent_selected_models` gate (`MVMC_RS_CTEST_MODELS`) were
+removed with their Julia/1.3.0 prefix fixtures in #702 (#695, #689). The
+`tests/fixtures/ctest_model_prefixes` paths below are historical. The
+upstream-rule gate above is the remaining long ctest gate; see
+[ISSUE180_UPSTREAM_CTEST_RULE.md](../../../ISSUE180_UPSTREAM_CTEST_RULE.md).
 
 The inventory and execution-audit commands are diagnostics, not #180 parity
 execution. Explicit invocation of the long or prefix gate with absent, empty,
