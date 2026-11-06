@@ -89,6 +89,14 @@ Tracked in #695.
   (`MVMC_RS_CTEST_UPSTREAM_MODELS`, C-shipped references, byte-identical in 1.4.0)
   is the only long ctest gate; it passes for all 13 models on main
   (`docs/ISSUE180_UPSTREAM_CTEST_RULE.md`).
+- **Retired evidence tooling (#718, 2026-11-06):** the #182/#183 threaded gate
+  planner (`scripts/thread_gate_plan_183.py`, its test and
+  `docs/THREAD_GATE_PLAN_183.md`) and the #184 matrix generator
+  (`scripts/build_issue184_complete_matrix.py`) are deleted. They planned or cited
+  tests and fixtures removed in #695, their issues (#182-#185) are closed, and no
+  current gate uses them. Dated records they produced stay as history and are not
+  regenerated; `scripts/verify_threaded_issue182.sh` remains for the existing
+  `threaded_issue182.rs` gate.
 
 ## Clear C defects are not reproduced
 
