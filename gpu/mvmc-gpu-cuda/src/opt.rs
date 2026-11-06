@@ -12,6 +12,8 @@ mod complex_tests;
 #[cfg(test)]
 mod dh_tests;
 #[cfg(test)]
+mod fsz_complex_tests;
+#[cfg(test)]
 mod fsz_tests;
 #[cfg(test)]
 mod localspin_tests;
@@ -88,6 +90,7 @@ const KERNELS: &[&str] = &[
     "cg_fallback",
     "cg_finish",
     "opt_slater_c",
+    "opt_slater_f_c",
     "opt_initial_commit_c",
     "opt_overlaps_c",
     "opt_derivatives_c",
@@ -478,7 +481,9 @@ impl State {
         let items = m.nq * m.ns * m.ns * if m.fsz { 4 } else { 1 };
         unsafe {
             exec.launch(
-                module.function(if m.fsz {
+                module.function(if m.fsz && m.complex {
+                    "opt_slater_f_c"
+                } else if m.fsz {
                     "opt_slater_f"
                 } else if m.complex {
                     "opt_slater_c"
@@ -799,6 +804,7 @@ impl State {
                         i(terms),
                         i(s.geom.walkers),
                         p(&self.resident.error)?,
+                        Arg::I(i32::from(m.fsz)),
                     ],
                 )
             };
@@ -891,6 +897,7 @@ impl State {
                         i(w),
                         p(&self.resident.error)?,
                         p(&self.resident.valid)?,
+                        Arg::I(i32::from(m.fsz)),
                     ],
                 )?;
             }

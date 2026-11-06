@@ -346,8 +346,26 @@ pub(crate) fn budget(aw: i32, n: usize, kappa: f64) -> f64 {
     16.0 * (aw + 1) as f64 * n as f64 * f64::EPSILON * kappa
 }
 
+/// A CPU C-order complex evaluation of one walker configuration: the normal
+/// complex path ([`Cpu`]) or complex FSZ (`fsz_complex_tests`).
+pub(crate) trait ComplexReference {
+    fn evaluate(&mut self, cfg: &[i32]) -> Evaluation;
+}
+
+impl ComplexReference for Cpu {
+    fn evaluate(&mut self, cfg: &[i32]) -> Evaluation {
+        Cpu::evaluate(self, cfg)
+    }
+}
+
 /// Compare one stage with the CPU C-order complex evaluation of the same walkers.
-fn assert_stage(name: &str, stage: &str, cpu: &mut Cpu, state: &State, backend: &mut CudaEngine) {
+pub(crate) fn assert_stage(
+    name: &str,
+    stage: &str,
+    cpu: &mut impl ComplexReference,
+    state: &State,
+    backend: &mut CudaEngine,
+) {
     let cfg = with_raw_exec(backend, "complex.cfg", |exec| {
         let g = state.resident.sampler.geom;
         download::<i32>(exec, &state.resident.sampler.ele, g.walkers * g.n)

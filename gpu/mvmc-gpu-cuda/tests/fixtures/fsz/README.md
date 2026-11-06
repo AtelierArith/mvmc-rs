@@ -20,6 +20,8 @@ Each directory's `inputs.sha256` lists its file hashes.
 | `kondo_fsz_kgc` | 8 conduction + 8 local | 14 | not set | 3 (KondoGC) | `OrbitalGeneral`, 46 classes | 2 | 55 |
 | `kondo_fsz_kgc_L128` | 64 conduction + 64 local | 128 | not set | 3 | `OrbitalGeneral`, 382 classes | 2 | 447 |
 | `heisenberg_fsz_L16` | 16 local | 16 | not set | 2 (exchange or local spin flip) | `OrbitalGeneral`, 46 classes | 2 | 55 |
+| `hubbard_fsz_complex_L16` | 16 | 12 | not set | 1 | complex `OrbitalGeneral`, 46 classes | 2 | 55 (110 SR components) |
+| `hubbard_fsz_complex_L128` | 128 | 128 | not set | 0 | complex `OrbitalGeneral`, 382 classes | 2 | 447 (894) |
 
 - C reads `2Sz=-1` only as the default; an explicit `2Sz -1` is an error
   (`readdef.c:2215-2218`), so the Sz-free inputs omit the line.
@@ -40,6 +42,12 @@ Each directory's `inputs.sha256` lists its file hashes.
   exchange (Exchange 0.5, Hund 0.5, CoulombInter -0.25) is joined by a
   Hermitian pair of spin-changing InterAll terms (`S+_i S+_j` type, 0.15) on
   two bonds.
+- The complex Hubbard chains (sub-milestone (c)) declare complex general
+  orbitals (`ComplexType 1`, so C `AllComplexFlag=1` selects the complex FSZ
+  path). They carry the Transfer phase `exp(0.25 i)` on the spin-conserving
+  hops and `exp(0.6 i)` on the spin-flip hops (Hermitian pairs), the
+  spin-changing InterAll value `0.2 ± 0.1 i`, and the TransSym weight
+  `0.6+0.8i` of `../complex`.
 - OneBodyG, TwoBodyG (and TwoBodyGEx on the Hubbard chains) include
   spin-flip pairs.
 - General orbitals are indexed by the class `(spin_i, spin_j, (j - i) mod L)`
@@ -55,6 +63,9 @@ and PhysCal; see "Timing").
 
 ## Physics and sampler contract
 
+The complex inputs follow C's complex FSZ path (`CalculateMAll_fsz`,
+`vmcmake_fsz.c`, `pfupdate_fsz.c`, `calham_fsz.c`, `locgrn_fsz.c`, the complex
+`StochasticOpt` over `2*NPara` real components). The real inputs follow
 C 1.4.0's real FSZ path (`iFlgOrbitalGeneral=1`, `AllComplexFlag=0`):
 `UpdateSlaterElm_fsz`, `CalculateMAll_fsz_real`, `CalculateNewPfM2_fsz_real`
 and `UpdateMAll_fsz_real`, `calham_fsz_real.c`, `locgrn_fsz_real.c`,
@@ -64,9 +75,17 @@ extends the Julia GPU five-word tape; see `docs/design/gpu-resident-opt.md`
 
 ## Contract and bounds
 
-Tests: `opt::fsz_tests` (Opt), `opt::physcal::fsz_tests` (PhysCal) and the
-host-only `opt::scope_tests::resident_scope_accepts_fsz_general_orbitals`
-and `resident_scope_rejects_fsz_families_before_cuda`. GPU stage tests use 8
+Tests: `opt::fsz_tests` and `opt::fsz_complex_tests` (Opt),
+`opt::physcal::fsz_tests` and `opt::physcal::fsz_complex_tests` (PhysCal), and
+the host-only `opt::scope_tests::resident_scope_accepts_fsz_general_orbitals`,
+`resident_scope_accepts_complex_fsz` and
+`resident_scope_rejects_fsz_families_before_cuda`. The complex tests use the
+complex stage checks of `../complex/README.md` (complex energies and Green
+functions required, SR against C's complex system rebuilt on the host,
+`4 eps` gauge) with the complex FSZ CPU kernels (`calc_m_all_fsz_complex`,
+`calculate_local_energy_fsz`, `slater_elm_diff_fsz`,
+`green_func1_fsz_complex`, `green_func2_fsz_complex`) and the FSZ replay with
+complex Pfaffians. GPU stage tests use 8
 walkers, seed 79, the fixed formula tape of `../localspin/README.md`, and
 8·Nsite proposals (L128: 128).
 
@@ -131,8 +150,11 @@ largest normalized error (bound 16):
 | `kondo_fsz_kgc` | 2.2e3 / 2.2e4 / 5.3e3 | ≤0.006 / ≤0.001 / ≤0.006 | ≤0.15 | 83 (35 local flips) / 20 | 2.4e-3 | 2.0e-17 | 0 |
 | `kondo_fsz_kgc_L128` | 4.7e3 / 2.0e4 / 2.0e4 | <0.001 / <0.001 / ≤0.001 | ≤0.025 | 120 (58 local flips) / 9 | 4.4e-2 | 1.6e-17 | 0 |
 | `heisenberg_fsz_L16` | 1.6e3 / 2.2e2 / 2.2e2 | ≤0.005 / ≤0.003 / ≤0.006 | ≤0.057 | 212 (212 local flips) / 77 | 8.6e-3 | 8.5e-17 | 0 |
+| `hubbard_fsz_complex_L16` | 5.1e2 / 2.2e2 / 2.0e2 | ≤0.008 / ≤0.004 / ≤0.026 | ≤0.11 | 164 / 62 | 5.7e-4 | 8.8e-18 | 0 |
+| `hubbard_fsz_complex_L128` | 6.6e3 / 6.7e3 / 7.6e3 | <0.001 / <0.001 / ≤0.001 | ≤0.002 | 202 / 0 | 9.9e-4 | 5.4e-18 | 8.9e-16 |
 
-The invalid-plane test (L16) is within 0.011 of its budget. The first
+The invalid-plane tests (L16) are within 0.011 (real) and 0.028 (complex)
+of their budget. The first
 floating difference is in the independent factorization: the device inverse
 (PFAPACK rebuild, paired factor at `2Ne=128`, rank-two or queued updates)
 against the CPU PFAPACK inverse. Every supplied-tape decision still matched.
@@ -165,6 +187,10 @@ including startup and output files), with `NVMCSample 64`, `NVMCWarmUp 1`,
 | `kondo_fsz_kgc` PhysCal | 0.075 / 0.074 | 0.53 |
 | `heisenberg_fsz_L16` PhysCal | 0.133 / 0.133 | 0.65 |
 | `kondo_fsz_kgc_L128` PhysCal | 4.51 / 4.52 | 18.1 |
+| `hubbard_fsz_complex_L16` Opt | 42.3 / 0.170 | 0.77 |
+| `hubbard_fsz_complex_L128` Opt | 2.30 / 2.29 | 24.0 |
+| `hubbard_fsz_complex_L16` PhysCal | 36.4 / 0.182 | 0.74 |
+| `hubbard_fsz_complex_L128` PhysCal | 2.21 / 2.20 | 22.2 |
 
 The GPU first call of a process includes NVRTC module compilation. Every
 sampling, measurement and SR series makes 0 explicit uploads, 0 downloads and
@@ -181,4 +207,7 @@ statistical observations only. `E[0], E[19]` on the GPU / CPU: L16
 `7.10, 3.34` / `8.64, 3.03`; Kondo `-0.011, -0.485` / `0.722, -1.084`; L128
 `108.5, 90.8` / `108.9, 93.4`; KondoGC `4.04, 1.24` / `3.24, 1.16`; Heisenberg
 `-8.24, -8.53` / `-7.97, -8.50`; KondoGC 64+64 `44.0, 29.8` / `32.9, 36.3`
-(128 warmup proposals per walker do not equilibrate this chain).
+(128 warmup proposals per walker do not equilibrate this chain); complex
+L16 `5.91, 2.60` / `5.57, 2.39`; complex L128 `98.6, 88.1` / `95.3, 86.9`.
+The complex sampler uses immediate C rank-two updates (no delayed queue or
+paired factor), as for complex normal orbitals.

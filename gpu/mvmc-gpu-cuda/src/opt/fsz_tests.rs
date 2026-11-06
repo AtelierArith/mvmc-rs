@@ -208,8 +208,26 @@ pub(crate) struct Replay {
     pub local_flips: usize,
 }
 
+/// A CPU FSZ model the replay can score: its data and the log overlap.
+pub(crate) trait FszOverlap {
+    fn data(&self) -> &mvmc_core::ExpertModeData;
+    /// `(log(|ip| + 1e-100), ip finite and nonzero)` of a configuration.
+    fn log_overlap(&mut self, cfg: &[i32]) -> (f64, bool);
+}
+
+impl FszOverlap for Cpu {
+    fn data(&self) -> &mvmc_core::ExpertModeData {
+        &self.data
+    }
+
+    fn log_overlap(&mut self, cfg: &[i32]) -> (f64, bool) {
+        let ip = self.factor(cfg);
+        ((ip.abs() + 1e-100).ln(), ip.is_finite() && ip != 0.0)
+    }
+}
+
 pub(crate) fn replay(
-    cpu: &mut Cpu,
+    cpu: &mut impl FszOverlap,
     model: &Model,
     initial: &[i32],
     tape: &[u32],
@@ -223,12 +241,12 @@ pub(crate) fn replay(
     let mut accepted = vec![0i32; walkers];
     let (mut margin, mut spin_moves, mut exchanges, mut local_flips) = (f64::INFINITY, 0, 0, 0);
     let scale = 4294967296.0;
-    let log_abs = |x: f64| (x.abs() + 1e-100).ln();
     for w in 0..walkers {
         let e = &mut cfg[w * n..(w + 1) * n];
         let (_, _, _, mut num) = arrays(e, ns);
-        let mut counts = cpu.counts(&num);
-        let mut log_old = log_abs(cpu.factor(e));
+        let mut counts = vec![0i64; model.nproj];
+        make_proj_cnt(&mut counts, &num, cpu.data());
+        let mut log_old = cpu.log_overlap(e).0;
         for step in 0..steps {
             let t = &tape[5 * (w + walkers * step)..][..5];
             let mi = (t[0] % n as u32) as usize;
@@ -276,7 +294,7 @@ pub(crate) fn replay(
                 e[partner] = pto as i32;
                 num[pfrom] = 0;
                 num[pto] = 1;
-                make_proj_cnt(&mut proposed, &num, &cpu.data);
+                make_proj_cnt(&mut proposed, &num, cpu.data());
                 assert_eq!(proposed, counts, "an exchange changes no counter");
             } else {
                 // C UpdateProjCnt_fsz: spin-agnostic post-move totals, and no
@@ -288,22 +306,21 @@ pub(crate) fn replay(
                     &mut proposed,
                     &counts,
                     &num,
-                    &cpu.data,
+                    cpu.data(),
                 );
             }
             let proj = if exchange {
                 0.0
             } else {
-                log_proj_ratio(&proposed, &counts, &cpu.data)
+                log_proj_ratio(&proposed, &counts, cpu.data())
             };
-            let ip_new = cpu.factor(e);
-            let log_new = log_abs(ip_new);
+            let (log_new, ok) = cpu.log_overlap(e);
             let ratio = 2.0 * (proj + log_new - log_old);
             let u = (t[4] as f64 / scale).ln();
             if u.is_finite() {
                 margin = margin.min((u - ratio).abs());
             }
-            if ip_new.is_finite() && ip_new != 0.0 && u < ratio {
+            if ok && u < ratio {
                 accepted[w] += 1;
                 log_old = log_new;
                 counts = proposed;

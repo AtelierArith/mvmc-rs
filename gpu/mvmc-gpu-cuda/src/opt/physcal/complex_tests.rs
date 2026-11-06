@@ -94,13 +94,25 @@ fn gpu_rows(model: &Model, ops: &Operators, v: &[Complex64]) -> (Vec<Complex64>,
     (rows, scale)
 }
 
-fn assert_values(
+/// CPU C-order complex PhysCal rows of one walker and its condition number:
+/// the normal complex path ([`Cpu`]) or complex FSZ (`fsz_complex_tests`).
+pub(crate) trait ComplexRows {
+    fn rows(&mut self, model: &Model, walker: &[i32]) -> (Vec<Complex64>, f64);
+}
+
+impl ComplexRows for Cpu {
+    fn rows(&mut self, model: &Model, walker: &[i32]) -> (Vec<Complex64>, f64) {
+        cpu_rows(self, model, walker)
+    }
+}
+
+pub(crate) fn assert_values(
     name: &str,
     stage: &str,
     backend: &mut CudaEngine,
     state: &State,
     measurement: &Measurement,
-    cpu: &mut Cpu,
+    cpu: &mut impl ComplexRows,
 ) {
     let m = &state.model;
     let g = state.resident.sampler.geom;
@@ -128,7 +140,7 @@ fn assert_values(
     let mut window_scale = vec![0f64; rows];
     for w in 0..g.walkers {
         let walker = &cfg[w * g.n..(w + 1) * g.n];
-        let (expected, kappa) = cpu_rows(cpu, m, walker);
+        let (expected, kappa) = cpu.rows(m, walker);
         let (actual, scale) = gpu_rows(m, ops, &values[w * terms..(w + 1) * terms]);
         // The Opt stage bound (#656 interval bound, see opt::complex_tests).
         let budget = budget(aw[w], g.n, kappa);
