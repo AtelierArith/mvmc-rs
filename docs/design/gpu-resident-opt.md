@@ -321,7 +321,7 @@ modes, `vmcmain.c:278`) and never changes them. See
 `gpu/mvmc-gpu-cuda/tests/fixtures/opttrans/README.md` for inputs, bounds and
 timings.
 
-### SR-CG (`NSRCG≠0`, #670)
+### SR-CG (`NSRCG≠0`, #670, #694)
 
 Julia GPU Opt rejects CG SR (`ext/cuda_runners.jl:27-28`), so this is new
 functionality. C `StochasticOptCG_real` (`stcopt_cg_impl.c`) defines the
@@ -408,6 +408,88 @@ summation order, so it measures CG's own rounding sensitivity.
   latches status 7, and the parameters are unchanged. 20-step runs repeat
   exactly after an interleaved run.
 
+**DiagScale, fallback and RescaleSmat** (#694). C 1.4.0 adds these to
+`StochasticOptCG_real`; Julia GPU has none of them, so the reference is again
+the CPU port (`SampledSrOperator::solve_variant` and `stochastic_opt_cg`).
+
+- **DiagScale** (`NSRCG 2`, or `useDiagScale 1` with `NSRCG 1`;
+  `stcopt_cg_impl.c:352-480`). `cg_prepare` sets `x = 0` and leaves the
+  start to `r = g - S x`, formed by the operator kernels (`cg_ty`, `cg_oy`)
+  as in C; `cg_diag_init` then forms `d = M^-1 r` and `delta = r.d`. The
+  preconditioner is `M_ii = (1 + DSROptStaDel) S_ii`, clamped to
+  `+-1e-12`, with `1 + DSROptStaDel` evaluated on the host as in C. Each
+  iteration ends with `q = M^-1 r`, `delta_new = r.q`, `delta = delta_new`
+  and `d = q + beta d` (`cg_direction` with `diag = 1`). The breakdown
+  guards, the 20-iteration refresh and the status are those of the plain
+  solve.
+- **NSRCGFallback** (`:203-269`). The host enqueues a second bounded solve
+  of the other variant. `cg_fallback` runs it only when the first status is
+  negative; it then resets `x = 0` (C reinitializes `VecCG`) and keeps the
+  first status. Otherwise every kernel of the second solve returns at once.
+  `cg_finish` reports the first status as the `zqp_SRinfo.dat` info, as C
+  does (`info = -(fallback_iter+1)`), and the fallback status separately
+  (`OptResult::cg_fallback`). The abort policy follows C: without the
+  fallback a failed solve aborts with `NSRCGAbortOnFail`; with it, the run
+  aborts only when the fallback solve fails too.
+- **RescaleSmat** (`:772-875`, called before `StochasticOptCG_real` by
+  `stcopt_cg.c:58-61`). The Slater block is `Para + NProj + NRBM` to
+  `+ NSlater`, before OptTrans (`cg::rescale_block`). The host skips the
+  kernels where C returns at once (`NProj <= 0`, `NProj >= NPara`,
+  `NSlater <= 0`). `cg_rescale` forms C's `get_absmax` over the projection
+  and Slater variances. It returns without rescaling below `1e-10` for the
+  projections and clamps the Slater maximum to `1e-10`. It then scales
+  `<OO>_ii` by `rescaleOO`, `<O>` and `<HO>` by `rescaleO = sqrt(rescaleOO)`,
+  recomputes the Slater variance, and divides the device Slater parameters by
+  `rescaleO`. `cg_rescale_samples` scales the stored derivatives. The
+  derivatives are recomputed at the next observation, as in C.
+- **Scope.** The resident CG is real Opt only. Complex and FSZ resident Opt
+  stay direct SR, with or without these options (`scope_tests`).
+
+**Validation** (`opt::cg_tests`, #694). The checks of the plain solve apply
+to each solve, with these additions:
+
+- **Operator kappa.** For DiagScale, the budget uses the kappa of
+  `M^-1/2 S M^-1/2`. Its lower eigenvalue bound
+  `DSROptStaDel min_i S_ii / M_ii` is rigorous for the same reason as
+  above; the upper one comes from power iteration. Observed kappa: 4.5e3
+  (L16), 2.0e3 (DH L16), 2.8e3 (RBM L16) and 1.2e4 (L128), against 1.2e5 to
+  1.9e6 for plain CG.
+- **Statuses.** Iteration counts and statuses are exact whenever the stop
+  falls in the deterministic regime. That covers DiagScale with
+  `NSROptCGMaxIter` 7 and 40 and tolerances 1e-4 (5 iterations) and 1e-3
+  (1 iteration: DiagScale's `delta_0 = r.M^-1 r` is still above the
+  threshold, as on the CPU). A failure at the limit is also exact when the
+  CPU's reordered run fails there with a margin above 1e3. The device
+  fallback decision is checked exactly, and the test requires the first
+  solve to be determined.
+- **Fallback cases (L16).** These cases were checked:
+  - Plain CG at `max_iter = nSmat` gives `-101`, then DiagScale converges.
+  - DiagScale fails at `NSROptCGMaxIter 4` (`-5`), then plain CG converges
+    in 3.
+  - Both variants fail at `NSROptCGMaxIter 6`: info `-7`, fallback `-7`.
+  - A converging first solve runs no fallback.
+  - A NaN local energy fails both variants at `-(0+1)`. The run aborts by
+    default with nothing published, or continues with `x = 0` under
+    `NSRCGAbortOnFail 0`.
+- **RescaleSmat.** The rescale decision is exact. The ratios agree with the
+  host `get_absmax` ratio within `max a / max_proj + max a / max_slater +
+  4 eps`, where `a` is the moment bound above; the observed difference is 0.
+  The rescaled moments, stored derivatives and divided Slater parameters
+  agree within the moment bounds plus that ratio error. Inputs: L16, DH L16
+  (block 31..47), RBM L16 (85..101), OptTrans L16 (9..25) and L128
+  (260..772), each with both variants. Two edited inputs cover C's
+  data-dependent branches: zero projection derivatives (no rescale) and zero
+  Slater derivatives (clamped, `rescaleOO = 1.7e10`).
+- **Complete step.** `mvmc_core::sr_cg::stochastic_opt_cg` runs on the host
+  moments and samples of the same step, covering RescaleSmat, the variant
+  and the fallback. Its update equals the oracle's within 2 eps per
+  parameter. The device parameters plus increment agree with it within the a
+  posteriori solution bound plus the rescale rounding.
+- **Observed.** DiagScale converges in 76 iterations on L16 (plain CG
+  reaches its limit of 100) and in 21 on L128 (plain CG takes about 470). The
+  GPU-CPU relative solution difference is below 1.3e-7 after DiagScale
+  converges, and below 3e-12 when the solve ends in the deterministic regime.
+
 **Timing** (RTX 3060, CUDA 12.9 image `b129bd583bbe`). The workload is seed
 79, 64 walkers, warmup and interval of 128 proposals per walker, and 20 steps.
 GPU times are warm complete namelist API calls
@@ -422,6 +504,13 @@ CLI (C-order runner, one thread, wall time including output). It runs with
 
 At L128, the GPU runs 444-537 iterations per step and the CPU 509-684. The
 counts differ because the samples differ.
+
+After #694 the plain CG series is unchanged: L16 0.142 s and L128 1.484 s
+warm, with the same per-step statuses. With `NSRCG 2`, `NSRCGFallback 1` and
+`RescaleSmat 1`, L128 takes 1.39 s (19-24 DiagScale iterations per step, no
+fallback) and L16 0.14 s. With plain CG, the fallback and RescaleSmat, L16
+takes 0.17 s: every step falls back from `-101` to DiagScale. All of these
+series keep 0 transfers and 1 synchronization.
 
 ### Local spins and exchange proposals (#660)
 

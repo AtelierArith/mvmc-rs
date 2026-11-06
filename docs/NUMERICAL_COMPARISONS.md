@@ -64,9 +64,11 @@ documented translation:
   operands, energy) precede the solve.
 
 Deliberate deviations from 1.4.0: an SR-CG step with no active parameter is a
-no-op (C reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds);
-the resident GPU CG rejects DiagScale, the fallback and `RescaleSmat` (#694). The
-earlier C-defect fixes (#370, #669, #676, #680, #681) are unchanged.
+no-op (C reports `-(0+1)`, aborts by default and reads `r[0]` out of bounds).
+The resident GPU CG follows the same contract, including DiagScale, the fallback
+and `RescaleSmat` (#694), for real Opt only: complex and FSZ resident Opt use
+direct SR. The earlier C-defect fixes (#370, #669, #676, #680, #681) are
+unchanged.
 
 ## Comparison rules
 
