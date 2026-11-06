@@ -184,6 +184,7 @@ Optimization and PhysCal share the namelist admission check. See `crates/mvmc-cl
 |-----------|--------|
 | `NLanczosMode > 0` | rejected ("use PhysCal") |
 | `NVMCCalMode != 0` | rejected for the optimization entry point ("cannot run parameter optimization; use fixed-parameter PhysCal"); PhysCal is selected with `--physcal` and `NVMCCalMode 1` ([8.1](08-running.md#selecting-the-calculation)) |
+| normal (not general) orbitals with `2Sz != 0`, including the -1 default of a ModPara without `2Sz`; general orbitals with an odd `2Sz` other than -1 (C `readdef.c:691-699`) | rejected (also in PhysCal) |
 | `InterAll` site outside $0\ldots N_s-1$, spin not in {0,1}, or (normal orbitals or fixed `2Sz`) with a spin-changing pair ($\sigma_1\ne\sigma_2$ or $\sigma_3\ne\sigma_4$) | rejected |
 | `NSite`, `NElec`, `NVMCWarmUp`, `NSROptItrStep` negative; `NVMCSample` or `NVMCInterval` $\le0$ | rejected |
 | incomplete Expert input (`input_errors` non-empty) | rejected (also in PhysCal) |

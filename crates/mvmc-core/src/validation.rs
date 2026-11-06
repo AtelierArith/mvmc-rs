@@ -98,6 +98,37 @@ pub fn validate_supported_modpara(p: &ModParaParameters) -> Result<(), String> {
     Ok(())
 }
 
+/// Reject the orbital/`2Sz` combinations that mVMC C rejects while reading ModPara.
+///
+/// C `ReadDefFileNInt` (readdef.c:689-701) requires general orbitals
+/// (`OrbitalGeneral`, or `OrbitalAntiParallel` with `OrbitalParallel`) whenever
+/// `2Sz != 0`. That includes the `-1` default of a ModPara file that omits `2Sz`
+/// (readdef.c:2106). With general orbitals, `2Sz` must be even or `-1`
+/// (not conserved).
+pub fn validate_orbital_two_sz(data: &ExpertModeData) -> Result<(), String> {
+    let two_sz = data.modpara.two_sz;
+    if two_sz == 0 {
+        return Ok(());
+    }
+    if data.i_flg_orbital_general != 1 {
+        return Err(format!(
+            "2Sz = {two_sz}{} requires OrbitalParallel or OrbitalGeneral files; normal orbitals \
+             need 2Sz = 0 (mVMC C readdef.c:691-696)",
+            if two_sz == -1 {
+                " (the default when ModPara omits 2Sz)"
+            } else {
+                ""
+            }
+        ));
+    }
+    if two_sz % 2 != 0 && two_sz != -1 {
+        return Err(format!(
+            "2Sz = {two_sz} must be an even number (mVMC C readdef.c:697-699)"
+        ));
+    }
+    Ok(())
+}
+
 /// Reject `NExUpdatePath` values outside the ported update paths 0-3.
 ///
 /// mVMC `getUpdateType` (`vmcmake.c:797-826`) returns `NONE` for any value it does not
@@ -254,6 +285,7 @@ pub fn validate_para_opt(data: &ExpertModeData) -> Result<(), String> {
     crate::run::get_all_complex_flag(data)?;
     let p = &data.modpara;
     validate_supported_modpara(p)?;
+    validate_orbital_two_sz(data)?;
     validate_sr_storage_contract(p)?;
     validate_grouped_runtime(data, RuntimeEntryPoint::ParaOpt)?;
     if p.lanczos_mode > 0 {
@@ -309,9 +341,13 @@ pub fn validate_phys_cal(data: &ExpertModeData) -> Result<(), String> {
     }
     validate_namelist_sections(data)?;
     validate_supported_modpara(p)?;
+    validate_orbital_two_sz(data)?;
     validate_inter_all(data)?;
     validate_grouped_runtime(data, RuntimeEntryPoint::PhysCal)?;
     if p.lanczos_mode > 0 {
+        // C reaches this error through an `else if` after the NSPGaussLeg
+        // reset, so it skips it when the input had NSPGaussLeg > 1. The message
+        // states that general-orbital Lanczos is unsupported; Rust always rejects.
         if data.i_flg_orbital_general != 0 {
             return Err(
                 "NLanczosMode > 0 is not supported for FSZ/general orbitals (mVMC C readdef.c:708-710)"
@@ -406,7 +442,7 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(
             directory.join("modpara.def"),
-            "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 3\nNe 1\nNMPTrans 1\nNneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n",
+            "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 3\nNe 1\n2Sz 0\nNMPTrans 1\nNneuronCharge 2\nNneuronSpin 2\nNneuronGeneral 2\n",
         )
         .unwrap();
         for (section, name) in mvmc_expert_parsers::parsers::rbm::SECTION_NAMES
@@ -447,6 +483,8 @@ mod tests {
         // array is reserved; this check does not establish C index safety.
         let mut data = ExpertModeData::new();
         data.modpara.nmp_trans = 1;
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.general_rbm_hidden_layer_terms
             .push(GeneralRBMHiddenLayerTerm {
                 site: 0,
