@@ -59,6 +59,13 @@ The [CPU L128 report](https://github.com/tmisawa/Julia-mVMC/blob/73140156ce813ef
 retains the separate 2026-11-03 threading measurements and RNG/output checks.
 Updating this pin does not regenerate or reverify historical fixtures or timings.
 
+The submodule now pins upstream `main`
+`6d73c18759a56d899214bdead74ed331a467516f` (#725), which adds the C 1.4.0
+reference update [PR #96](https://github.com/tmisawa/Julia-mVMC/pull/96).
+That PR changes only the CPU code, and the lock is byte-identical. This
+comparison was not rerun at `6d73c187`, so the `7314015` check above remains the
+last verified reference for it.
+
 The script temporarily copies this lock into the Julia project and removes it
 on exit. An existing identical lock is preserved; a differing lock causes an
 error before measurement. The script does not replace local source files.

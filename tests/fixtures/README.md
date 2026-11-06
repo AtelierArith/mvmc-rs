@@ -18,8 +18,12 @@ removed in #695. Their input files remain where tests still read them; for
 example `pfapack/*.orig.txt` are the fixed skew-symmetric inputs of
 `crates/pfapack/tests/fixed_matrix_identities.rs`.
 
-The Julia GPU references (pin `7314015`, XORWOW contract) used by the resident
-GPU tests live under `gpu/mvmc-gpu-cuda/tests/fixtures/`.
+The Julia GPU references (generated at pin `7314015`, XORWOW contract) used by
+the resident GPU tests live under `gpu/mvmc-gpu-cuda/tests/fixtures/`. The
+submodule now pins `6d73c187` (#725). The Julia GPU sources did not change
+between the two pins, so these references remain the accepted GPU reference.
+`c_integration_reference/provenance.txt` records the `7314015` inputs it was
+generated from. The inputs that Rust tests read are unchanged at `6d73c187`.
 
 Each `pfapack/*.orig.txt` file has a few `key value` header lines, a blank
 line, then one floating-point literal per column-major entry (`%.17e`; complex

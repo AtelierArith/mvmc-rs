@@ -12,8 +12,11 @@ historical references. The script never runs Rust to produce expected values,
 and normal Cargo tests never invoke the script or a reference runtime.
 
 `extern/Julia-mVMC` pins a reviewed commit from
-[upstream `main`](https://github.com/tmisawa/Julia-mVMC), including
-[PR #54](https://github.com/tmisawa/Julia-mVMC/pull/54), merged on 2026-10-06.
+[upstream `main`](https://github.com/tmisawa/Julia-mVMC), currently
+`6d73c18759a56d899214bdead74ed331a467516f` (#725). It includes
+[PR #54](https://github.com/tmisawa/Julia-mVMC/pull/54), merged on 2026-10-06,
+and the C 1.4.0 reference update
+[PR #96](https://github.com/tmisawa/Julia-mVMC/pull/96), merged on 2026-11-06.
 Use `git submodule sync --recursive` followed by
 `git submodule update --init --recursive` to synchronize existing checkouts.
 Historical fixtures and reports retain their original source commits and
