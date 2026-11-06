@@ -349,6 +349,8 @@ fn spin_flip_transfer_lanczos_rejection_has_mode_independent_wording() {
     // claiming identical exception text or changing production validation.
     for mode in [1, 2] {
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.lanczos_mode = mode;
         data.modpara.nmp_trans = 1;
         data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {

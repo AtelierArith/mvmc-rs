@@ -293,6 +293,17 @@ fn parse_expert_mode_files_mode<P: AsRef<Path>>(
         data.i_flg_orbital_general = 1;
     }
 
+    // C readdef.c:703-707: general orbitals have no spin projection, so C
+    // replaces NSPGaussLeg > 1 by 1 with a warning before allocating the
+    // quantum-projection weights.
+    if data.i_flg_orbital_general == 1 && data.modpara.nsp_gauss_leg > 1 {
+        tracing::warn!(
+            "NSPGaussLeg ({}) must be 0 or 1 when orbital is general; NSPGaussLeg set as 1",
+            data.modpara.nsp_gauss_leg
+        );
+        data.modpara.nsp_gauss_leg = 1;
+    }
+
     // Julia builds the lookup matrices after judging the orbital mode,
     // before initialization and runtime projection-count normalization.
     if !data.orbital_terms.is_empty() {

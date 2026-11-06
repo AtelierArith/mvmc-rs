@@ -27,6 +27,8 @@ fn supported_dh2_sections_pass_runtime_validation_with_or_without_namelist() {
             "DH2",
             |path| parse_expert_mode_files(path),
         );
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         // Use the same final single-keyword metadata as the valid loader stage,
         // not the archived component sequence preserved by the parser helper.
         let final_definition = data.namelist.iter().rposition(|(kind, _)| kind == "DH2");

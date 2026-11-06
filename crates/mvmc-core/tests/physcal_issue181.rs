@@ -983,6 +983,8 @@ fn green_reference_gate_requires_candidate_and_reference_files() {
 fn no_factored_terms_preserve_one_body_order_and_duplicate_rows() {
     use mvmc_expert_parsers::{ExpertModeData, GreenOneTerm, Spin};
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nsite = 2;
     data.modpara.nelec = 1;
     data.modpara.nmp_trans = 1; // Valid projection input for the mode2 duplicate guard.

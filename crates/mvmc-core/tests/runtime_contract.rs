@@ -27,10 +27,12 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
     ] {
         let mut data = ExpertModeData::new();
         // A valid unrelated projection setting prevents default zero from
-        // masking the deliberately invalid option under test.
+        // masking the deliberately invalid option under test, and normal
+        // orbitals need 2Sz = 0 (C readdef.c:691-696).
         // C modpara files carry an eight-line positional header.
         let header = "-\nModel_Parameters 0\n-\nVMC_Cal_Parameters\n-\nCDataFileHead zvo\nCParaFileHead zqp\n-\n";
-        data.modpara = parse_modpara_content(&format!("{header}NMPTrans 1\n{text}")).unwrap();
+        data.modpara =
+            parse_modpara_content(&format!("{header}NMPTrans 1\n2Sz 0\n{text}")).unwrap();
         let before = data.clone();
         let mut rng = Sfmt19937Rng::new(1);
         let mut probe = Sfmt19937Rng::new(1);
@@ -58,6 +60,8 @@ fn rejects_modpara_solver_controls_instead_of_discarding_them() {
 #[test]
 fn rejects_unsupported_lanczos_physcal_combinations_before_sampling() {
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.lanczos_mode = 1;
     data.modpara.nmp_trans = 1;
     data.i_flg_orbital_general = 1;
@@ -76,6 +80,8 @@ fn rejects_unsupported_lanczos_physcal_combinations_before_sampling() {
 #[test]
 fn rejects_spin_changing_lanczos_operators_before_sampling() {
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.lanczos_mode = 1;
     data.modpara.nmp_trans = 1;
     data.transfer_terms.push(mvmc_expert_parsers::TransferTerm {
@@ -92,6 +98,8 @@ fn rejects_spin_changing_lanczos_operators_before_sampling() {
 #[test]
 fn rejects_duplicate_mode2_one_body_entries_without_factored_green() {
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.lanczos_mode = 2;
     data.modpara.nmp_trans = 1;
     let term = mvmc_expert_parsers::GreenOneTerm {
@@ -110,11 +118,15 @@ fn unported_sections_cannot_silently_change_the_model() {
     // C reads TwoBodyGEx but never uses it during optimization, so it is
     // accepted there; SpinJastrow would change the projection layout.
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nmp_trans = 1;
     data.namelist
         .push(("TwoBodyGEx".into(), "missing.def".into()));
     mvmc_core::validation::validate_para_opt(&data).unwrap();
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nmp_trans = 1;
     data.namelist
         .push(("SpinJastrow".into(), "missing.def".into()));
@@ -127,6 +139,8 @@ fn physcal_applies_the_same_namelist_admission_as_optimization() {
     // C readdef.c rejects BF/BFRange and unknown keywords regardless of NVMCCalMode.
     for kind in ["BF", "BFRange", "SpinJastrow", "BogusSection", "InBogus"] {
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.nmp_trans = 1;
         data.namelist.push((kind.into(), "missing.def".into()));
         let physcal = mvmc_core::validation::validate_phys_cal(&data).unwrap_err();
@@ -136,6 +150,8 @@ fn physcal_applies_the_same_namelist_admission_as_optimization() {
     }
     // TwoBodyGEx is consumed only by PhysCal and stays admitted there.
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nmp_trans = 1;
     data.namelist
         .push(("TwoBodyGEx".into(), "greentwoex.def".into()));
@@ -146,6 +162,8 @@ fn physcal_applies_the_same_namelist_admission_as_optimization() {
 fn active_serial_opttrans_passes_validation_including_single_sector_payloads() {
     for count in [1, 2] {
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.nmp_trans = 1;
         data.n_qp_opt_trans = count;
         data.opt_trans = vec![num_complex::Complex64::new(0.5, 0.25); count as usize];
@@ -164,6 +182,8 @@ fn normal_spin_changing_interall_is_rejected_before_initialization_with_or_witho
     for has_namelist in [true, false] {
         let mut data =
             historical_orbital_model::historical_kernel_model(root.join("namelist.def")).unwrap();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         // The archived kernel fixture omits projection settings. Supply the
         // accepted C identity count, keeping its actual InterAll terms intact.
         data.modpara.nmp_trans = 1;
@@ -203,6 +223,8 @@ fn normal_spin_changing_interall_is_rejected_before_initialization_with_or_witho
 fn normal_interall_passes_runtime_validation_in_real_and_complex_modes() {
     for complex in [false, true] {
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.nsite = 2;
         data.modpara.nelec = 1;
         data.modpara.nvmc_sample = 1;
@@ -230,6 +252,8 @@ fn normal_interall_passes_runtime_validation_in_real_and_complex_modes() {
 fn interall_rejects_invalid_sites_and_fixed_twosz_spin_changes_as_in_c() {
     for general in [0, 1] {
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.nsite = 2;
         data.modpara.nelec = 1;
         data.modpara.nvmc_sample = 1;
@@ -281,6 +305,8 @@ fn interall_rejects_invalid_sites_and_fixed_twosz_spin_changes_as_in_c() {
 #[test]
 fn complex_fixed_sz_interall_passes_runtime_validation() {
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nsite = 2;
     data.modpara.nelec = 1;
     data.modpara.nvmc_sample = 1;
@@ -308,6 +334,8 @@ fn complex_fixed_sz_interall_passes_runtime_validation() {
 #[test]
 fn real_fixed_sz_interall_passes_runtime_validation() {
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nsite = 2;
     data.modpara.nelec = 1;
     data.modpara.nvmc_sample = 1;
@@ -437,7 +465,7 @@ fn supported_overlay_sections_pass_runtime_validation_even_when_optional_files_a
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("modpara.def"),
-        "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\nNMPTrans 1\nNVMCSample 1\nNVMCInterval 1\n",
+        "--------------------\nModel_Parameters 0\n--------------------\nVMC_Cal_Parameters\n--------------------\nCDataFileHead zvo\nCParaFileHead zqp\n--------------------\nNsite 2\nNe 1\n2Sz 0\nNMPTrans 1\nNVMCSample 1\nNVMCInterval 1\n",
     )
     .unwrap();
     let mut namelist = "ModPara modpara.def\n".to_owned();
@@ -467,6 +495,8 @@ fn grouped_opttrans_rows_pass_c_contract_and_need_communicator_without_rng_use()
     {
         let line = format!("{fields:?}");
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.nsplit_size = 2;
         data.n_qp_opt_trans = fields[0] as i64;
         data.opt_trans = vec![num_complex::Complex64::new(0.5, 0.25); fields[1]];
@@ -498,6 +528,8 @@ fn grouped_opttrans_rows_pass_c_contract_and_need_communicator_without_rng_use()
 #[test]
 fn grouped_runtime_matrix_rejects_only_c_undefined_sr_cg() {
     let mut data = ExpertModeData::new();
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nsplit_size = 2;
     data.modpara.nmp_trans = 1;
 
@@ -550,6 +582,9 @@ fn grouped_invalid_rank_rejects_before_rng_use() {
     }
 
     let mut data = ExpertModeData::new();
+
+    // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+    data.modpara.two_sz = 0;
     data.modpara.nsplit_size = 2;
     data.modpara.nmp_trans = 1;
     let mut rng = Sfmt19937Rng::new(1);
@@ -579,6 +614,8 @@ fn ex_update_path_validator_accepts_only_ported_paths() {
     // pair-hopping updates that are not ported; anything else has no move.
     for path in 0..=3 {
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.nmp_trans = 1;
         data.modpara.nex_update_path = path;
         assert_eq!(
@@ -588,6 +625,8 @@ fn ex_update_path_validator_accepts_only_ported_paths() {
     }
     for path in [4, 5, 6, -1, 7, i64::MAX] {
         let mut data = ExpertModeData::new();
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         data.modpara.nmp_trans = 1;
         data.modpara.nex_update_path = path;
         for error in [

@@ -163,6 +163,7 @@ Rust: `crates/mvmc-core/src/run.rs:1358` に記された "init → initial.def �
 |-----------|--------|
 | `NLanczosMode > 0` | 拒否("use PhysCal") |
 | `NVMCCalMode != 0` | 最適化のエントリポイントでは拒否("cannot run parameter optimization; use fixed-parameter PhysCal")。PhysCal は `--physcal` と `NVMCCalMode 1` で選択します([8.1](08-running.md#計算の選択)) |
+| 通常軌道(一般軌道でない)で `2Sz != 0`(ModPara に `2Sz` がないときの既定値 -1 を含む)、または一般軌道で -1 以外の奇数の `2Sz`(C `readdef.c:691-699`) | 拒否(PhysCal でも) |
 | `InterAll` のサイトが $0\ldots N_s-1$ の範囲外、スピンが {0,1} にない、または(通常軌道または固定 `2Sz`)でスピンを変えるペア($\sigma_1\ne\sigma_2$ または $\sigma_3\ne\sigma_4$)がある | 拒否 |
 | `NSite`, `NElec`, `NVMCWarmUp`, `NSROptItrStep` が負。`NVMCSample` または `NVMCInterval` が $\le0$ | 拒否 |
 | 不完全な Expert 入力(`input_errors` が空でない) | 拒否(PhysCal でも) |

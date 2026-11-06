@@ -33,6 +33,8 @@ fn parsed_and_programmatic_dh4_sections_pass_runtime_validation() {
             "DH4",
             |path| parse_expert_mode_files(path),
         );
+        // Normal orbitals need 2Sz = 0 (C readdef.c:691-696).
+        data.modpara.two_sz = 0;
         let final_definition = data.namelist.iter().rposition(|(kind, _)| kind == "DH4");
         // Archived zero-count DH is a no-DH programmatic layout, not a valid
         // required C definition. The shared helper separately asserts rejection.
