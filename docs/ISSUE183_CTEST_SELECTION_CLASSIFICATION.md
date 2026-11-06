@@ -2,7 +2,7 @@
 
 Related to #183 and #185; neither issue is complete. Candidate baselinee41ffc38265310492546b33c7df008a378a99ee9. Minimal delta: ctest_equivalent.rs, merged fixture_status.rs helper and this doc; no production kernels, reference expectations or numerical bounds changed.
 
-The actual MVMC_RS_CTEST_MODELS selection is validated before fixture discovery. Unknown, empty-segment, duplicate and nonUnicode explicit selections report Unsupported and cannot pass. Absent/empty/skip opt-in keeps existing require_gate fail-closed behavior. NonUnicode/empty explicit oracle root is Unsupported; only NotPresent uses the default root.
+The actual ctest gate selection (then `MVMC_RS_CTEST_MODELS`, now `MVMC_RS_CTEST_UPSTREAM_MODELS`; the 20-step gate was removed in #702) is validated before fixture discovery. Unknown, empty-segment, duplicate and nonUnicode explicit selections report Unsupported and cannot pass. Absent/empty/skip opt-in keeps existing require_gate fail-closed behavior. NonUnicode/empty explicit oracle root is Unsupported; only NotPresent uses the default root.
 
 Missing regular fixture metadata or referenced input is MissingFixture. Symlinks/nonregular/inaccessible members and malformed manifests are Failure. Typed errors preserve those labels through the model catch, actual report_gate and aggregate terminal failure; independent verifier/numerical assertion panics remain Failure. The unchanged verify_inputs still rejects changed hashes or unhashed references. Flat-path checks are this pinned fixture bundle's existing contract, not new restrictions on the public C/Rust loader.
 
