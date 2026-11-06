@@ -252,12 +252,9 @@ impl Model {
             );
         }
         if fsz {
-            // C readdef.c:697: 2Sz is even, or -1 (not conserved).
-            if m.two_sz != -1 && m.two_sz % 2 != 0 {
-                return Err("resident GPU FSZ requires an even 2Sz or 2Sz=-1".into());
-            }
-            // NSPGaussLeg is already 1: the parser resets it for general
-            // orbitals with C's warning (readdef.c:689-707, #721).
+            // The shared validator already rejects an odd 2Sz other than -1
+            // (readdef.c:697-699), and the parser resets NSPGaussLeg to 1 for
+            // general orbitals with C's warning (readdef.c:689-707, #721).
             if !physcal && m.nsrcg != 0 {
                 return Err("resident GPU FSZ Opt requires direct SR (NSRCG=0)".into());
             }

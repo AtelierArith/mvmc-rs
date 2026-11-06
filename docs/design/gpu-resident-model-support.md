@@ -42,9 +42,9 @@ the host, with no device context or allocation. The order is:
 3. A single resident-scope predicate in `prepare_input`. It returns
    `"resident GPU requires NExUpdatePath<=2 (3 with general orbitals),
    serial execution, and general orbitals for 2Sz != 0"`. Complex Opt with
-   `NSRCG≠0` is rejected next (#678), then the FSZ subset (#714): an odd
-   `2Sz` and Opt with `NSRCG≠0`. The parser already resets `NSPGaussLeg`
-   to 1 for general orbitals, as C does (#721).
+   `NSRCG≠0` is rejected next (#678), then FSZ Opt with `NSRCG≠0` (#714).
+   The shared validator already rejects an odd `2Sz`, and the parser resets
+   `NSPGaussLeg` to 1 for general orbitals, as C does (#721).
 4. Model construction checks in `from_data_with_derivatives`: the FSZ
    spin-sector check, the FSZ family check (RBM, OptTrans, DH2/DH4; #714),
    real/finite parameters (real mode), the complex-mode family check (RBM,

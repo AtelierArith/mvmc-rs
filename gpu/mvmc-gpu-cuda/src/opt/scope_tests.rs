@@ -84,10 +84,6 @@ fn resident_scope_accepts_real_normal_baseline() {
 fn resident_scope_rejects_unsupported_families_before_cuda() {
     let edits: &[(&str, &[Edit])] = &[
         (
-            "two-sz",
-            &[("modpara.def", "2Sz            0", "2Sz            2")],
-        ),
-        (
             "nsplit",
             &[("modpara.def", "NSplitSize     1", "NSplitSize     2")],
         ),
@@ -97,8 +93,6 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
             &[("modpara.def", "NExUpdatePath  0", "NExUpdatePath  3")],
         ),
     ];
-    // The "two-sz" edit keeps normal orbitals with 2Sz=2, which C rejects
-    // (readdef.c:691-696) and the resident scope rejects with it.
     let cases: Vec<(String, PathBuf, bool)> = edits
         .iter()
         .map(|(tag, e)| (tag.to_string(), edited(tag, e), true))
@@ -124,6 +118,16 @@ fn resident_scope_rejects_unsupported_families_before_cuda() {
             fs::remove_dir_all(input.parent().unwrap()).unwrap();
         }
     }
+    // Normal orbitals with 2Sz != 0: C rejects them (readdef.c:691-696), and
+    // since #721 so does the shared CPU validator, before the resident scope.
+    let two_sz = edited(
+        "two-sz",
+        &[("modpara.def", "2Sz            0", "2Sz            2")],
+    );
+    assert!(mvmc_core::validation::validate_para_opt(&parse(&two_sz)).is_err());
+    assert!(Model::prepare(&two_sz, &cfg()).is_err());
+    assert!(Model::prepare_physcal(&two_sz, &cfg(), None).is_err());
+    fs::remove_dir_all(two_sz.parent().unwrap()).unwrap();
 }
 
 /// Julia GPU PhysCal accepts and ignores `NSRCG` (`ext/cuda_runners.jl:27`):
@@ -1257,16 +1261,6 @@ fn resident_scope_rejects_fsz_families_before_cuda() {
             false,
         ),
         (
-            "fsz-spin-projection",
-            edited_from(
-                &l16,
-                "fsz-spin-projection",
-                &[("modpara.def", "NSPGaussLeg    1", "NSPGaussLeg    4")],
-            ),
-            "NSPGaussLeg=1",
-            true,
-        ),
-        (
             "fsz-rbm",
             edited_from(
                 &l16,
@@ -1313,6 +1307,18 @@ fn resident_scope_rejects_fsz_families_before_cuda() {
             fs::remove_dir_all(input.parent().unwrap()).unwrap();
         }
     }
+    // NSPGaussLeg > 1 with general orbitals: the parser resets it to 1 with
+    // C's warning (readdef.c:689-707, #721), so both routes accept it.
+    let projection = edited_from(
+        &l16,
+        "fsz-spin-projection",
+        &[("modpara.def", "NSPGaussLeg    1", "NSPGaussLeg    4")],
+    );
+    assert_eq!(parse(&projection).modpara.nsp_gauss_leg, 1);
+    let model = Model::prepare(&projection, &cfg()).unwrap();
+    assert_eq!((model.data.modpara.nsp_gauss_leg, model.fsz), (1, true));
+    Model::prepare_physcal(&projection, &cfg(), None).unwrap();
+    fs::remove_dir_all(projection.parent().unwrap()).unwrap();
     // SR-CG: rejected for FSZ Opt, ignored by FSZ PhysCal.
     let cg = edited_from(
         &l16,
@@ -1341,7 +1347,8 @@ fn resident_scope_rejects_fsz_families_before_cuda() {
     assert!(error.contains("FSZ Opt requires direct SR"), "{error}");
     assert!(Model::prepare_physcal(&cg, &cfg(), None).unwrap().fsz);
     fs::remove_dir_all(cg.parent().unwrap()).unwrap();
-    // C rejects an odd 2Sz other than -1 (readdef.c:697); so does the model.
+    // C rejects an odd 2Sz other than -1 (readdef.c:697); so does the shared
+    // validator that Model::prepare runs first (#721).
     let odd = edited_from(
         &fsz_input("kondo_fsz_2sz2"),
         "fsz-odd",
@@ -1350,7 +1357,7 @@ fn resident_scope_rejects_fsz_families_before_cuda() {
     let error = Model::prepare(&odd, &cfg())
         .map(|_| ())
         .expect_err("odd 2Sz");
-    assert!(error.contains("even 2Sz"), "{error}");
+    assert!(error.contains("must be an even number"), "{error}");
     fs::remove_dir_all(odd.parent().unwrap()).unwrap();
 }
 
