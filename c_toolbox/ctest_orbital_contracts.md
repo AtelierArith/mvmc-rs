@@ -111,16 +111,14 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 julia +1.13.1 \
   "$ctest_oracle_stage" \
   hubbard_chain_cmp,kondo_chain_real,kondo_chain_cmp,kondo_chain_stot1_cmp,hubbard_tetragonal_real,hubbard_tetragonal_momentum_projection_real \
   1,2,3,20
-MVMC_RS_CTEST_ORACLE_ROOT="$ctest_oracle_stage" \
-MVMC_RS_CTEST_PREFIX_MODELS=hubbard_chain_cmp,kondo_chain_real,kondo_chain_cmp,kondo_chain_stot1_cmp,hubbard_tetragonal_real,hubbard_tetragonal_momentum_projection_real \
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  cargo nextest run -p mvmc-core --locked --cargo-profile test-fast \
-  --test ctest_model_prefixes --run-ignored only -E 'test(canonical_models_)' \
-  --no-fail-fast --retries 0 --success-output immediate --failure-output immediate
 ```
 
-Staged observations are not checked-in fixtures. Their presence or successful
-generation does not count as Rust parity until the corresponding gate executes.
+Staged observations are not checked-in fixtures. The Rust gate that consumed
+them (`ctest_model_prefixes`, selected with `MVMC_RS_CTEST_PREFIX_MODELS`) and
+its checked-in Julia/1.3.0 prefix fixtures were removed in #702 (#695, #689);
+these observations are no longer read by any Rust test. The remaining long
+ctest gate is the upstream-rule gate in `crates/mvmc-core/tests/ctest_equivalent.rs`
+(`MVMC_RS_CTEST_UPSTREAM_MODELS`).
 
 The optional bridge was built in `/tmp/mvmc-ctest-fsz-bridge.Xyzp6F` using
 `uv run --no-project python scripts/check_native_fsz_runner_bridge.py --build-dir DIR`.
