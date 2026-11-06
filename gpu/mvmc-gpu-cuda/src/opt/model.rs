@@ -256,11 +256,8 @@ impl Model {
             if m.two_sz != -1 && m.two_sz % 2 != 0 {
                 return Err("resident GPU FSZ requires an even 2Sz or 2Sz=-1".into());
             }
-            // C forces NSPGaussLeg=1 for general orbitals (readdef.c:703-707);
-            // the Rust parser keeps the input value, so require it here.
-            if m.nsp_gauss_leg > 1 {
-                return Err("resident GPU FSZ requires NSPGaussLeg=1 (no spin projection)".into());
-            }
+            // NSPGaussLeg is already 1: the parser resets it for general
+            // orbitals with C's warning (readdef.c:689-707, #721).
             if !physcal && m.nsrcg != 0 {
                 return Err("resident GPU FSZ Opt requires direct SR (NSRCG=0)".into());
             }

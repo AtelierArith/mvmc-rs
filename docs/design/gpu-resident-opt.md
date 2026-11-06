@@ -121,7 +121,7 @@ Rust CPU C-order FSZ path. The physics is C's real FSZ path
   2Nsite` plane, `S[q][rsi][rsj] = F[a] s_a - F[b] s_b`, from the model's
   translated general orbital indices and signs (C `UpdateSlaterElm_fsz`).
   There is no spin projection: C forces `NSPGaussLeg=1` for general orbitals
-  (`readdef.c:703-707`), and the model rejects a larger value. The sparse
+  (`readdef.c:703-707`), and so does the Rust parser (#721). The sparse
   derivative basis is `dS/dF` of the same tables, so `opt_derivatives`
   evaluates C `SlaterElmDiff_fsz` unchanged.
 - **Initialization.** The Julia label-permutation contract with C
