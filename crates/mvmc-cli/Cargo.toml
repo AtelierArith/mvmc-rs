@@ -45,5 +45,6 @@ sfmt19937 = { workspace = true }
 tracing = { workspace = true }
 
 [features]
-default = []
+default = ["faer-pfaffian"]
+faer-pfaffian = ["mvmc-core/faer-pfaffian"]
 mpi = ["mvmc-core/mpi"]

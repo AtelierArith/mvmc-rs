@@ -1,0 +1,50 @@
+While replacing the Pfaffian backend in AtelierArith/mvmc-rs#731, we found a
+structural C-reference error boundary distinct from floating-point parity.
+
+For the real skew matrix
+
+```
+A = [ 0  2  0  0
+     -2  0  0  0
+      0  0  0  2
+      0  0 -2  0 ]
+```
+
+Pf(A)=4 and det(A)=16. Its inverse exists, with upper entries
+(1,2)=(3,4)=-1/2.
+
+The unmodified PfaPack routines vendored by mVMC 1.4.0 (release e83aa6cb,
+nested PfaPack ebaa11b7) return INFO=2 from both DSKTF2("U","N") and
+DSKTRF("U","N"). Paired mode "P" returns INFO=0. For disconnected n=6/8
+blocks, full-mode INFO is 4/6 although the analytic Pfaffians are 8/16.
+Connecting neighboring blocks with upper tridiagonal entries 1 restores
+INFO=0 without changing the Pfaffian.
+
+This follows PfaPack's documented INFO contract: it flags any exactly zero
+tridiagonal off-diagonal entry (dsktf2.f:223-228), including even-index
+separators that do not make an even-dimensional skew matrix singular. The
+defect is treating all positive full-mode INFO values as unusable planes:
+mVMC matrix.c:264-265 calls M_DSKTRF("U","N") and immediately returns any
+nonzero INFO before computing the Pfaffian/inverse. The analogous complex
+caller is matrix.c:165-166.
+
+The standalone developer probe links the original routines with GNU Fortran
+13.3.0 and system OpenBLAS 0.3.26 on Linux x86_64. Source, commands and SHA-256
+provenance are in c_toolbox/pfaffian_block_info/ on mvmc-rs PR #732. This is a
+library/caller-contract check, not full executable/MPI/sampling validation.
+Cargo tests never compile or invoke this reference runtime.
+
+A paired faer factorization accepts these mathematically valid inputs. We
+plan to document this as an application of mvmc-rs's existing clear-C-defect
+exception, rather than C trajectory parity or an increased numerical
+tolerance. True singular/zero matrices must still fail paired pivot/inverse
+checks; this is not a proposal to ignore every nonzero INFO.
+
+Please keep this distinction in mind when reconciling the C reference with
+Julia's error handling. No Julia patch is assumed necessary if the current
+implementation already handles the nonsingular case correctly. This report
+is separate from the already closed julia-patch PR #96.
+
+Related implementation:
+https://github.com/AtelierArith/mvmc-rs/issues/731
+https://github.com/AtelierArith/mvmc-rs/pull/732

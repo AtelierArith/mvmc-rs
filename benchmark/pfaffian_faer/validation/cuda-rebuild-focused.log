@@ -1,0 +1,36 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+debconf: delaying package configuration, since apt-utils is not installed
+   Compiling pfapack v0.0.0 (/work/crates/pfapack)
+   Compiling mvmc-core v0.0.0 (/work/crates/mvmc-core)
+   Compiling mvmc-gpu v0.0.0 (/work/crates/mvmc-gpu)
+   Compiling mvmc-gpu-cuda v0.0.0 (/work/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 19.90s
+     Running unittests src/lib.rs (/cuda-target/debug/deps/mvmc_gpu_cuda-351da723e20303a8)
+
+running 1 test
+test opt::complex_tests::resident_opt_complex_l128_matches_cpu_c_order ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 114 filtered out; finished in 360.14s
+
+    Finished `test` profile [optimized] target(s) in 0.11s
+     Running unittests src/lib.rs (/cuda-target/debug/deps/mvmc_gpu_cuda-351da723e20303a8)
+
+running 1 test
+test interval::resident::tests::delayed_updates_flush_partial_queues_and_rebuild_boundaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 116 filtered out; finished in 28.89s
+

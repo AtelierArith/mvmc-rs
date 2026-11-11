@@ -40,6 +40,10 @@ jobs:
             features: 'blas-backend'
           - name: simd-backend + blas-backend
             features: 'simd-backend blas-backend'
+          - name: faer-backend
+            features: 'faer-backend'
+          - name: faer-backend + simd-backend + blas-backend
+            features: 'faer-backend simd-backend blas-backend'
     steps:
       - uses: actions/checkout@v5
         with:

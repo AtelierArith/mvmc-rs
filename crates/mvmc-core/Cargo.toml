@@ -9,8 +9,10 @@ repository.workspace = true
 publish = false
 
 [features]
-default = []
+default = ["faer-pfaffian"]
 mpi = ["dep:mpi"]
+# Shared-factor CPU rebuilds; small matrices retain the C-order reference path.
+faer-pfaffian = ["pfapack/faer-backend"]
 
 [dependencies]
 sfmt19937 = { workspace = true }

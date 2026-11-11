@@ -1,0 +1,84 @@
+diff --git a/gpu/mvmc-gpu-cuda/src/interval.rs b/gpu/mvmc-gpu-cuda/src/interval.rs
+index 57140090..4f581458 100644
+--- a/gpu/mvmc-gpu-cuda/src/interval.rs
++++ b/gpu/mvmc-gpu-cuda/src/interval.rs
+@@ -62,6 +62,7 @@ pub const INTERVAL_KERNELS: &[&str] = &[
+     "pfinv_f64",
+     "interval_resident_hop",
+     "interval_resident_factor",
++    "interval_resident_factor_panel",
+     "interval_resident_commit",
+     "interval_paired_factor",
+     "interval_paired_fallback",
+diff --git a/gpu/mvmc-gpu-cuda/src/interval/resident.rs b/gpu/mvmc-gpu-cuda/src/interval/resident.rs
+index 0ce6ddfd..9d5d26cc 100644
+--- a/gpu/mvmc-gpu-cuda/src/interval/resident.rs
++++ b/gpu/mvmc-gpu-cuda/src/interval/resident.rs
+@@ -758,7 +758,11 @@ impl ResidentInterval {
+                 )?;
+             }
+             exec.launch(
+-                module.function("interval_resident_factor")?,
++                module.function(if (64..128).contains(&g.n) && g.n.is_multiple_of(2) {
++                    "interval_resident_factor_panel"
++                } else {
++                    "interval_resident_factor"
++                })?,
+                 ((g.walkers * g.nqp) as u32, 1, 1),
+                 nt,
+                 shared,
+diff --git a/gpu/mvmc-gpu-cuda/src/interval_resident.cu b/gpu/mvmc-gpu-cuda/src/interval_resident.cu
+index 9d704f4c..3b9be18b 100644
+--- a/gpu/mvmc-gpu-cuda/src/interval_resident.cu
++++ b/gpu/mvmc-gpu-cuda/src/interval_resident.cu
+@@ -33,7 +33,7 @@ extern "C" __global__ void interval_resident_hop(
+ // list and no copying resident inverses/Pfaffians back for a rebuild. `ne` is
+ // the first slot with the down-spin offset: Ne for normal walkers, 2Ne for FSZ
+ // walkers, whose slots already hold rs (#714).
+-extern "C" __global__ void interval_resident_factor(
++template<bool Panel> __device__ void interval_resident_factor_impl(
+     const int* rebuild, const int* error, const int* ele, const double* slater,
+     double* A, double* W, double* OUT, double* PF, int* ST,
+     int n, int ne, int nsite, int nqp) {
+@@ -49,8 +49,27 @@ extern "C" __global__ void interval_resident_factor(
+     a[index] = -SLT(slater, q, ri, rj, 2*nsite);
+   }
+   __syncthreads();
+-  body_f64(A, W, OUT, PF, ST, n);
++  if (Panel) {
++    body_f64(A, W, OUT, PF, ST, n);
++  } else if (n >= 64 && (n & 1) == 0) {
++    // Keep the established large-real fallback free of the panel inverse's
++    // register/resource requirements, even though only one branch executes.
++    pfinv_plane_f64(A + offset, W + offset, OUT + offset, PF + plane, ST + plane, n);
++  } else {
++    entry<double>(A, W, OUT, PF, ST, n);
++  }
++}
++
++#define RESIDENT_FACTOR_ENTRY(NAME, PANEL) \
++extern "C" __global__ void NAME( \
++    const int* rebuild, const int* error, const int* ele, const double* slater, \
++    double* A, double* W, double* OUT, double* PF, int* ST, \
++    int n, int ne, int nsite, int nqp) { \
++  interval_resident_factor_impl<PANEL>(rebuild,error,ele,slater,A,W,OUT,PF,ST,n,ne,nsite,nqp); \
+ }
++RESIDENT_FACTOR_ENTRY(interval_resident_factor, false)
++RESIDENT_FACTOR_ENTRY(interval_resident_factor_panel, true)
++#undef RESIDENT_FACTOR_ENTRY
+ 
+ // Publish a walker whose weighted overlap is finite and nonzero, recording
+ // per-plane validity as Julia does (cuda_batched_inverse.jl:68): no zero pivot
+diff --git a/gpu/mvmc-gpu-cuda/src/opt.rs b/gpu/mvmc-gpu-cuda/src/opt.rs
+index 979e3e53..68a338de 100644
+--- a/gpu/mvmc-gpu-cuda/src/opt.rs
++++ b/gpu/mvmc-gpu-cuda/src/opt.rs
+@@ -660,6 +660,8 @@ impl State {
+                     exec.launch(
+                         interval.function(if m.complex {
+                             "interval_complex_factor"
++                        } else if (64..128).contains(&g.n) && g.n.is_multiple_of(2) {
++                            "interval_resident_factor_panel"
+                         } else {
+                             "interval_resident_factor"
+                         })?,

@@ -45,6 +45,8 @@ mod mat;
 
 pub(crate) mod backend;
 
+#[cfg(feature = "faer-backend")]
+pub mod faer_pfaffian;
 pub mod julia_complex;
 pub mod ltl;
 pub mod pfaffian;

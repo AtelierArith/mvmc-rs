@@ -136,7 +136,7 @@ __device__ int rc_block_argmax(const rcx* x, int begin, int end) {
 // resident_block_pfaffian with complex arithmetic. An exactly zero pivot
 // column gives Pf = 0; a nonfinite column gives NaN. Destroys A; tau and u
 // hold n values each. Every thread of the block receives the same value.
-__device__ rcx rc_block_pfaffian(rcx* A, int n, rcx* tau, rcx* u) {
+__device__ rcx rc_block_pfaffian_unblocked(rcx* A, int n, rcx* tau, rcx* u) {
   __shared__ rcx s_pf;
   const int tid = threadIdx.x, nt = blockDim.x;
   if (tid == 0) s_pf = rc(1.0, 0.0);
@@ -184,6 +184,26 @@ __device__ rcx rc_block_pfaffian(rcx* A, int n, rcx* tau, rcx* u) {
   const rcx result = s_pf;
   __syncthreads();
   return result;
+}
+
+struct ResidentComplexPfOps {
+  typedef rcx T;
+  __device__ static T one() { return rc(1.0, 0.0); }
+  __device__ static T zero() { return rc(0.0, 0.0); }
+  __device__ static T nan() { const double x = __longlong_as_double(0x7ff8000000000000LL); return rc(x,x); }
+  __device__ static T neg(T x) { return rc_neg(x); }
+  __device__ static T add(T x, T y) { return rc_add(x,y); }
+  __device__ static T sub(T x, T y) { return rc_sub(x,y); }
+  __device__ static T mul(T x, T y) { return rc_mul(x,y); }
+  __device__ static T div(T x, T y) { return rc_div(x,y); }
+  __device__ static int argmax(const T* x, int begin, int end) {
+    return rc_block_argmax(x, begin, end);
+  }
+};
+
+__device__ rcx rc_block_pfaffian(rcx* A, int n, rcx* tau, rcx* u) {
+  if (n < 64) return rc_block_pfaffian_unblocked(A, n, tau, u);
+  return resident_panel_pfaffian<ResidentComplexPfOps>(A, n, tau, u);
 }
 
 // Gauss-Jordan inverse with partial pivoting: Y = A^-1 (column-major).

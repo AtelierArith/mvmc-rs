@@ -29,7 +29,9 @@ fn resident_geometry_fits_shared_memory_and_whole_warp_groups() {
 fn delayed_updates_flush_partial_queues_and_rebuild_boundaries() {
     use mvmc_gpu::{pfaffian_inverse_batched, testkit::random_planes, Backend};
     let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
-    for (n, ns) in [(128, 80), (130, 80), (192, 128)] {
+    // Include both ends of the separate small-real factor entry and the
+    // neighboring large-real route. The last iteration forces a rebuild.
+    for (n, ns) in [(64, 48), (126, 80), (128, 80), (130, 80), (192, 128)] {
         let w = 2;
         let nq = 3; // a partial final QP group
         let g = IntervalGeometry {
@@ -811,6 +813,8 @@ fn invalid_flag_full_pfaffian_path_matches_inverse_path() {
 /// same routine as an in-kernel walker rebuild. Kept out of the production
 /// module so it adds no compile or JIT time there.
 const PROBE_MODULE: &str = concat!(
+    include_str!("../../pfaffian_panel.cuh"),
+    "\n",
     include_str!("../../resident_dense.cuh"),
     r#"
 extern "C" __global__ void resident_dense_probe(const double* table, double* inv, double* pf,

@@ -1,0 +1,18 @@
+   Compiling t4a-faer-traits v0.24.3 (https://github.com/AtelierArith/faer?rev=a3dd7b450e81df16065ebf51788414d87bb44171#a3dd7b45)
+   Compiling t4a-faer v0.32.0 (https://github.com/AtelierArith/faer?rev=a3dd7b450e81df16065ebf51788414d87bb44171#a3dd7b45)
+   Compiling pfapack v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs/crates/pfapack)
+   Compiling mvmc-core v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs/crates/mvmc-core)
+    Finished `test` profile [unoptimized] target(s) in 58.96s
+────────────
+ Nextest run ID 06169fdf-b641-4f43-a618-768c939241b0 with nextest profile: default
+    Starting 8 tests across 119 binaries (858 tests skipped)
+        PASS [   0.018s] (1/8) pfapack faer_pfaffian::tests::inverse_errors_do_not_conflate_underflow_nonfinite_and_singular
+        PASS [   0.020s] (2/8) pfapack faer_pfaffian::tests::complex_plain_transpose_sign_and_workspace_reuse
+        PASS [   0.022s] (3/8) pfapack faer_pfaffian::tests::boundary_and_failure_contracts
+        PASS [   0.076s] (4/8) pfapack faer_pfaffian::tests::panel_updates_match_scalar_reference
+        PASS [   0.276s] (5/8) pfapack faer_pfaffian::tests::real_and_complex_inverse_residuals_across_panel_boundaries
+        PASS [   0.428s] (6/8) mvmc-core pfaffian::tests::faer_rebuild_preserves_upper_authority_and_transpose_sign
+        PASS [   0.707s] (7/8) mvmc-core pfaffian::tests::faer_rebuild_uses_negative_inverse_and_restores_failed_input
+        PASS [   1.259s] (8/8) pfapack::faer_inverse_residuals permuted_pairs_have_small_backward_error_across_panels
+────────────
+     Summary [   1.261s] 8 tests run: 8 passed, 858 skipped

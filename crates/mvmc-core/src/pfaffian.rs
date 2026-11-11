@@ -8,8 +8,12 @@
 //! chunks. Each parallel chunk owns its temporary inverse and Pfaffian output;
 //! chunks are copied back in QP order so the sampling/RNG contract is unchanged.
 //!
-//! The kernels are direct ports of `calculate_m_all_child_{fcmp,real}!`
-//! and reproduce the upstream pipeline exactly:
+//! Assembly follows `calculate_m_all_child_{fcmp,real}!`. With the default
+//! `faer-pfaffian` feature, real matrices of order >=128 and complex matrices
+//! of order >=64 share a panelized faer factorization for Pfaffian and inverse.
+//! Each worker retains its scratch; smaller matrices and failed faer calls use
+//! the C-order pipeline below. A failed call restores the original input first.
+//! Both paths preserve upper-triangle authority and the stored negative inverse.
 //!
 //! 1. Build `inv_m[msj, msi] = -slater_elm[ rsi*n_site2 + rsj ]`
 //!    (column-major store; the explicit transpose mirrors the
@@ -26,6 +30,9 @@
 //!
 //! See `matrix.c:285-387` for the C reference the upstream Julia port
 //! traces back to.
+//!
+//! Explicit `c-order` and `tenferro` measurement stages retain their independent
+//! C-order executors; the default `calc-m-all` measurement path uses this module.
 
 #![allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 
@@ -806,6 +813,11 @@ fn calc_m_all_child_fsz_real(
         }
     }
     ensure_workspace_real(ws, n_size);
+    #[cfg(feature = "faer-pfaffian")]
+    if let Some(value) = faer_rebuild_real(inv_m.qp_matrix_slice_mut(qp), n_size, ws) {
+        *pf_slot = value;
+        return Ok(());
+    }
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
@@ -880,6 +892,11 @@ fn calc_m_all_plane_real<const NATIVE_STATUS: bool>(
     }
 
     ensure_workspace_real(ws, n_size);
+    #[cfg(feature = "faer-pfaffian")]
+    if let Some(value) = faer_rebuild_real(plane, n_size, ws) {
+        *pf_slot = value;
+        return Ok(());
+    }
     let pf_value = {
         let mut a = SqMat::new(&mut *plane, n_size);
         dsktf2(&mut a, &mut ws.pivots[..n_size])
@@ -947,6 +964,15 @@ fn calc_m_all_plane_complex<const C_COMPAT: bool, const NATIVE_STATUS: bool>(
     }
 
     ensure_workspace_complex(ws, n_size);
+    #[cfg(feature = "faer-pfaffian")]
+    if let Some(value) = faer_rebuild_complex(plane, n_size, ws) {
+        // Native normal status uses C's finite check on the component sum.
+        if !NATIVE_STATUS || (value.re + value.im).is_finite() {
+            *pf_slot = value;
+            return Ok(());
+        }
+        plane.copy_from_slice(&ws.buf_m_complex[..n_size * n_size]);
+    }
     let pf_value = {
         let mut a = SqMat::new(&mut *plane, n_size);
         let result = if C_COMPAT {
@@ -1002,6 +1028,11 @@ fn calc_m_all_child_fsz_complex(
         qp, ele_idx, ele_spn, slater_elm, inv_m, n_size, n_site, n_site2,
     )?;
     ensure_workspace_complex(ws, n_size);
+    #[cfg(feature = "faer-pfaffian")]
+    if let Some(value) = faer_rebuild_complex(inv_m.qp_matrix_slice_mut(qp), n_size, ws) {
+        *pf_slot = value;
+        return Ok(());
+    }
     let pf_value = {
         let qp_buf = inv_m.qp_matrix_slice_mut(qp);
         let mut a = SqMat::new(qp_buf, n_size);
@@ -1247,6 +1278,75 @@ fn max_abs2_complex(plane: &[Complex64]) -> f64 {
 // smaller `n_size`).
 // ---------------------------------------------------------------------------
 
+// Preserve the C boundary on provider errors: INFO's row, partially published
+// factor storage, zero-product underflow, and FSZ's zero-Pfaffian behavior all
+// depend on the reference factorization. The original plane is restored before
+// taking that path. C reads the original upper triangle; presenting the buffer
+// row-major makes that faer's strict lower triangle and represents -A. Its true
+// inverse is already the sampler's -A^-1. Pf(-A)=(-1)^(n/2) Pf(A). This also
+// preserves C's upper authority for buffers whose ignored half is not skew.
+// Nonsingular full-factor INFO separators are the documented #731 exception.
+#[cfg(feature = "faer-pfaffian")]
+fn faer_rebuild_real(plane: &mut [f64], n: usize, ws: &mut PfaPackWorkspace) -> Option<f64> {
+    // Shared-factor probes gain 1.26/1.48/1.49x at n=128/256/512; n=64 is
+    // only 1.09x on the shared host. Retain the small-matrix reference path.
+    if n < 128 {
+        return None;
+    }
+    if ws.faer_real.as_ref().is_none_or(|w| w.n() != n) {
+        ws.faer_real = Some(pfapack::faer_pfaffian::RealPfaffianInverseWorkspace::new(n));
+    }
+    let input = &mut ws.buf_m_real[..n * n];
+    input.copy_from_slice(plane);
+    match ws.faer_real.as_mut().unwrap().compute(
+        input,
+        plane,
+        pfapack::faer_pfaffian::InputLayout::RowMajor,
+    ) {
+        Ok(value) => Some(if (n / 2).is_multiple_of(2) {
+            value
+        } else {
+            -value
+        }),
+        Err(_) => {
+            plane.copy_from_slice(input);
+            None
+        }
+    }
+}
+
+#[cfg(feature = "faer-pfaffian")]
+fn faer_rebuild_complex(
+    plane: &mut [Complex64],
+    n: usize,
+    ws: &mut PfaPackWorkspace,
+) -> Option<Complex64> {
+    // Complex full rebuilds first improve at n=64 in the matched probe.
+    if n < 64 {
+        return None;
+    }
+    if ws.faer_complex.as_ref().is_none_or(|w| w.n() != n) {
+        ws.faer_complex = Some(pfapack::faer_pfaffian::ComplexPfaffianInverseWorkspace::new(n));
+    }
+    let input = &mut ws.buf_m_complex[..n * n];
+    input.copy_from_slice(plane);
+    match ws.faer_complex.as_mut().unwrap().compute(
+        input,
+        plane,
+        pfapack::faer_pfaffian::InputLayout::RowMajor,
+    ) {
+        Ok(value) => Some(if (n / 2).is_multiple_of(2) {
+            value
+        } else {
+            -value
+        }),
+        Err(_) => {
+            plane.copy_from_slice(input);
+            None
+        }
+    }
+}
+
 fn ensure_workspace_real(ws: &mut PfaPackWorkspace, n_size: usize) {
     if ws.buf_m_real.len() < n_size * n_size {
         ws.buf_m_real.resize(n_size * n_size, 0.0);
@@ -1284,6 +1384,128 @@ fn ensure_workspace_complex(ws: &mut PfaPackWorkspace, n_size: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "faer-pfaffian")]
+    #[test]
+    fn faer_rebuild_preserves_upper_authority_and_transpose_sign() {
+        for n in [64, 66, 128, 130] {
+            // Upper tridiagonal edges alternate 2,1. Pf=2^(n/2), and
+            // (-A^-1)[i,j]=2^(-(j-i+1)/2) for even i < odd j.
+            // C ignores the diagonal and lower triangle, so poison both.
+            let mut input = vec![0.0; n * n];
+            for j in 0..n {
+                for i in j..n {
+                    input[i + j * n] = 13.0 + (i + j) as f64;
+                }
+                if j > 0 {
+                    input[j - 1 + j * n] = if j % 2 == 1 { 2.0 } else { 1.0 };
+                }
+            }
+            let mut ws = PfaPackWorkspace::new(n, PfaPackMode::Both);
+            let expected_pf = 2.0f64.powi((n / 2) as i32);
+            let expected_entry = |i: usize, j: usize| {
+                if i < j && i.is_multiple_of(2) && !j.is_multiple_of(2) {
+                    2.0f64.powi(-((j - i).div_ceil(2) as i32))
+                } else if j < i && j.is_multiple_of(2) && !i.is_multiple_of(2) {
+                    -2.0f64.powi(-((i - j).div_ceil(2) as i32))
+                } else {
+                    0.0
+                }
+            };
+            let mut real = input.clone();
+            if n >= 128 {
+                let pf = faer_rebuild_real(&mut real, n, &mut ws).unwrap();
+                assert!((pf - expected_pf).abs() <= 1e-13 * expected_pf);
+                for j in 0..n {
+                    for i in 0..n {
+                        assert!(
+                            (real[i + j * n] - expected_entry(i, j)).abs() <= 1e-13,
+                            "real n={n} ({i},{j})"
+                        );
+                    }
+                }
+            } else {
+                assert!(faer_rebuild_real(&mut real, n, &mut ws).is_none());
+                assert_eq!(real, input, "small reference input must remain untouched");
+            }
+            let edge = Complex64::new(2.0, 0.5);
+            let mut complex: Vec<_> = input
+                .iter()
+                .enumerate()
+                .map(|(index, &x)| {
+                    let i = index % n;
+                    let j = index / n;
+                    let imaginary = if i >= j {
+                        17.0
+                    } else if i + 1 == j && j % 2 == 1 {
+                        0.5
+                    } else {
+                        0.0
+                    };
+                    Complex64::new(x, imaginary)
+                })
+                .collect();
+            let pf = faer_rebuild_complex(&mut complex, n, &mut ws).unwrap();
+            let expected_complex_pf = edge.powu((n / 2) as u32);
+            assert!((pf - expected_complex_pf).norm() <= 1e-13 * expected_complex_pf.norm());
+            for j in 0..n {
+                for i in 0..n {
+                    let expected = if i < j && i.is_multiple_of(2) && !j.is_multiple_of(2) {
+                        Complex64::new(1.0, 0.0) / edge.powu((j - i).div_ceil(2) as u32)
+                    } else if j < i && j.is_multiple_of(2) && !i.is_multiple_of(2) {
+                        -Complex64::new(1.0, 0.0) / edge.powu((i - j).div_ceil(2) as u32)
+                    } else {
+                        Complex64::new(0.0, 0.0)
+                    };
+                    assert!(
+                        (complex[i + j * n] - expected).norm() <= 1e-13,
+                        "complex n={n} ({i},{j})"
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "faer-pfaffian")]
+    #[test]
+    fn faer_rebuild_uses_negative_inverse_and_restores_failed_input() {
+        let n = 256;
+        let mut input = vec![0.0; n * n];
+        for i in (0..n).step_by(2) {
+            input[i + (i + 1) * n] = 2.0;
+            input[i + 1 + i * n] = -2.0;
+        }
+        let mut plane = input.clone();
+        let mut ws = PfaPackWorkspace::new(n, PfaPackMode::Both);
+        let value = faer_rebuild_real(&mut plane, n, &mut ws).unwrap();
+        let expected = 2.0f64.powi((n / 2) as i32);
+        assert!((value - expected).abs() <= 1e-14 * expected);
+        assert!(
+            ws.faer_real.is_some(),
+            "must exercise the provider, not fallback"
+        );
+        for j in 0..n {
+            for i in 0..n {
+                // The input has exactly one nonzero per row.
+                let k = i ^ 1;
+                let residual = input[i + k * n] * plane[k + j * n] + f64::from(i == j);
+                assert!(residual.abs() <= 1e-14, "({i},{j}) {residual}");
+            }
+        }
+        let mut singular = vec![0.0; n * n];
+        assert!(faer_rebuild_real(&mut singular, n, &mut ws).is_none());
+        assert!(
+            singular.iter().all(|&x| x == 0.0),
+            "fallback receives the original input"
+        );
+        let mut complex: Vec<_> = input.iter().map(|&x| Complex64::new(x, 0.0)).collect();
+        let pf = faer_rebuild_complex(&mut complex, n, &mut ws).unwrap();
+        assert!((pf - Complex64::new(expected, 0.0)).norm() <= 1e-14 * expected);
+        assert!(ws.faer_complex.is_some());
+        for (actual, real) in complex.iter().zip(plane) {
+            assert!((actual - Complex64::new(real, 0.0)).norm() <= 1e-14);
+        }
+    }
     use approx::assert_relative_eq;
 
     #[test]

@@ -1,0 +1,66 @@
+[
+  {
+    "label": "before",
+    "rep": 0,
+    "warmup": true,
+    "started_unix": 1794419367.1453736,
+    "loadavg": "2.81 9.06 7.99 4/1496 1250541",
+    "seconds": 0.587684154
+  },
+  {
+    "label": "after",
+    "rep": 0,
+    "warmup": true,
+    "started_unix": 1794419367.735358,
+    "loadavg": "2.81 9.06 7.99 6/1497 1250542",
+    "seconds": 0.479077777
+  },
+  {
+    "label": "after",
+    "rep": 1,
+    "warmup": false,
+    "started_unix": 1794419368.219186,
+    "loadavg": "2.81 9.06 7.99 6/1497 1250542",
+    "seconds": 0.450406034
+  },
+  {
+    "label": "before",
+    "rep": 1,
+    "warmup": false,
+    "started_unix": 1794419368.6746435,
+    "loadavg": "2.81 9.06 7.99 4/1497 1250542",
+    "seconds": 0.484082084
+  },
+  {
+    "label": "before",
+    "rep": 2,
+    "warmup": false,
+    "started_unix": 1794419369.1610925,
+    "loadavg": "2.81 9.06 7.99 5/1496 1250542",
+    "seconds": 0.481756887
+  },
+  {
+    "label": "after",
+    "rep": 2,
+    "warmup": false,
+    "started_unix": 1794419369.6478229,
+    "loadavg": "2.81 9.06 7.99 4/1496 1250542",
+    "seconds": 0.438981421
+  },
+  {
+    "label": "after",
+    "rep": 3,
+    "warmup": false,
+    "started_unix": 1794419370.0892842,
+    "loadavg": "2.81 9.06 7.99 6/1496 1250542",
+    "seconds": 0.437799348
+  },
+  {
+    "label": "before",
+    "rep": 3,
+    "warmup": false,
+    "started_unix": 1794419370.5307271,
+    "loadavg": "2.75 8.94 7.96 3/1496 1250542",
+    "seconds": 0.487606143
+  }
+]

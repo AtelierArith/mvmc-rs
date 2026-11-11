@@ -323,6 +323,29 @@ without a reference: Parlett-Reid and `utu2pfa` agree within `4 n eps`,
 header). C-order correctness is covered by the hand-dyadic and analytic tests
 (`rank2_real_regression.rs`, `issue176_ordinary_panel.rs`).
 
+## Nonsingular block matrices and full-factor INFO (#731)
+
+PfaPack's full `DSKTRF("U","N")` reports any zero tridiagonal off-diagonal
+entry, including even-index separators that do not imply singularity.
+mVMC 1.4.0 `matrix.c:264-265` returns every nonzero INFO before computing the
+Pfaffian/inverse (the complex caller does the same at `matrix.c:165-166`).
+For `diag([[0,2],[-2,0]], [[0,2],[-2,0]])`, the analytic Pfaffian is 4,
+determinant is 16 and the inverse's upper block entries are -1/2, but both
+native `DSKTF2` and `DSKTRF` full mode return INFO=2. Paired mode returns 0.
+The optional [probe](../c_toolbox/pfaffian_block_info/README.md) records the
+unmodified C-reference-library source hashes, compiler, BLAS and results.
+It is a small standalone library check, not a full sampling/MPI comparison.
+
+The faer rebuild accepts nonsingular block inputs under the
+existing clear-C-defect policy. Its analytic block-inverse/sign regression
+is `faer_rebuild_uses_negative_inverse_and_restores_failed_input`; random
+inverse residuals are checked separately. This case's C INFO/failure-induced
+Pfaffian publication is excluded from parity expectations, with no tolerance
+change or Rust-generated C fixture. Genuine singular/zero inputs still fail
+the provider and use the reference fallback. The default size dispatch selects
+faer for real n>=128 and complex n>=64. Reported upstream as
+[Julia-mVMC#98](https://github.com/tmisawa/Julia-mVMC/issues/98).
+
 ## OptTrans optimization flags (#676)
 
 C `GetInfoOptTrans` (1.3.0 and 1.4.0) (`readdef.c:1327-1328, 2799-2816`) writes

@@ -932,6 +932,12 @@ pub enum PfaPackMode {
 /// Pre-allocated workspace for Pfaffian + inverse (`PfaPackWorkspace`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PfaPackWorkspace {
+    /// Lazy reusable faer rebuild scratch (the C-order buffers remain references).
+    #[cfg(feature = "faer-pfaffian")]
+    pub(crate) faer_real: Option<pfapack::faer_pfaffian::RealPfaffianInverseWorkspace>,
+    /// Lazy reusable complex faer rebuild scratch.
+    #[cfg(feature = "faer-pfaffian")]
+    pub(crate) faer_complex: Option<pfapack::faer_pfaffian::ComplexPfaffianInverseWorkspace>,
     /// `n_size`-side square scratch (real).
     pub buf_m_real: Vec<f64>,
     /// `n_size - 1`-length tridiagonal scratch (real).
@@ -974,6 +980,10 @@ impl PfaPackWorkspace {
             PfaPackMode::RealOnly => 0,
         };
         Self {
+            #[cfg(feature = "faer-pfaffian")]
+            faer_real: None,
+            #[cfg(feature = "faer-pfaffian")]
+            faer_complex: None,
             buf_m_real: vec![0.0; real_n2],
             v_t_real: vec![0.0; real_v_t],
             m_work_real: vec![0.0; real_n2],

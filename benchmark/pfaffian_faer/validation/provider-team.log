@@ -1,0 +1,26 @@
+warning: unused import: `crate::prelude::*`
+ --> /tmp/mvmc731-faer/faer/src/io.rs:1:5
+  |
+1 | use crate::prelude::*;
+  |     ^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `re` and `im` are never read
+  --> /tmp/mvmc731-faer/faer/src/stats/mod.rs:19:2
+   |
+18 | pub struct ComplexDistribution<Re, Im = Re> {
+   |            ------------------- fields in this struct
+19 |     re: Re,
+   |     ^^
+20 |     im: Im,
+   |     ^^
+   |
+   = note: `ComplexDistribution` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `t4a-faer` (lib) generated 2 warnings (run `cargo fix --lib -p t4a-faer` to apply 1 suggestion)
+   Compiling mvmc731-faer-probe v0.0.0 (/tmp/mvmc731-faer-probe)
+    Finished `release` profile [optimized] target(s) in 11.72s
+     Running `/tmp/mvmc731-faer-probe/target/release/mvmc731-faer-probe`
+shared-factor team inverse/Pfaffian checks passed (2/3/8 participants)
