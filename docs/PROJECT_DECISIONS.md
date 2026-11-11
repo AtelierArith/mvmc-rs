@@ -230,6 +230,18 @@ To apply it:
 - File upstream tenferro requests only case by case, with owner approval.
   Otherwise prefer in-repo kernels.
 
+## Pfaffian backend direction (2026-11-11)
+
+The owner requests adopting tensor4all/faer's accelerated Pfaffian calculation
+on CPU and corresponding GPU implementation work, based on
+[the Pfaffian benchmark](https://github.com/AtelierArith/pfaffian-benchmark/blob/main/BENCHMARKS.md).
+Track the complete change in #731, including actual sampler Pfaffian/inverse
+rebuilds, resident GPU fallback paths, numerical/RNG validation and matched
+performance evidence. Standalone-Pfaffian gains do not establish rebuild or E2E
+gains. The owner authorizes creating the PR and merging to `main` after the
+performance and correctness gates pass. The implementation investigation is
+recorded in `docs/design/faer-pfaffian-migration.md`.
+
 ## Development hosts
 
 - **Local GPU host:** 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, FP64 about 1/64
