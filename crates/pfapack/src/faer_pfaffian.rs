@@ -6,9 +6,10 @@
 //! Sequential execution avoids creating a competing team inside QP workers.
 
 use faer::dyn_stack::{MemBuffer, MemStack};
-use faer::linalg::lu::partial_pivoting::{factor, inverse};
-use faer::linalg::pfaffian::{pfaffian, pfaffian_scratch};
-use faer::{MatMut, MatRef, Par, ParShape};
+use faer::linalg::pfaffian::{
+    pfaffian, pfaffian_inverse, pfaffian_inverse_scratch, pfaffian_scratch,
+};
+use faer::{MatMut, MatRef, Par};
 use num_complex::Complex64;
 
 pub use faer::linalg::pfaffian::PfaffianError;
@@ -69,43 +70,42 @@ impl ComplexPfaffianWorkspace {
     }
 }
 
-// The Pfaffian provider does not expose its elimination factors. Use faer's
-// blocked LU/inverse for the inverse instead of factoring a second time with
-// the scalar LTL kernel. All three operations share one scratch allocation;
-// no team or allocation is created by compute().
+/// Layout of the input buffer; the inverse output is always column-major.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InputLayout {
+    /// Strict lower triangle of a column-major matrix.
+    ColumnMajor,
+    /// Strict lower triangle of a row-major matrix.
+    RowMajor,
+}
+
+fn input_matrix<T>(a: &[T], n: usize, layout: InputLayout) -> MatRef<'_, T> {
+    match layout {
+        InputLayout::ColumnMajor => MatRef::from_column_major_slice(a, n, n),
+        InputLayout::RowMajor => MatRef::from_row_major_slice(a, n, n),
+    }
+}
+
+// The provider retains paired factors and uses its triangular inverse/GEMM.
+// One reusable scratch allocation covers the complete rebuild; no second
+// factorization, inverse skew projection or team construction is needed.
 macro_rules! inverse_workspace {
-    ($name:ident, $scalar:ty, $finite:expr) => {
+    ($name:ident, $scalar:ty) => {
         /// Reusable sequential faer workspace for a Pfaffian and true inverse.
         ///
-        /// Pfaffians use panelized skew elimination; inverses use blocked LU.
+        /// Pfaffian and inverse share a panelized skew factorization.
         /// The scalar LTL routines remain the C-order reference implementation.
         pub struct $name {
             n: usize,
             memory: MemBuffer,
-            lu: Vec<$scalar>,
-            perm: Vec<usize>,
-            perm_inv: Vec<usize>,
         }
 
         impl $name {
             /// Allocate all scratch for matrices of dimension `n`.
             pub fn new(n: usize) -> Self {
-                let req = faer::dyn_stack::StackReq::any_of(&[
-                    pfaffian_scratch::<$scalar>(n),
-                    factor::lu_in_place_scratch::<usize, $scalar>(
-                        n,
-                        n,
-                        ParShape::Seq,
-                        Default::default(),
-                    ),
-                    inverse::inverse_scratch::<usize, $scalar>(n, ParShape::Seq),
-                ]);
                 Self {
                     n,
-                    memory: MemBuffer::new(req),
-                    lu: vec![<$scalar>::default(); n * n],
-                    perm: vec![0; n],
-                    perm_inv: vec![0; n],
+                    memory: MemBuffer::new(pfaffian_inverse_scratch::<$scalar>(n)),
                 }
             }
 
@@ -114,9 +114,10 @@ macro_rules! inverse_workspace {
                 self.n
             }
 
-            /// Compute Pfaffian and true inverse of compact column-major `a`.
+            /// Compute Pfaffian and true inverse with an explicit input layout.
             ///
-            /// Strict lower-triangle input is authoritative for both outputs.
+            /// The input layout's strict lower triangle defines both outputs.
+            /// The inverse output is compact column-major regardless of input.
             /// Input is preserved; `out` is unspecified on error. Nonfinite
             /// inverses are errors even when the Pfaffian itself is finite.
             /// Panics unless both slices have exactly `n*n` entries.
@@ -124,66 +125,17 @@ macro_rules! inverse_workspace {
                 &mut self,
                 a: &[$scalar],
                 out: &mut [$scalar],
+                layout: InputLayout,
             ) -> Result<$scalar, PfaffianError> {
                 let n = self.n;
                 assert_eq!(a.len(), n * n);
                 assert_eq!(out.len(), n * n);
-                let value = pfaffian(
-                    MatRef::from_column_major_slice(a, n, n),
-                    Par::Seq,
-                    MemStack::new(&mut self.memory),
-                )?;
-                if n == 0 {
-                    return Ok(value);
-                }
-                for j in 0..n {
-                    self.lu[j + j * n] = <$scalar>::default();
-                    for i in (j + 1)..n {
-                        self.lu[i + j * n] = a[i + j * n];
-                        self.lu[j + i * n] = -a[i + j * n];
-                    }
-                }
-                let (_, perm) = factor::lu_in_place(
-                    MatMut::from_column_major_slice_mut(&mut self.lu, n, n),
-                    &mut self.perm,
-                    &mut self.perm_inv,
-                    Par::Seq,
-                    MemStack::new(&mut self.memory),
-                    Default::default(),
-                );
-                for i in 0..n {
-                    let diagonal = self.lu[i + i * n];
-                    if !($finite)(diagonal) {
-                        return Err(PfaffianError::NumericalFailure);
-                    }
-                    if diagonal == <$scalar>::default() {
-                        return Err(PfaffianError::ZeroPivot { index: i });
-                    }
-                }
-                let lu = MatRef::from_column_major_slice(&self.lu, n, n);
-                inverse::inverse(
+                pfaffian_inverse(
+                    input_matrix(a, n, layout),
                     MatMut::from_column_major_slice_mut(out, n, n),
-                    lu,
-                    lu,
-                    perm,
                     Par::Seq,
                     MemStack::new(&mut self.memory),
-                );
-                if out.iter().any(|&x| !($finite)(x)) {
-                    return Err(PfaffianError::NumericalFailure);
-                }
-                // The exact inverse of a skew matrix is skew. Project LU
-                // roundoff onto that structure, without conjugating complex
-                // values. Halving before subtracting avoids finite overflow.
-                for j in 0..n {
-                    out[j + j * n] = <$scalar>::default();
-                    for i in (j + 1)..n {
-                        let value = out[i + j * n] * 0.5 - out[j + i * n] * 0.5;
-                        out[i + j * n] = value;
-                        out[j + i * n] = -value;
-                    }
-                }
-                Ok(value)
+                )
             }
         }
 
@@ -209,12 +161,8 @@ macro_rules! inverse_workspace {
     };
 }
 
-inverse_workspace!(RealPfaffianInverseWorkspace, f64, |x: f64| x.is_finite());
-inverse_workspace!(
-    ComplexPfaffianInverseWorkspace,
-    Complex64,
-    |x: Complex64| x.re.is_finite() && x.im.is_finite()
-);
+inverse_workspace!(RealPfaffianInverseWorkspace, f64);
+inverse_workspace!(ComplexPfaffianInverseWorkspace, Complex64);
 
 #[cfg(test)]
 mod tests {
@@ -247,8 +195,12 @@ mod tests {
             let expected_real =
                 crate::pfaffian_ltl_real(&mut crate::SqMat::new(&mut scalar_real, n));
             for _ in 0..2 {
-                let pf = complex_ws.compute(&a, &mut inv).unwrap();
-                let pf_real = real_ws.compute(&real, &mut inv_real).unwrap();
+                let pf = complex_ws
+                    .compute(&a, &mut inv, InputLayout::ColumnMajor)
+                    .unwrap();
+                let pf_real = real_ws
+                    .compute(&real, &mut inv_real, InputLayout::ColumnMajor)
+                    .unwrap();
                 assert!((pf - expected).norm() <= 1e-12 * expected.norm().max(1.0));
                 assert!((pf_real - expected_real).abs() <= 1e-12 * expected_real.abs().max(1.0));
                 for j in 0..n {
@@ -276,7 +228,7 @@ mod tests {
         let mut out = [0.0; 16];
         let mut ws = RealPfaffianInverseWorkspace::new(4);
         assert!(matches!(
-            ws.compute(&[0.0; 16], &mut out),
+            ws.compute(&[0.0; 16], &mut out, InputLayout::ColumnMajor),
             Err(PfaffianError::ZeroPivot { .. })
         ));
         let mut a = [0.0; 16];
@@ -285,17 +237,21 @@ mod tests {
         a[11] = -1e-200;
         a[14] = 1e-200;
         assert_eq!(
-            ws.compute(&a, &mut out),
+            ws.compute(&a, &mut out, InputLayout::ColumnMajor),
             Err(PfaffianError::NumericalFailure)
         );
         let mut tiny = RealPfaffianInverseWorkspace::new(2);
         assert_eq!(
-            tiny.compute(&[0.0, -1e-320, 1e-320, 0.0], &mut [0.0; 4]),
+            tiny.compute(
+                &[0.0, -1e-320, 1e-320, 0.0],
+                &mut [0.0; 4],
+                InputLayout::ColumnMajor
+            ),
             Err(PfaffianError::NumericalFailure)
         );
         a[1] = f64::NAN;
         assert_eq!(
-            ws.compute(&a, &mut out),
+            ws.compute(&a, &mut out, InputLayout::ColumnMajor),
             Err(PfaffianError::NumericalFailure)
         );
     }

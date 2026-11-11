@@ -5,7 +5,9 @@
 #[cfg(feature = "faer-backend")]
 fn main() {
     use num_complex::Complex64;
-    use pfapack::faer_pfaffian::{ComplexPfaffianInverseWorkspace, RealPfaffianInverseWorkspace};
+    use pfapack::faer_pfaffian::{
+        ComplexPfaffianInverseWorkspace, InputLayout, RealPfaffianInverseWorkspace,
+    };
     use pfapack::{PivotIndex1Based, SqMat};
     use std::hint::black_box;
     use std::time::{Duration, Instant};
@@ -21,7 +23,7 @@ fn main() {
         start.elapsed().as_secs_f64() * 1e6 / reps as f64
     }
 
-    println!("dtype,n,reference_us,faer_pf_lu_inverse_us,speedup");
+    println!("dtype,n,reference_us,faer_shared_inverse_us,speedup");
     macro_rules! bench {
         ($t:ty, $ws:ty, $make:expr, $factor:path, $pfa:path, $inv:path, $label:literal) => {
             for n in [16, 32, 64, 128, 256, 512] {
@@ -54,7 +56,10 @@ fn main() {
                 let mut ws = <$ws>::new(n);
                 let mut out = vec![zero; n * n];
                 let candidate = timing(|| {
-                    black_box(ws.compute(&input, &mut out).unwrap());
+                    black_box(
+                        ws.compute(&input, &mut out, InputLayout::ColumnMajor)
+                            .unwrap(),
+                    );
                     black_box(&out);
                 });
                 println!(

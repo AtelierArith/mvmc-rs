@@ -33,7 +33,7 @@ homepage = "https://github.com/atelierarith/ManyVariableVariationalMonteCarlo.jl
 sfmt19937 = { path = "crates/sfmt19937", version = "0.0.0" }
 pfapack = { path = "crates/pfapack", version = "0.0.0" }
 mvmc-expert-parsers = { path = "crates/mvmc-expert-parsers", version = "0.0.0" }
-mvmc-core = { path = "crates/mvmc-core", version = "0.0.0" }
+mvmc-core = { path = "crates/mvmc-core", version = "0.0.0", default-features = false }
 mvmc-uhf = { path = "crates/mvmc-uhf", version = "0.0.0" }
 mvmc-stdface = { path = "crates/mvmc-stdface", version = "0.0.0" }
 mvmc-gpu = { path = "crates/mvmc-gpu", version = "0.0.0" }

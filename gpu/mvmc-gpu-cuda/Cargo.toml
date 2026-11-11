@@ -16,7 +16,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-mvmc-core = { path = "../../crates/mvmc-core" }
+# Device execution and its C-order CPU reference do not select the CPU faer backend.
+mvmc-core = { path = "../../crates/mvmc-core", default-features = false }
 mvmc-expert-parsers = { path = "../../crates/mvmc-expert-parsers" }
 sfmt19937 = { path = "../../crates/sfmt19937" }
 # Versions must match the root workspace (crates.io 0.9.0; the git revisions used by

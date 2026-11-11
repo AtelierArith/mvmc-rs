@@ -1,6 +1,8 @@
 #![cfg(feature = "faer-backend")]
 use num_complex::Complex64;
-use pfapack::faer_pfaffian::{ComplexPfaffianInverseWorkspace, RealPfaffianInverseWorkspace};
+use pfapack::faer_pfaffian::{
+    ComplexPfaffianInverseWorkspace, InputLayout, RealPfaffianInverseWorkspace,
+};
 #[test]
 fn permuted_pairs_have_small_backward_error_across_panels() {
     for n in [4, 8, 26, 64, 130] {
@@ -22,10 +24,10 @@ fn permuted_pairs_have_small_backward_error_across_panels() {
             let mut inv = vec![Complex64::default(); n * n];
             let mut inv_real = vec![0.0; n * n];
             ComplexPfaffianInverseWorkspace::new(n)
-                .compute(&a, &mut inv)
+                .compute(&a, &mut inv, InputLayout::ColumnMajor)
                 .unwrap();
             RealPfaffianInverseWorkspace::new(n)
-                .compute(&real, &mut inv_real)
+                .compute(&real, &mut inv_real, InputLayout::ColumnMajor)
                 .unwrap();
             let mut norm_a = 0.0f64;
             let mut norm_inv = 0.0f64;

@@ -1656,7 +1656,7 @@ dependencies = [
  "pulp",
  "rayon",
  "reborrow",
- "t4a-faer-traits",
+ "t4a-faer-traits 0.24.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "t4a-gemm",
  "t4a-private-gemm-x86",
  "threadteam",
@@ -1665,8 +1665,7 @@ dependencies = [
 [[package]]
 name = "t4a-faer"
 version = "0.32.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56cb66d2a11287259ed62ab6cbef98e907ef0b67d78b45c32d8d33709693fde7"
+source = "git+https://github.com/AtelierArith/faer?rev=a3dd7b450e81df16065ebf51788414d87bb44171#a3dd7b450e81df16065ebf51788414d87bb44171"
 dependencies = [
  "bytemuck",
  "dyn-stack",
@@ -1678,7 +1677,7 @@ dependencies = [
  "num-traits",
  "pulp",
  "reborrow",
- "t4a-faer-traits",
+ "t4a-faer-traits 0.24.3 (git+https://github.com/AtelierArith/faer?rev=a3dd7b450e81df16065ebf51788414d87bb44171)",
  "t4a-gemm",
  "t4a-private-gemm-x86",
 ]
@@ -1688,6 +1687,22 @@ name = "t4a-faer-traits"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d0ac00f8eac55b87f2609e232ed97179783cd57a14ce3a007e6c45b2bda0b84"
+dependencies = [
+ "bytemuck",
+ "dyn-stack",
+ "generativity",
+ "libm",
+ "num-complex",
+ "num-traits",
+ "pulp",
+ "qd",
+ "reborrow",
+]
+
+[[package]]
+name = "t4a-faer-traits"
+version = "0.24.3"
+source = "git+https://github.com/AtelierArith/faer?rev=a3dd7b450e81df16065ebf51788414d87bb44171#a3dd7b450e81df16065ebf51788414d87bb44171"
 dependencies = [
  "bytemuck",
  "dyn-stack",

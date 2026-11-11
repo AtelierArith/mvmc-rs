@@ -9,5 +9,5 @@ publish = false
 [dependencies]
 num-complex = "0.4"
 pfapack = { path = "../../crates/pfapack" }
-mvmc-core = { path = "../../crates/mvmc-core" }
+mvmc-core = { path = "../../crates/mvmc-core", default-features = false }
 mvmc-expert-parsers = { path = "../../crates/mvmc-expert-parsers" }

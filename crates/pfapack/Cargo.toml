@@ -15,7 +15,8 @@ num-complex = { workspace = true }
 pulp = { workspace = true, optional = true }
 blas = { workspace = true, optional = true }
 lapack = { workspace = true, optional = true }
-faer = { package = "t4a-faer", version = "=0.32.0", default-features = false, features = ["std", "linalg"], optional = true }
+# tensor4all/faer 0.32.0 plus the shared-factor inverse API, immutable downstream pin.
+faer = { package = "t4a-faer", git = "https://github.com/AtelierArith/faer", rev = "a3dd7b450e81df16065ebf51788414d87bb44171", default-features = false, features = ["std", "linalg"], optional = true }
 
 [dev-dependencies]
 approx = { workspace = true }
