@@ -1,0 +1,41 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+   Compiling mvmc-gpu-cuda v0.0.0 (/work/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 10.85s
+     Running unittests src/lib.rs (/cuda-target/debug/deps/mvmc_gpu_cuda-351da723e20303a8)
+
+running 1 test
+test pfaffian::rebuild_tests::full_panel_rebuilds_match_cpu_and_inverse_residuals ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 117 filtered out; finished in 22.42s
+
+   Compiling mvmc-gpu-cuda v0.0.0 (/work/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 3.75s
+     Running tests/resident_interval.rs (/cuda-target/debug/deps/resident_interval-85a036f5da692ec7)
+
+running 7 tests
+test device_rng_matches_julia_calls_reseed_and_independent_owners ... ok
+test device_rng_rejects_a_different_device_context ... ok
+test julia_log_decision_handles_overflow_and_zero_uniform ... ok
+test nonfinite_proposal_overlap_preserves_walker_state ... ok
+test resident_intervals_complete_rebuild_boundaries_without_transfers ... ok
+test resident_l128_sampling_transfer_benchmark ... ok
+test resident_schedule_matches_host_control_for_mixed_walkers_and_full_filling ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 217.44s
+
+   Compiling mvmc-gpu-cuda v0.0.0 (/work/gpu/mvmc-gpu-cuda)
+    Finished `release` profile [optimized] target(s) in 4.79s

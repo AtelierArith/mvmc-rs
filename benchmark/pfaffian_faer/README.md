@@ -105,4 +105,46 @@ for the final source remain pending. The earlier standalone-panel gate passed
 128 tests; `validation/cuda-full-rebuild-gate.log` passed 131 tests before the
 later original-input preservation fix. Targeted inverse residual and scaled
 fallback tests and all-target CUDA Clippy pass after that fix; the final broad
-gate is being rerun. Validation logs identify these distinct source stages.
+gate passed 131 tests at the original-input-preservation source (118 library,
+three CLI, one interval gate, three parity and six resident interval tests).
+The separate two-device integration test passes too, for 132 total. Its first
+follow-up command accidentally selected the library target and ran zero tests;
+`validation/cuda-two-device-context.log` records the corrected integration
+target. Validation logs identify these distinct source stages. Later performance
+experiments changing inlining/dispatch must not inherit this full-source claim.
+
+## End-to-end evidence and current adoption limits
+
+See [e2e/README.md](e2e/README.md) for matched public API measurements, raw
+outputs, source manifests and transfer counters. The fixed-input-backup CUDA
+kernel improves complex L128 Opt by 1.1593x and PhysCal by 1.1260x. The same
+source regresses real L128 Opt and short PhysCal by roughly 7% and 5%; this is
+being investigated and prevents declaring adoption complete. CPU default
+adoption and its full-factor INFO boundary also remain unresolved.
+
+## CUDA compilation resource diagnostics
+
+`cuda_module_resources.cpp` compiles a concatenated interval module with NVRTC
+and queries the driver without launching kernels. Build inside the recorded
+CUDA 12.9.2 image with:
+
+```sh
+g++ -O2 -I/usr/local/cuda/include cuda_module_resources.cpp \
+  -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs \
+  -Wl,-rpath,/usr/local/cuda/lib64 -lnvrtc -lcuda -o resources
+./resources interval.cu
+# Separate diagnostic, not RawExec::module's production contraction setting:
+./resources interval.cu --no-fmad
+```
+
+Construct `interval.cu` by joining the files named by `include_str!` in
+`gpu/mvmc-gpu-cuda/src/interval.rs` in their listed order, separated by newlines.
+The probe uses `compute_86`, C++14 and ordinary contraction by default, matching
+`RawExec::module`; `*-no-fmad.csv` disables contraction and is labelled separately.
+Recorded files compare baseline `fae8eb14`, combined panel source `4fef0a87`,
+that source with `separate-entry-experiment.patch`, and the noinline experiment
+(only `resident_block_pfaffian` gains `__noinline__`). The separated entry lowers
+its register count but does not cure the measured real E2E regression, so that
+patch is retained as a reproducible experiment and is not applied to production.
+The noinline experiment is still being measured. Resource counts alone do not
+establish a performance explanation.
