@@ -43,7 +43,24 @@ for real n=64/128/256/512 and 1.28/1.81/2.46/2.74/2.96x for complex
 n=32/64/128/256/512. The probe now additionally checks empty/odd/nonsquare,
 zero pivots, nonfinite input, underflow, inverse overflow, lower-triangle
 authority and padded input/output windows. Those checks passed in a subsequent
-run. Team execution and broad scale/conditioning tests are still pending.
+run. A later `provider-team` check passes for real/complex n=6/130/258 with
+2/3/8 participants, checking each inverse against an independent normalized
+residual and its Pfaffian against the sequential calculation on bounded,
+strengthened inputs. The bound is `64*epsilon*n` (times matrix/inverse norms
+for the residual), covering floating-point accumulation over n terms; it is
+not a blanket acceptance rule for ill-conditioned inputs. The log is
+`../validation/provider-team.log`.
+
+```sh
+MVMC_FAER_PROBE_TEAM=1 MVMC_FAER_PROBE_VERIFY_ONLY=1 \
+  bash benchmark/pfaffian_faer/provider-prototype/run.sh
+```
+
+Team verification uses the separate `Cargo.team.lock`, adding the provider's
+optional threadteam dependencies without changing the historical timing lock
+or any already locked package version. The normal probe still uses the original
+`Cargo.lock`. Broad scale/conditioning and additional scalar-type tests remain
+pending before claiming a general provider API.
 
 To adopt it, the provider API needs full error/shape/strided/team/conditioning
 tests and an approved upstream or maintained-dependency integration path. Then

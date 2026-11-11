@@ -11,7 +11,9 @@ git -C "$pf_work/faer" checkout --detach 144621059bca3f0348c4ddb64d68428185528da
 git -C "$pf_work/faer" apply "$pf_probe/shared-factor.patch"
 mkdir -p "$pf_work/probe/src"
 cp "$pf_probe/main.rs" "$pf_work/probe/src/main.rs"
-cp "$pf_probe/Cargo.lock" "$pf_work/probe/Cargo.lock"
+pf_lock=Cargo.lock
+if [ "${MVMC_FAER_PROBE_TEAM:-0}" = 1 ]; then pf_lock=Cargo.team.lock; fi
+cp "$pf_probe/$pf_lock" "$pf_work/probe/Cargo.lock"
 cat > "$pf_work/probe/Cargo.toml" <<EOF
 [package]
 name = "mvmc731-faer-probe"
@@ -25,6 +27,7 @@ num-complex = "0.4"
 [features]
 default = ["faer-backend"]
 faer-backend = []
+provider-team = ["faer/threadteam"]
 [profile.release]
 opt-level = 3
 codegen-units = 1
@@ -34,4 +37,6 @@ export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-stable}"
 export CARGO_TARGET_DIR="$pf_work/target"
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 rustc -Vv >&2
-cargo run --locked --release --manifest-path "$pf_work/probe/Cargo.toml"
+pf_features=()
+if [ "${MVMC_FAER_PROBE_TEAM:-0}" = 1 ]; then pf_features=(--features provider-team); fi
+cargo run --locked --release --manifest-path "$pf_work/probe/Cargo.toml" "${pf_features[@]}"

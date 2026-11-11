@@ -185,6 +185,70 @@ fn main() {
     }
     verify!(f64, RealPfaffianInverseWorkspace, |re, _im| re);
     verify!(Complex64, ComplexPfaffianInverseWorkspace, Complex64::new);
+    #[cfg(feature = "provider-team")]
+    {
+        macro_rules! verify_team {
+            ($t:ty, $make:expr) => {
+                for n in [6, 130, 258] {
+                    let mut a = vec![<$t>::default(); n * n];
+                    for j in 0..n {
+                        for i in j + 1..n {
+                            let re = if j % 2 == 0 && i == j + 1 {
+                                8.0
+                            } else {
+                                ((i * 17 + j * 31) % 23) as f64 / 23.0 - 0.5
+                            };
+                            let value = ($make)(re, ((i * 11 + j * 7) % 19) as f64 / 38.0);
+                            a[i + j * n] = value;
+                            a[j + i * n] = -value;
+                        }
+                    }
+                    let mut output = vec![<$t>::default(); n * n];
+                    let mut memory = MemBuffer::new(pfaffian_inverse_scratch::<$t>(n));
+                    let mut run = |par: Par<'_>| {
+                        let pf = pfaffian_inverse(
+                            MatRef::from_column_major_slice(&a, n, n),
+                            MatMut::from_column_major_slice_mut(&mut output, n, n),
+                            par,
+                            MemStack::new(&mut memory),
+                        ).unwrap();
+                        let mut norm_a = 0.0f64;
+                        let mut norm_inv = 0.0f64;
+                        for i in 0..n {
+                            norm_a = norm_a.max((0..n).map(|j| a[i + j*n].norm_value()).sum());
+                            norm_inv = norm_inv.max((0..n).map(|j| output[i + j*n].norm_value()).sum());
+                        }
+                        for j in 0..n {
+                            for i in 0..n {
+                                let mut sum = <$t>::default();
+                                for k in 0..n {
+                                    sum += a[i + k*n] * output[k + j*n];
+                                }
+                                let residual = (sum - ($make)(f64::from(i == j), 0.0)).norm_value();
+                                assert!(residual <= 64.0 * f64::EPSILON * n as f64 * norm_a * norm_inv,
+                                    "team inverse n={n} ({i},{j}) {residual:e}");
+                            }
+                        }
+                        pf
+                    };
+                    let expected = run(Par::Seq);
+                    for width in [2, 3, 8] {
+                        let got = faer::team::with_team(width, |par| run(par));
+                        // Stable bounded matrices; products have n/2 pivots.
+                        assert!((got - expected).norm_value()
+                            <= 64.0 * f64::EPSILON * n as f64 * expected.norm_value(),
+                            "team Pfaffian n={n} width={width}");
+                    }
+                }
+            };
+        }
+        verify_team!(f64, |re, _im| re);
+        verify_team!(Complex64, Complex64::new);
+        eprintln!("shared-factor team inverse/Pfaffian checks passed (2/3/8 participants)");
+    }
+    if std::env::var_os("MVMC_FAER_PROBE_VERIFY_ONLY").is_some() {
+        return;
+    }
     use pfapack::{PivotIndex1Based, SqMat};
     use std::hint::black_box;
     use std::time::{Duration, Instant};
