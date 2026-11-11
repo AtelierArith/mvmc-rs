@@ -109,3 +109,28 @@ remains experimental. Resident E2E performance and the complete GPU gate remain 
 
 The optimized `pfapack` feature run including `faer-backend`, `blas-backend` and
 `simd-backend` passes all 39 enabled tests (one pre-existing ignored test).
+
+## Shared-factor provider prototype (2026-11-11)
+
+The released Pfaffian interface's discarded factors cause duplicate O(n^3)
+work when paired with a separate inverse. A local provider extension now
+retains L/D/permutation during the original faer reduction and computes the
+inverse with faer's triangular inverse and triangular GEMM. Its patch, pinned
+dependency lock, isolated reproduction script, domain/layout/identity checks
+and five timing samples are in
+`benchmark/pfaffian_faer/provider-prototype/`. Mean timing ratios for complete
+rebuilds reach about 1.49x real and 2.96x complex at n=512. This resolves the
+performance limitation in a prototype, not in a released dependency: no
+upstream PR has been submitted and the main workspace still uses the earlier
+experimental adapter. An asynchronous scope question asks the owner whether
+to include a PR to tensor4all/faer, since that would send a change proposal to
+maintainers outside the original mvmc-rs PR scope.
+
+The CUDA standalone-panel gate from source `f3abded0` completed: 115 library,
+3 CLI, 1 interval gate, 3 interval parity and 6 resident interval tests passed.
+It includes Julia fixtures and 20-step/window repeatability. The standard gate
+excludes the separate two-device context rejection test; that test remains to
+be run independently. The log is
+`benchmark/pfaffian_faer/validation/cuda-standalone-panels-gate.log`.
+New complete-rebuild CUDA dispatch is being validated separately; the above
+gate is not evidence for changes made after that build.
