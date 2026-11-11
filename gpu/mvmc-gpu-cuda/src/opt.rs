@@ -43,6 +43,8 @@ use tenferro_tensor::Engine;
 const SOURCE: &str = concat!(
     include_str!("resident_status.cuh"),
     "\n",
+    include_str!("pfaffian_panel.cuh"),
+    "\n",
     include_str!("resident_dense.cuh"),
     "\n",
     include_str!("resident_dh.cuh"),

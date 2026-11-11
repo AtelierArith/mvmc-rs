@@ -92,7 +92,7 @@ __device__ int resident_block_argmax(const double* x, int begin, int end) {
 // products, so A remains exactly skew-symmetric. Destroys A; tau and u hold n
 // doubles each. Every thread of the block must call it and receives the same
 // value.
-__device__ double resident_block_pfaffian(double* A, int n, double* tau, double* u) {
+__device__ double resident_block_pfaffian_unblocked(double* A, int n, double* tau, double* u) {
   __shared__ double s_pf;
   const int tid = threadIdx.x, nt = blockDim.x;
   if (tid == 0) s_pf = 1.0;
@@ -137,6 +137,27 @@ __device__ double resident_block_pfaffian(double* A, int n, double* tau, double*
   const double result = s_pf;
   __syncthreads();
   return result;
+}
+
+struct ResidentRealPfOps {
+  typedef double T;
+  __device__ static T one() { return 1.0; }
+  __device__ static T zero() { return 0.0; }
+  __device__ static T nan() { return __longlong_as_double(0x7ff8000000000000LL); }
+  __device__ static T neg(T x) { return -x; }
+  __device__ static T add(T x, T y) { return __dadd_rn(x, y); }
+  __device__ static T sub(T x, T y) { return __dsub_rn(x, y); }
+  __device__ static T mul(T x, T y) { return __dmul_rn(x, y); }
+  __device__ static T div(T x, T y) { return __ddiv_rn(x, y); }
+  __device__ static int argmax(const T* x, int begin, int end) {
+    return resident_block_argmax(x, begin, end);
+  }
+};
+
+__device__ double resident_block_pfaffian(double* A, int n, double* tau, double* u) {
+  // Small minors keep the lower-overhead reference kernel.
+  if (n < 128) return resident_block_pfaffian_unblocked(A, n, tau, u);
+  return resident_panel_pfaffian<ResidentRealPfOps>(A, n, tau, u);
 }
 
 // Gauss-Jordan inverse with partial pivoting: Y = A^-1 (column-major).

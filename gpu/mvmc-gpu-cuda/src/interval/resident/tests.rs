@@ -811,6 +811,8 @@ fn invalid_flag_full_pfaffian_path_matches_inverse_path() {
 /// same routine as an in-kernel walker rebuild. Kept out of the production
 /// module so it adds no compile or JIT time there.
 const PROBE_MODULE: &str = concat!(
+    include_str!("../../pfaffian_panel.cuh"),
+    "\n",
     include_str!("../../resident_dense.cuh"),
     r#"
 extern "C" __global__ void resident_dense_probe(const double* table, double* inv, double* pf,
