@@ -11,6 +11,8 @@ publish = false
 [features]
 default = []
 mpi = ["dep:mpi"]
+# Full-rebuild experiment; enabled explicitly until E2E/performance gates pass.
+faer-pfaffian = ["pfapack/faer-backend"]
 
 [dependencies]
 sfmt19937 = { workspace = true }
