@@ -8,3 +8,5 @@ c_toolbox/sr_operand_dump/*.patch whitespace=-blank-at-eol
 tests/fixtures/greenr2k/** whitespace=-blank-at-eol
 # Preserve native C inputs and outputs, including their trailing blank lines.
 tests/fixtures/native_c_lanczos_576/** whitespace=-blank-at-eol,-blank-at-eof
+# Square-lattice Hubbard benchmark inputs are the executed C-mVMC inputs, byte for byte.
+benchmark/square_hubbard_a100/inputs/** whitespace=-blank-at-eol,-blank-at-eof
