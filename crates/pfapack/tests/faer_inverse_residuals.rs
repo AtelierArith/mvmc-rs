@@ -46,7 +46,7 @@ fn permuted_pairs_have_small_backward_error_across_panels() {
                     let mut r = -Complex64::new(f64::from(i == j), 0.0);
                     let mut rr = -f64::from(i == j);
                     for k in 0..n {
-                        r = r + a[i + k * n] * inv[k + j * n];
+                        r += a[i + k * n] * inv[k + j * n];
                         rr += real[i + k * n] * inv_real[k + j * n];
                     }
                     row += r.norm();

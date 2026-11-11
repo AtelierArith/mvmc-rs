@@ -1,148 +1,110 @@
 # Faer Pfaffian migration (#731)
 
-Status: implementation in progress. GPU standalone-Pfaffian panels are implemented;
-CPU full rebuild integration is experimental, and final adoption/E2E gates remain open.
+Status: CPU default integration and final performance/CI validation in progress.
+GPU correctness and matched complex Opt/PhysCal performance are verified.
 
-The owner's requested target is tensor4all/faer for CPU Pfaffians and corresponding
-GPU acceleration, measured before PR merge. The starting report is
+The owner requested tensor4all/faer's accelerated Pfaffian calculation on CPU
+and corresponding GPU work, based on
 [pfaffian-benchmark/BENCHMARKS.md](https://github.com/AtelierArith/pfaffian-benchmark/blob/main/BENCHMARKS.md).
-Its source revision `14462105` identifies t4a-faer 0.32.0. The adapter currently
-pins the registry release 0.32.0; new performance results must identify this
-release rather than claim to measure that Git revision.
+Its source `14462105` is the base of t4a-faer 0.32.0. A Pfaffian-only replacement
+does not accelerate mVMC's complete rebuild: Pfaffian and inverse originally
+share one C-order LTL factorization. Pairing the released faer Pfaffian with a
+second LU factorization regressed real rebuilds, so that experiment was replaced.
+Historical measurements remain labelled in the report.
 
-## Current implementation
+## CPU implementation
 
-`pfapack`'s opt-in `faer-backend` feature supplies real and complex reusable
-workspaces, compact column-major input views, sequential execution and explicit
-provider errors. Inputs are non-destructive, with strict lower-triangle authority.
-The scalar in-place kernels remain independent references. Real/complex inverse
-workspaces now combine faer's Pfaffian and blocked LU/inverse with shared scratch
-and no per-evaluation allocation. The inverse is projected onto plain-transpose
-skew symmetry after finite-result validation.
+`pfapack/faer-backend` uses an immutable Git dependency on the public
+[AtelierArith/faer fork](https://github.com/AtelierArith/faer/tree/a3dd7b450e81df16065ebf51788414d87bb44171),
+revision `a3dd7b450e81df16065ebf51788414d87bb44171`, based on tensor4all/faer.
+The branch adds `pfaffian_inverse_scratch` and `pfaffian_inverse`: the original
+paired panel reduction retains L/D/permutation, followed by faer's triangular
+inverse and triangular GEMM. There is one factorization, no conjugation, and
+no inverse skew projection. Private retained factors do not expand the public
+API. The fork has not been published to a registry or proposed to external
+maintainers; neither action is needed to reproduce this pinned dependency.
 
-`mvmc-core/faer-pfaffian` is an experimental, non-default feature routing normal
-and FSZ rebuilds through those workspaces. The sampler stores the negative of
-the true inverse, as before. Non-skew input or provider failure restores the
-original plane and executes the C-order path, preserving INFO, partial storage
-and FSZ singular behavior. Real/complex scratch is lazy and reused per QP worker.
-The current experiment retains C rebuilds below n=256 (real) and n=64
-(complex), because the complete-rebuild probe shows regressions below those
-regions. The real large-matrix path remains a candidate, not a proven speedup.
+Real/complex workspaces retain scratch and select `Par::Seq` inside existing QP
+workers. Input has explicit row/column layout; its strict lower triangle is
+authoritative, the input remains untouched, and output is a true column-major
+inverse. Provider errors distinguish odd dimensions, zero pivots and numerical
+failure; inverse overflow is not accepted just because the Pfaffian is finite.
 
-The dependency adds t4a-faer 0.32.0 alongside tenferro's 0.28.2. Cargo unifies
-t4a-faer-traits at 0.24.3 and t4a-private-gemm-x86 at 0.1.28 (the latter is a
-minimum requirement of 0.32.0); workspace validation must cover those shared
-dependency updates too.
+`mvmc-core` and `mvmc-cli` enable `faer-pfaffian` by default. Full sampler and
+default `calc-m-all` measurement rebuilds use faer for real n>=128 and complex
+n>=64, including FSZ. Smaller matrices retain the faster C-order kernels.
+Presenting C's original upper storage as a row-major view represents -A to
+faer: its true inverse directly gives the sampler's stored -A^-1, and
+`(-1)^(n/2)` corrects the Pfaffian. Ignored lower/diagonal entries need not be
+skew. All provider failures restore the original matrix and take the C-order
+path, preserving its INFO and partial-storage contracts.
 
-## Call-path findings and remaining work
+The nonsingular block/full-factor INFO defect is an explicit exception under
+the existing clear-C-defect policy, supported by the independent native probe
+in `c_toolbox/pfaffian_block_info` and
+[Julia-mVMC#98](https://github.com/tmisawa/Julia-mVMC/issues/98).
+Genuinely singular inputs retain their errors. See `docs/NUMERICAL_COMPARISONS.md`.
 
-- `mvmc-core/src/pfaffian.rs` computes Pfaffian and inverse from the same
-  `dsktf2`/`zsktf2` decomposition and `utu2pfa`/`utu2inv` pipeline. Replacing
-  `pfaffian_ltl_*` alone does not migrate the sampler's rebuilds. The provider
-  currently returns only a Pfaffian, so inverse construction needs an explicitly
-  measured design and independent residual checks.
-- `mvmc-core/src/observables/lanczos_nodal.rs` calls standalone real/complex
-  Pfaffians and is a direct candidate for the reusable workspaces.
-- `mvmc-gpu/src/scalar.rs` also shares factorization between Pfaffian and inverse;
-  `tenferro_native.rs` implements a separate eager pipeline.
-- The resident CUDA kernel `gpu/mvmc-gpu-cuda/src/pfaffian_batched.cu` uses one
-  block per plane and upper-storage LTL/inverse construction. It is not a faer
-  call. Audit its resident fallback callers as well as explicit batched launches
-  before adding panel updates; preserve on-device lifetimes and transfer counts.
-- GPU standalone helpers now use an eight-column panel with eliminated columns
-  as factor storage. It needs the same matrix and two n-vectors, with no added
-  transfers or launches. Measurements retain the old kernel below n=128 (real)
-  and n=64 (complex). See `benchmark/pfaffian_faer/README.md` for raw probes.
-- The main `pfinv_f64`/`pfinv_c64` LTL/inverse rebuild kernels are still pending;
-  the standalone-helper speedup must not be presented as their speedup.
+## Call-path audit
 
-Error policies must distinguish structural zeros from nonfinite arithmetic and
-underflow. Do not silently map every provider failure to zero. Validate complex
-plain-transpose signs, empty/odd/singular inputs, panel crossings, C 1.4.0
-fixtures, inverse residuals and unchanged RNG on fixed control paths. Numerical
-acceptance divergences require first-divergence evidence, as specified in
-`docs/NUMERICAL_COMPARISONS.md`.
+- `pfaffian.rs` routes all four normal/FSZ real/complex full rebuild entries
+  through the selected workspace before their existing fallback.
+- `observables/lanczos_nodal.rs` has the only two standalone Pfaffian callers.
+  Its private `expand_terms` appends at most two Hamiltonian operator pairs to
+  at most two external pairs; reductions only shorten that list. Thus the
+  child matrix order is at most eight. These tiny kernels retain the reference
+  implementation rather than paying a large-matrix workspace cost.
+- Explicit `c-order` and `tenferro` measurement stages remain independently
+  selectable C-order executors. The default `calc-m-all` stage uses the new
+  size dispatch. `mvmc-gpu` scalar/native providers also remain references.
+- The standalone CUDA workspace disables core's default features explicitly,
+  preserving its CPU C-order oracle and existing lock. No CPU faer team/state
+  is added to the resident GPU runner.
 
-## Validation so far
+## Resident GPU implementation
 
-On Linux x86_64, the initial adapter passes `cargo check -p pfapack --features
-faer-backend`, `cargo nextest run -p pfapack --features faer-backend` (35 passed;
-one existing ignored test), and `cargo clippy -p pfapack --features faer-backend
---all-targets -- -D warnings`. New tests cover boundary/error behavior, an
-independent complex 4x4 formula with workspace reuse, and a 64x64 panel-crossing
-comparison to the scalar reference. Full workspace, optimized BLAS/SIMD,
-doctests, Linux/macOS CI, GPU correctness and E2E performance gates remain open.
+CUDA has no faer GPU Pfaffian API. The Rust/device implementation ports its
+delayed panel update organization into the existing resident kernels. Width-eight
+panels reuse existing buffers; full rebuilds retain L/D/permutation and share
+the reduction with inverse construction. The original input backup survives
+through the inverse, so pivot, reciprocal and nonfinite failures restore it
+and execute the old reference on device, without a host round trip.
 
-Additional verification on 2026-11-11:
+Full rebuild dispatch selects panels for real n=64..126 and complex n>=64.
+The existing faster Julia paired factorization remains for real n>=128,
+including its independent C-order cancellation fallback. Standalone complex
+Pfaffians select panels at n>=64. Standalone real proposal/observable matrices
+retain the old loop: dense random kernel gains did not translate to a physical
+L128 improvement. Controlled measurements and reverted experiments are retained.
 
-- `cargo nextest run -p pfapack --features 'faer-backend blas-backend'`:
-  39 passed, one pre-existing ignored test. New inverse tests cover real/complex
-  n=0/2/4/24/26/64, workspace reuse, independent identity residuals, underflow,
-  nonfinite input and inverse overflow. Clippy passes for that configuration.
-- `cargo clippy -p mvmc-core --features faer-pfaffian --lib -- -D warnings` passes.
-  The direct integration sign/restoration test passes.
-- The initial all-size core feature trial found three comparison failures:
-  `stage_a_matches_calc_m_all_real_and_applies_the_invm_sign`,
-  `stage_backend_c_order_measurement_is_byte_identical_to_calc_m_all`, and
-  `stage_backend_tenferro_measurement_matches_calc_m_all`. These compare the new
-  LU inverse with explicit old C-order stages. The first observed kernel
-  differences were about 6e-15 (before skew projection); after projection, the
-  reported n=4 difference is about 1e-15, including zeroed diagonals. One
-  three-step SR output difference before projection was 1.6185e-14 in
-  `zqp_opt.dat`. The measured size dispatch now retains the faster reference
-  implementation at these small sizes. Rerunning the targeted feature tests
-  passes all 14 tests, including all three above, without modifying tests or
-  tolerances. A separate n=256 integration test verifies actual provider use,
-  negative inverse residuals and restored input on failure. Validation for
-  eligible-size physical workloads and their discrete controls remains pending.
-- CUDA 12.9.2 container `b129bd583bbe`, RTX 3060 device 0: the Rust ignored tests
-  `dense_refactor_matches_known_pfaffians_and_inverses` and
-  `panel_pfaffians_match_cpu_reference` pass. The latter compares real and
-  complex n=2/6/24/26/64/128/130/256 against the independent CPU LTL path.
+There are no added device allocations, launches, host transfers or explicit
+synchronizations. Complex shared storage is 44n bytes, within 48 KiB at n<=1024.
 
-CPU real Pfaffian+LU inverse has not demonstrated an overall rebuild speedup,
-unlike complex n>=64. Five repeated probes with the final skew projection
-confirm this (mean timing ratios: 0.57–0.95x real and 1.14–1.69x complex n>=64).
-The preliminary report records this limitation explicitly. Real default adoption
-requires further inverse optimization or another measured strategy. The feature
-remains experimental. Resident E2E performance and the complete GPU gate remain open.
+## Evidence and remaining gates
 
-The optimized `pfapack` feature run including `faer-backend`, `blas-backend` and
-`simd-backend` passes all 39 enabled tests (one pre-existing ignored test).
+The complete report, raw results, source manifests and reproduction commands
+are in `benchmark/pfaffian_faer/README.md` and `e2e/README.md` below that directory.
 
-## Shared-factor provider prototype (2026-11-11)
+- Final provider tests cover f32/f64/c32/c64, strided layouts, triangle poison,
+  plain-transpose complex signs, empty/odd/singular/nonfinite/extreme scales,
+  panel boundaries and independently bounded inverse residuals. Full provider
+  tests and doctests pass; held-team allocation tests pass for 4/8/70 workers,
+  and its minimal no_std library build passes. Logs identify the fork revision;
+  this is downstream validation, not a tensor4all/faer-main benchmark campaign.
+- The final CPU adapter's eight focused tests pass, including upper-triangle
+  authority, odd-pair sign, negative inverse, failure restoration and residuals.
+  Full workspace/default adoption and CPU matched E2E checks are in progress.
+- The selected CUDA source passes all 132 numerical/runner tests, including
+  Julia GPU fixtures, supplied tapes, RNG/transfer contracts, 20-step/window
+  repeatability, inverse residuals and two-device context rejection.
+- Selected complex L128 Opt improves 1.1575x and PhysCal 1.1230x in matched
+  alternating three-repetition cohorts. Real L128 is effectively unchanged
+  (0.9974x Opt, 0.9942x short PhysCal); no real L128 gain is claimed. Explicit
+  transfer calls/bytes and synchronizations are unchanged.
+- Final CPU timings, workspace tests, optimized features, doctests, lint and
+  exact-head Linux/macOS CI must pass before PR #732 is made ready and merged.
 
-The released Pfaffian interface's discarded factors cause duplicate O(n^3)
-work when paired with a separate inverse. A local provider extension now
-retains L/D/permutation during the original faer reduction and computes the
-inverse with faer's triangular inverse and triangular GEMM. Its patch, pinned
-dependency lock, isolated reproduction script, domain/layout/identity checks
-and five timing samples are in
-`benchmark/pfaffian_faer/provider-prototype/`. Mean timing ratios for complete
-rebuilds reach about 1.49x real and 2.96x complex at n=512. This resolves the
-performance limitation in a prototype, not in a released dependency: no
-upstream PR has been submitted and the main workspace still uses the earlier
-experimental adapter. An asynchronous scope question asks the owner whether
-to include a PR to tensor4all/faer, since that would send a change proposal to
-maintainers outside the original mvmc-rs PR scope.
-
-The CUDA standalone-panel gate from source `f3abded0` completed: 115 library,
-3 CLI, 1 interval gate, 3 interval parity and 6 resident interval tests passed.
-It includes Julia fixtures and 20-step/window repeatability. The standard gate
-excludes the separate two-device context rejection test; that test remains to
-be run independently. The log is
-`benchmark/pfaffian_faer/validation/cuda-standalone-panels-gate.log`.
-New complete-rebuild CUDA dispatch is being validated separately; the above
-gate is not evidence for changes made after that build.
-
-The new CUDA shared-factor rebuild now passes production-entry tests against
-CPU reference/identity residuals for real and complex n=24/26/64/128/130/256,
-including zero-pivot status and shared-memory bounds. The complex L128 Opt
-stage test passes. The measured dispatch selects new real n=64..126 and
-complex n>=64, while preserving the faster existing Julia paired real n>=128
-path and its independent C-order cancellation fallback. Rebuild probe details
-and the distinction from the real resident baseline are in
-`benchmark/pfaffian_faer/README.md`. Complete post-change gates and E2E/transfer
-measurements remain pending. The focused follow-up delayed-update/rebuild-boundary
-regression passed after the L128 stage. A complete gate for the new rebuild
-source (`38f2849b`) is now running, including a separate two-device context test.
+Computed floating-point values use explicit numerical bounds, never bitwise
+comparison. RNG initialization/state/draw order remain independently exact for
+fixed control paths. Any acceptance divergence requires locating its first
+numerical cause rather than attributing it to Monte Carlo noise.

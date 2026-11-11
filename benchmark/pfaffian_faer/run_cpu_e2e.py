@@ -65,7 +65,8 @@ class Worker:
                 "-e", "MVMC_RS_INNER_THREADS=1",
                 "-v", f"{volume}:/target:ro", "-v", f"{args.input.parent}:/inputs:ro",
                 "-v", f"{args.output}:/results", args.image,
-                "taskset", "-c", str(args.cpu), "/target/release/examples/pfaffian_e2e_worker",
+                "taskset", "-c", str(args.cpu),
+                "/target/target/linux-x86_64/release/examples/pfaffian_e2e_worker",
                 args.mode, f"/inputs/{args.input.name}", f"/results/{label}", str(args.steps), args.dtype]
         self.proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=self.err, text=True, bufsize=1)
