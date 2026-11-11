@@ -155,9 +155,10 @@ struct ResidentRealPfOps {
 };
 
 __device__ double resident_block_pfaffian(double* A, int n, double* tau, double* u) {
-  // Small minors keep the lower-overhead reference kernel.
-  if (n < 128) return resident_block_pfaffian_unblocked(A, n, tau, u);
-  return resident_panel_pfaffian<ResidentRealPfOps>(A, n, tau, u);
+  // Structured proposal/observable matrices favor this loop: using the panel
+  // here regressed L128 Opt by 7%, despite its dense standalone benchmark gain.
+  // Shared-factor full rebuilds select panels separately in pfaffian_batched.cu.
+  return resident_block_pfaffian_unblocked(A, n, tau, u);
 }
 
 // Gauss-Jordan inverse with partial pivoting: Y = A^-1 (column-major).

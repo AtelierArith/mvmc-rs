@@ -102,3 +102,14 @@ ratio is 0.9336x and PhysCal is 0.9490x. `noinline-real-*` adds only
 the respective ratios are 0.9292x and 0.9426x. These production changes were
 reverted after measurement. All outputs and raw traffic remain reproducible.
 The resource diagnostics do not establish the cause of the regression.
+
+`reference-proposal-real-*` changes only the real standalone wrapper to call
+the original unblocked Pfaffian. The full-rebuild panel dispatch is retained.
+Real Opt then measures 4.9498 s before and 4.9628 s after (0.9974x), and
+PhysCal 0.5588 s before and 0.5620 s after (0.9942x). This controlled comparison
+removes the earlier regression at this workload's measured resolution; it
+does not claim a real L128 speedup. Outputs and explicit traffic still agree.
+The production real standalone wrapper therefore retains the established loop.
+Complex final-source timing and the broad CUDA gate are repeated after this
+selection change. The only later change to that wrapper is an explanatory
+comment; its executed body is the one measured here.

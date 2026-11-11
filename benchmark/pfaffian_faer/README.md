@@ -57,8 +57,11 @@ block-diagonal and zero planes. All observed differences were zero; the
 assertion uses an explicit numerical bound, not bitwise equality.
 
 Panel updates gain about 1.44–1.94x for real n=128–512 and 1.07–1.68x for
-complex n=64–512 in this probe. Production dispatch retains the unblocked
-helper below these respective sizes. The new helper uses the existing two
+complex n=64–512 in this probe. Complex production dispatch retains the
+unblocked helper below n=64. Later E2E measurements show a real L128 regression
+when its structured proposal/observable matrices use the panel, so real
+standalone production retains the old loop; the real dense-panel rows remain
+candidate measurements, not a production speedup claim. The new helper uses the existing two
 n-vectors and matrix scratch, with no added allocation, transfer or launch.
 This is a CUDA port of the panel-update organization, not a faer GPU API call.
 
