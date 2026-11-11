@@ -6,13 +6,20 @@
 #ifndef MVMC_PFAFFIAN_PANEL
 #define MVMC_PFAFFIAN_PANEL
 
-template <typename Ops>
+template <typename Ops, bool Factor = false>
 __device__ typename Ops::T resident_panel_pfaffian(
-    typename Ops::T* A, int n, typename Ops::T* tau, typename Ops::T* u) {
+    typename Ops::T* A, int n, typename Ops::T* tau, typename Ops::T* u,
+    typename Ops::T* lower = nullptr, typename Ops::T* diagonal = nullptr,
+    int* permutation = nullptr, int* factor_status = nullptr) {
   typedef typename Ops::T T;
   __shared__ T product;
   const int tid = threadIdx.x, nt = blockDim.x;
   if (tid == 0) product = Ops::one();
+  if (Factor) {
+    if (tid == 0) *factor_status = 0;
+    for (int i=tid;i<n;i+=nt) permutation[i]=i;
+    for (int i=tid;i<n*n;i+=nt) lower[i] = i%n==i/n ? Ops::one() : Ops::zero();
+  }
   __syncthreads();
   if (n & 1) return Ops::zero();
   const int panel = 8;
@@ -33,6 +40,7 @@ __device__ typename Ops::T resident_panel_pfaffian(
       const int kp = Ops::argmax(tau, k + 1, n);
       if (kp < 0) {
         if (tid == 0) product = kp == -1 ? Ops::zero() : Ops::nan();
+        if (Factor && tid == 0) *factor_status = kp == -1 ? 1 : -1;
         __syncthreads();
         const T value = product;
         __syncthreads();
@@ -47,6 +55,14 @@ __device__ typename Ops::T resident_panel_pfaffian(
           A[k + 1 + (size_t)c*n] = A[kp + (size_t)c*n];
           A[kp + (size_t)c*n] = x;
         }
+        if (Factor) {
+          for (int c=tid;c<k;c+=nt) {
+            const T x=lower[k+1+(size_t)c*n];
+            lower[k+1+(size_t)c*n]=lower[kp+(size_t)c*n];
+            lower[kp+(size_t)c*n]=x;
+          }
+          if (tid==0) { const int p=permutation[k+1]; permutation[k+1]=permutation[kp]; permutation[kp]=p; }
+        }
         __syncthreads();
         for (int r = tid; r < n; r += nt) {
           const T x = A[r + (size_t)(k+1)*n];
@@ -58,6 +74,7 @@ __device__ typename Ops::T resident_panel_pfaffian(
       }
       const T d = A[k + 1 + (size_t)k*n];
       if (tid == 0) product = Ops::mul(product, Ops::neg(d));
+      if (Factor && tid==0) diagonal[k/2]=d;
       for (int r = k + 2 + tid; r < n; r += nt) {
         T value = A[r + (size_t)(k+1)*n];
         for (int p = start; p < k; p += 2) {
@@ -67,6 +84,10 @@ __device__ typename Ops::T resident_panel_pfaffian(
         }
         u[r] = value;
         tau[r] = Ops::div(A[r + (size_t)k*n], d);
+        if (Factor) {
+          lower[r+(size_t)k*n]=Ops::neg(Ops::div(value,d));
+          lower[r+(size_t)(k+1)*n]=tau[r];
+        }
       }
       __syncthreads();
       for (int r = k + 2 + tid; r < n; r += nt) {

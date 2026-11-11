@@ -65,4 +65,35 @@ This is a CUDA port of the panel-update organization, not a faer GPU API call.
 **Not yet established:** repeated medians, broad conditioning/nonfinite
 coverage, resident Opt/PhysCal E2E performance and transfer counters, full
 Julia GPU fixture gates, and the complete Pfaffian/inverse rebuild kernels.
-The existing CUDA LTL/inverse rebuild kernel has not been replaced yet.
+At the time of that standalone probe, the complete rebuild kernels were not
+changed. The additional complete-rebuild work below is validated separately.
+
+## GPU complete-rebuild panel probe
+
+`gpu_inverse_probe.cu` builds the actual complete-rebuild helpers. Compile it
+with the same nvcc flags as the standalone probe above (substitute its source
+and binary name). `gpu-rebuild-probe-20261111.csv` records RTX 3060 device 1,
+16-plane batches, CUDA event times for ten launches, including device assembly
+copies and excluding host transfers/allocation. Fifteen planes are bounded
+dense matrices; one zero plane verifies the reference status/failure fallback.
+Inverse differences and Pfaffians are checked numerically against the old
+upper-LTL implementation before timing.
+
+The complete shared panel kernel gains about 1.9x for real n=64 and 2.0–2.4x
+for complex n=64–512 versus the old LTL path. The existing **real resident**
+n>=128 path already uses a Julia paired factorization and is substantially
+faster than the new candidate (rows `f64-current-resident`); it is retained,
+along with its independent C-order cancellation fallback. Production now uses
+the new kernel for real n=64..126 and complex n>=64. Complex launch geometry
+reserves `44n` shared bytes and stays within 48 KiB at the supported n<=1024.
+The same three global matrices are reused, with no new allocation, launch or
+host round trip. Numerical/pivot failures and overflowing reciprocals take the
+reference path on device before the original input backup is reused.
+
+Rust tests of the production dispatch pass for real/complex n=24/26/64/128/130/256,
+covering an independent CPU Pfaffian/inverse, exact zero-pivot status, zero
+failed output, normwise backward residual and conditioning-scaled inverse
+comparison. The production complex L128 Opt stage test passes too. Full final
+GPU gates, repeated timings, transfer counters and Opt/PhysCal E2E measurements
+remain pending; the earlier 128-test gate validates only the standalone-panel
+commit, not this later change.

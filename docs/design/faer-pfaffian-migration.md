@@ -134,3 +134,14 @@ be run independently. The log is
 `benchmark/pfaffian_faer/validation/cuda-standalone-panels-gate.log`.
 New complete-rebuild CUDA dispatch is being validated separately; the above
 gate is not evidence for changes made after that build.
+
+The new CUDA shared-factor rebuild now passes production-entry tests against
+CPU reference/identity residuals for real and complex n=24/26/64/128/130/256,
+including zero-pivot status and shared-memory bounds. The complex L128 Opt
+stage test passes. The measured dispatch selects new real n=64..126 and
+complex n>=64, while preserving the faster existing Julia paired real n>=128
+path and its independent C-order cancellation fallback. Rebuild probe details
+and the distinction from the real resident baseline are in
+`benchmark/pfaffian_faer/README.md`. Complete post-change gates and E2E/transfer
+measurements remain pending. The focused follow-up test process is still
+running the delayed-update/rebuild-boundary regression after the L128 stage.

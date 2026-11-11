@@ -238,7 +238,8 @@ extern "C" __global__ void interval_complex_hop(
 }
 
 // Assemble the complex plane A = -S(rs, rs) of a requested walker and factor
-// it with the batched complex PFAPACK kernel (C CalculateMAll_fcmp).
+// it with a paired panel factorization (n>=64) or the C-order reference.
+// Failure paths retain the original PFAPACK status through a device-only fallback.
 extern "C" __global__ void interval_complex_factor(
     const int* rebuild, const int* error, const int* ele, const Cx<double>* slater,
     Cx<double>* A, Cx<double>* W, Cx<double>* OUT, Cx<double>* PF, int* ST,
@@ -254,7 +255,7 @@ extern "C" __global__ void interval_complex_factor(
     a[index] = -SLT(slater, q, ri, rj, 2 * nsite);
   }
   __syncthreads();
-  entry<Cx<double>>(A, W, OUT, PF, ST, n);
+  body_c64(A, W, OUT, PF, ST, n);
 }
 
 // interval_resident_commit with complex tables: publish a walker whose

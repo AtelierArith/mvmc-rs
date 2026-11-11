@@ -1,6 +1,6 @@
 // Batched Pfaffian + inverse of skew-symmetric matrices, one thread block per plane.
 //
-// Same math as crates/pfapack: dsktf2/zsktf2 (Parlett-Reid style skew LTL^T with partial
+// The reference path follows crates/pfapack: dsktf2/zsktf2 (skew LTL^T with partial
 // pivoting, upper storage), utu2pfa, utu2inv. Planes are column-major n x n, stored back to
 // back (plane p at offset p*n*n). The kernel works in global memory (the planes of n = 2*Ne up
 // to 128 do not fit shared memory for complex data) with small per-plane vectors in dynamic
@@ -10,6 +10,9 @@
 // Status codes (int per plane): 0 ok, k > 0 zero pivot (pfapack INFO, 1-based row),
 // -1 non-finite Pfaffian. For status != 0 the output plane is zero; a zero-pivot plane
 // reports pf = 0.
+// Production also selects a shared paired panel factorization for real
+// n=64..126 and complex n>=64. Large real resident rebuilds retain their
+// faster Julia paired kernel and this file's independent cancellation fallback.
 
 template <typename R> struct Cx { R re, im; };
 
@@ -517,12 +520,27 @@ __device__ inline void entry(T* A, T* W, T* OUT, T* PF, int* ST, int n) {
 // path (bit-identical to the pre-#517 kernel there); odd n has no 16-byte-aligned double2 staging
 // and stays generic as well.
 __device__ inline void body_f64(double* A, double* W, double* OUT, double* PF, int* ST, int n) {
-  if (n >= 64 && (n & 1) == 0) {
+  if (n >= 64 && n < 128 && (n & 1) == 0) {
+    const size_t p=blockIdx.x, nn=(size_t)n*n;
+    pfinv_panel_plane<PfinvRealPanelOps>(A+p*nn,W+p*nn,OUT+p*nn,PF+p,ST+p,n);
+  } else if (n >= 64 && (n & 1) == 0) {
     pfinv_plane_f64(A + blockIdx.x * (size_t)n * n, W + blockIdx.x * (size_t)n * n,
                     OUT + blockIdx.x * (size_t)n * n, PF + blockIdx.x, ST + blockIdx.x, n);
   } else {
     entry<double>(A, W, OUT, PF, ST, n);
   }
+}
+
+// Real n>=128 resident rebuilds already use the faster Julia paired kernel,
+// followed by this file's independent C-order fallback for projection
+// cancellation. Keep that fallback; the new real panel wins below n=128.
+__device__ inline void body_c64(Cx<double>* A,Cx<double>* W,Cx<double>* OUT,Cx<double>* PF,int* ST,int n) {
+  if (n>=64 && !(n&1)) {
+    const size_t p=blockIdx.x, nn=(size_t)n*n;
+    pfinv_panel_plane<PfinvComplexPanelOps>(reinterpret_cast<rcx*>(A+p*nn),
+        reinterpret_cast<rcx*>(W+p*nn),reinterpret_cast<rcx*>(OUT+p*nn),
+        reinterpret_cast<rcx*>(PF+p),ST+p,n);
+  } else entry<Cx<double>>(A,W,OUT,PF,ST,n);
 }
 
 extern "C" __global__ void __launch_bounds__(256, 2) pfinv_f64(double* A, double* W, double* OUT, double* PF, int* ST, int n) {
@@ -538,11 +556,20 @@ extern "C" __global__ void __launch_bounds__(1024, 1) pfinv_f64_wide(double* A, 
   body_f64(A, W, OUT, PF, ST, n);
 }
 extern "C" __global__ void pfinv_c64(Cx<double>* A, Cx<double>* W, Cx<double>* OUT, Cx<double>* PF, int* ST, int n) {
-  entry<Cx<double>>(A, W, OUT, PF, ST, n);
+  body_c64(A, W, OUT, PF, ST, n);
 }
 extern "C" __global__ void pfinv_f32(float* A, float* W, float* OUT, float* PF, int* ST, int n) {
   entry<float>(A, W, OUT, PF, ST, n);
 }
 extern "C" __global__ void pfinv_c32(Cx<float>* A, Cx<float>* W, Cx<float>* OUT, Cx<float>* PF, int* ST, int n) {
   entry<Cx<float>>(A, W, OUT, PF, ST, n);
+}
+
+__device__ void PfinvRealPanelOps::reference(double* A,double* W,double* OUT,double* PF,int* ST,int n) {
+  if (n>=64 && !(n&1)) pfinv_plane_f64(A,W,OUT,PF,ST,n);
+  else pfinv_plane<double>(A,W,OUT,PF,ST,n);
+}
+__device__ void PfinvComplexPanelOps::reference(rcx* A,rcx* W,rcx* OUT,rcx* PF,int* ST,int n) {
+  pfinv_plane<Cx<double>>(reinterpret_cast<Cx<double>*>(A),reinterpret_cast<Cx<double>*>(W),
+      reinterpret_cast<Cx<double>*>(OUT),reinterpret_cast<Cx<double>*>(PF),ST,n);
 }

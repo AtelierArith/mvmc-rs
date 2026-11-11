@@ -639,8 +639,8 @@ impl ResidentInterval {
         Ok(())
     }
 
-    /// Complex rebuild of every flagged walker: C CalculateMAll_fcmp on the
-    /// device (`interval_complex_factor`), then the validity commit.
+    /// Complex rebuild of every flagged walker: paired panels (n>=64) or the
+    /// C-order reference on the device, followed by the validity commit.
     fn enqueue_complex_rebuild(
         &self,
         exec: &RawExec<'_, '_>,
