@@ -1,0 +1,22 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+versions Versions { driver_version: Some("580.178.04"), cuda_driver_api: Some("13.0"), nvrtc: Some("12.9"), cublas: Some("12.9.2"), cusolver: Some("11.7.5") }
+mode phys walkers 320 steps_or_windows 1 warmup 128 interval 128 seed 79
+rep,seconds,upload_calls,upload_bytes,download_calls,download_bytes,synchronizations,scopes
+0,52.914564774,27,21648912,3,392,11,8
+1,5.161370808,27,21648912,3,392,11,8
+2,5.209333975,27,21648912,3,392,11,8
+3,5.191337401,27,21648912,3,392,11,8

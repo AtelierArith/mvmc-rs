@@ -71,4 +71,26 @@ parameters. The first parameter entries exceeding 64 epsilon at unit scale
 are recorded in `numerical.json`; these observations accompany the kernel
 residual and stage gates, rather than excusing an RNG discrepancy.
 
-Real Opt and real/complex PhysCal final measurements are still pending.
+The matching `final-complex-phys-20261112` cohort gives 5.8456 s to
+5.1913 s (1.1260x) for one saved-sample window. Its explicit traffic is
+27 uploads/21,648,912 bytes, three downloads/392 bytes, 11 synchronizations
+and eight scopes on every repetition. Maximum absolute cross-revision energy
+error is 1.85e-13; all Green-function component errors are below 1.88e-14.
+
+## Real-path regression under investigation
+
+These `final-*` names identify the post-overflow-fix measurement cohorts, not
+a declaration that adoption validation is finished. The same source gives:
+
+| Input | Before median | After median | Before/after |
+| --- | ---: | ---: | ---: |
+| Real Opt, 20 steps | 4.9551 s | 5.3252 s | 0.9305x |
+| Real PhysCal, one window | 0.5637 s | 0.5960 s | 0.9457x |
+
+Both real cohorts preserve traffic and pass repeatability. They retain the
+established large-real arithmetic, but the new panel branch was compiled into
+the same resident fallback entry. A separate small-real entry is being tested
+to remove that potential resource interaction. The table records a regression,
+not a successful real-path speedup or a resolved explanation. Final adoption
+requires measuring and explaining the effect; later cohorts must retain these
+results rather than overwrite them.
