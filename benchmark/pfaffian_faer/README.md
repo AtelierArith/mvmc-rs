@@ -121,9 +121,13 @@ experiments changing inlining/dispatch must not inherit this full-source claim.
 See [e2e/README.md](e2e/README.md) for matched public API measurements, raw
 outputs, source manifests and transfer counters. The fixed-input-backup CUDA
 kernel improves complex L128 Opt by 1.1593x and PhysCal by 1.1260x. The same
-source regresses real L128 Opt and short PhysCal by roughly 7% and 5%; this is
-being investigated and prevents declaring adoption complete. CPU default
-adoption and its full-factor INFO boundary also remain unresolved.
+source regresses real L128 Opt and short PhysCal by roughly 7% and 5%.
+Retaining the established real standalone loop removes that regression at the
+measured resolution (0.9974x Opt, 0.9942x short PhysCal), with no real L128
+speedup claimed. The selected-source complex timing and full CUDA gate are
+being repeated. CPU default adoption remains pending; its full-factor INFO
+difference is documented under the existing clear-C-defect policy, with an
+independent native-library probe and upstream report Julia-mVMC#98.
 
 ## CUDA compilation resource diagnostics
 

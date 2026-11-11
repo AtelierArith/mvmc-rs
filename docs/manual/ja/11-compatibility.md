@@ -117,6 +117,8 @@ Rustへの移植は、**Juliaの設計**(公開API、ランナーの構造、ラ
 16. **0-3 以外の `NExUpdatePath`**(#681)。C 1.3.0 の `getUpdateType` は 0-3 以外の値に `NONE` を返し、`readdef.c:714-724` は局在スピンがある場合しかこの値を検査しません。そのためCは実行を開始しても一度も手を提案せず、初期配置を全サンプルとして保存します。C 1.4.0(`vmcmake.c:797-826`)は 4/5 を t-J のスピンホッピング更新、6 をダブロンのみのペアホッピングに割り当てました(上流 #94、#97、#98)が、それ以外の値には依然として手がありません。Rustは 1.4.0 の更新も何もしない動作も移植しません。`validate_ex_update_path`(`crates/mvmc-core/src/validation.rs`)が、Opt と PhysCal、CPU と常駐GPUのすべてで、出力の前に 0-3 以外の値を拒否します。4/5/6 の場合は、1.4.0 の更新が未移植であることをメッセージで示します。
 17. **ComplexUHF のレコード数**(#680)。C 1.3.0 の `ReadDefFileError` は `Error: <file> (Broken file or Not exist)` を表示しても 0 を返していたため、宣言より少ないレコードの定義ファイルでも、0で埋めた項のまま実行が続きました。上流は 1.4.0 で修正しました(#81。`extern/mVMC-1.4.0/src/ComplexUHF/readdef.c:70-74` は 1 を返します)。Rustはこの修正に従い、同じ行を表示してから、出力の前にエラーで停止します。宣言より多いレコードは警告付きで捨て、末尾の空行はレコードとして数えません([COMPLEX_UHF](../../COMPLEX_UHF.md))。
 
+18. **非特異なブロック行列と全因子分解の INFO**（#731、[Julia-mVMC#98](https://github.com/tmisawa/Julia-mVMC/issues/98)）。全 `DSKTRF("U","N")` は三重対角の副対角要素が0なら INFO を返しますが、偶数位置の区切りが0でも行列が特異とは限りません。C の `matrix.c:264-265` はこれらを全て失敗した平面として扱います。上三角要素が2の独立した2×2反対称ブロックを2個並べた行列は Pfaffian が4で逆行列も有限ですが、C は INFO=2 を返します。既存の「明白なCの欠陥は再現しない」方針に従い、実験的な faer 再構築経路はこの非特異なケースを受理し、真に特異な入力は引き続き拒否します。CPU の既定経路はまだ変更していません。構造上の例外と独立した解析的回帰テストは [NUMERICAL_COMPARISONS](../../NUMERICAL_COMPARISONS.md#nonsingular-block-matrices-and-full-factor-info-731) に記録しており、数値許容誤差は緩めていません。
+
 ## 11.6 本マニュアルで検証しなかったこと
 
 MPIでの実行(ランチャーが利用できませんでした)、macOSでの挙動、`mvmc-cli` の `simd-backend` ビルド、`crates/mvmc-cli/examples` 配下のサンプルプログラム、OptTrans(`-o`)の実行、
