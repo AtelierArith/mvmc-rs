@@ -132,8 +132,13 @@ def main():
                               for p in paths if (getattr(args, s)/p.relative_to(args.after)).exists()}
                           for s in ("before", "after")},
         "lock_sha256": {s: digest(getattr(args, s)/"Cargo.lock") for s in ("before", "after")},
+        "workspace_manifest_sha256": {s: digest(getattr(args, s)/"Cargo.toml") for s in ("before", "after")},
         "input_sha256": {p.name: digest(p) for p in sorted(args.input.parent.iterdir()) if p.is_file()},
         "image_id": command("docker", "image", "inspect", args.image, "--format", "{{.Id}}"),
+        "toolchain": command("docker", "run", "--rm", args.image, "bash", "-lc",
+                             "rustc -Vv; pkg-config --modversion openblas; mpichversion"),
+        "host_cpu": command("lscpu", "-J"),
+        "build": "cargo build --release -p mvmc-cli --example pfaffian_e2e_worker --locked --offline; default features; separate named target volumes",
         "scope": "public CPU API, parsing, initialization, sampling, optimizer and normal file IO; excludes worker startup, serialization and returned-state teardown; seed79, opt nsmp=steps",
         "numerics": "same-implementation repeat bounded; cross-provider trajectory differences require first-divergence analysis, no blanket tolerance",
     }
