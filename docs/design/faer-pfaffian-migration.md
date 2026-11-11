@@ -143,5 +143,6 @@ complex n>=64, while preserving the faster existing Julia paired real n>=128
 path and its independent C-order cancellation fallback. Rebuild probe details
 and the distinction from the real resident baseline are in
 `benchmark/pfaffian_faer/README.md`. Complete post-change gates and E2E/transfer
-measurements remain pending. The focused follow-up test process is still
-running the delayed-update/rebuild-boundary regression after the L128 stage.
+measurements remain pending. The focused follow-up delayed-update/rebuild-boundary
+regression passed after the L128 stage. A complete gate for the new rebuild
+source (`38f2849b`) is now running, including a separate two-device context test.
