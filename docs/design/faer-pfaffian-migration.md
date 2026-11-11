@@ -1,7 +1,7 @@
 # Faer Pfaffian migration (#731)
 
-Status: CPU default integration and final performance/CI validation in progress.
-GPU correctness and matched complex Opt/PhysCal performance are verified.
+CPU default integration, CPU/GPU correctness and matched performance are verified
+locally. The final exact-head Linux/macOS CI gate is required before merge.
 
 The owner requested tensor4all/faer's accelerated Pfaffian calculation on CPU
 and corresponding GPU work, based on
@@ -93,7 +93,8 @@ are in `benchmark/pfaffian_faer/README.md` and `e2e/README.md` below that direct
   this is downstream validation, not a tensor4all/faer-main benchmark campaign.
 - The final CPU adapter's eight focused tests pass, including upper-triangle
   authority, odd-pair sign, negative inverse, failure restoration and residuals.
-  Full workspace/default adoption and CPU matched E2E checks are in progress.
+  The all-features workspace passes 1,455 tests. Doctests, all-target Clippy and
+  the explicitly enabled C-referenced threaded runner matrix pass too.
 - The selected CUDA source passes all 132 numerical/runner tests, including
   Julia GPU fixtures, supplied tapes, RNG/transfer contracts, 20-step/window
   repeatability, inverse residuals and two-device context rejection.
@@ -101,8 +102,11 @@ are in `benchmark/pfaffian_faer/README.md` and `e2e/README.md` below that direct
   alternating three-repetition cohorts. Real L128 is effectively unchanged
   (0.9974x Opt, 0.9942x short PhysCal); no real L128 gain is claimed. Explicit
   transfer calls/bytes and synchronizations are unchanged.
-- Final CPU timings, workspace tests, optimized features, doctests, lint and
-  exact-head Linux/macOS CI must pass before PR #732 is made ready and merged.
+- CPU real L128 Opt/PhysCal improves 1.0418x/1.1027x; complex improves
+  1.2153x/1.2711x. All recorded RNG state/counts, configurations and acceptance
+  counters match across implementations; same-implementation repetitions pass.
+  Five final full-rebuild probes confirm real n>=128 and complex n>=64 gains.
+- Exact-head Linux/macOS CI must pass before PR #732 is merged.
 
 Computed floating-point values use explicit numerical bounds, never bitwise
 comparison. RNG initialization/state/draw order remain independently exact for

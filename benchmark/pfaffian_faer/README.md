@@ -1,6 +1,55 @@
-# Pfaffian migration probes (#731)
+# Pfaffian backend measurements (#731)
 
-These are preliminary kernel measurements, not the final adoption/E2E report.
+## Selected CPU and GPU implementations (2026-11-12)
+
+CPU uses the shared Pfaffian/inverse API in the public tensor4all/faer fork
+`AtelierArith/faer`, pinned at `a3dd7b450e81df16065ebf51788414d87bb44171`.
+It is enabled by default for real n>=128 and complex n>=64. Smaller matrices
+and provider failures retain the C-order reference. See
+[the design](../../docs/design/faer-pfaffian-migration.md) for signs, triangle
+authority, failure restoration, explicit reference stages and fork provenance.
+
+Matched public API medians on Linux x86_64 / Xeon E5-2699 v3:
+
+| Backend / L128 input | Before | After | Speedup |
+| --- | ---: | ---: | ---: |
+| CPU real Opt, 20 steps | 7.7481 s | 7.4370 s | 1.0418x |
+| CPU real PhysCal | 0.4841 s | 0.4390 s | 1.1027x |
+| CPU complex Opt, 20 steps | 83.5420 s | 68.7391 s | 1.2153x |
+| CPU complex PhysCal | 5.0899 s | 4.0042 s | 1.2711x |
+| CUDA complex Opt, 20 steps | 73.0071 s | 63.0738 s | 1.1575x |
+| CUDA complex PhysCal | 5.8701 s | 5.2273 s | 1.1230x |
+
+Each cohort alternates before/after, excludes one warmup and retains three
+measured repetitions. CPU uses 32 samples, Rust 1.99.0, OpenBLAS 0.3.26, one
+inner/BLAS thread and a fixed CPU; GPU uses 320 resident walkers on RTX 3060.
+CPU and GPU timings have different workloads and scopes and must not be compared
+to each other. These shared-host measurements establish these workloads, not
+universal gains or a strict tensor4all/faer-main benchmark campaign.
+Real CUDA L128 stays effectively unchanged (0.9974x Opt / 0.9942x short PhysCal):
+its faster existing large-real factorization and standalone loop are retained.
+
+CPU same-implementation repetitions pass. Across providers, every recorded RNG
+word, consumption count/index, saved/current configuration and acceptance counter
+matches. Floating-point differences begin in step zero; panel reduction and
+triangular inverse change arithmetic order. Raw output differences are reported
+separately from independent kernel residual/error gates; no fixture or tolerance
+was changed to force trajectory agreement. GPU's final 132-test gate passes and
+explicit transfer calls/bytes/synchronizations are unchanged. Reproduction,
+source/lock hashes, raw timings and numerical reports are in [e2e/README.md](e2e/README.md).
+
+Five final full-rebuild kernel samples are `cpu-shared-rebuild-sample-*-20261112.csv`.
+The ratio of median reference/candidate times is 1.20/1.40/1.40x for real
+n=128/256/512 and 1.79/2.43/2.83/2.96x for complex n=64/128/256/512.
+Real n=64 gains only 1.05x; small-size reference dispatch is retained.
+Both paths reuse scratch; the reference includes its input copy. Matrices are
+the bounded strengthened-block workload in `faer_rebuild_bench`, not physical
+sample matrices. CPU measurements use the final shared-factor API, replacing
+the slower Pfaffian-plus-independent-LU experiment below.
+
+## Historical exploratory probes
+
+The following sections retain earlier experiments and their limitations.
 CPU: Linux x86_64, Xeon E5-2699 v3, rustc 1.99.1
 (`58cf8f9c3`, LLVM 23.1.1), system OpenBLAS 0.3.26. GPU: RTX 3060 sm_86,
 CUDA 12.9.2 container image `b129bd583bbe243671d4d4b9ec18cf39b00d0037cadd098197530d2d33750918`.
@@ -26,8 +75,8 @@ This probe predates adding the final inverse skew projection to the adapter;
 rerun with final code for adoption decisions. The complex candidate gains
 1.17–1.69x for n=64–512. Real full rebuilds do not show a reliable gain; small
 sizes regress. Do not infer a real sampler speedup from the standalone faer
-Pfaffian benchmark. Full rebuild integration is currently experimental behind
-`mvmc-core/faer-pfaffian`; its default is not enabled.
+Pfaffian benchmark. At that stage, full rebuild integration was experimental
+behind the non-default `mvmc-core/faer-pfaffian` feature.
 
 `cpu-rebuild-samples-20261111.csv` repeats the probe five times with the final
 skew projection included, on the same shared host while the GPU gate was also
@@ -116,7 +165,7 @@ follow-up command accidentally selected the library target and ran zero tests;
 target. Validation logs identify these distinct source stages. Later performance
 experiments changing inlining/dispatch must not inherit this full-source claim.
 
-## End-to-end evidence and current adoption limits
+## GPU end-to-end evidence and earlier regressions
 
 See [e2e/README.md](e2e/README.md) for matched public API measurements, raw
 outputs, source manifests and transfer counters. The fixed-input-backup CUDA
@@ -128,7 +177,7 @@ speedup claimed. The selected-source complex timing confirms 1.1575x Opt and
 1.1230x PhysCal (`selected-complex-*-20261112`). Its final broad CUDA gate
 passes all 132 tests, including supplied-tape rebuilds at real
 n=64/126/128/130/192; see `validation/cuda-selected-paths-gate.log`.
-CPU default validation remains pending; its full-factor INFO
+CPU's full-factor INFO
 difference is documented under the existing clear-C-defect policy, with an
 independent native-library probe and upstream report Julia-mVMC#98.
 

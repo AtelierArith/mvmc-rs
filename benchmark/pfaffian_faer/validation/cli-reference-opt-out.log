@@ -1,0 +1,4 @@
+   Compiling pfapack v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs/crates/pfapack)
+   Compiling mvmc-core v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs/crates/mvmc-core)
+    Checking mvmc-cli v0.0.0 (/home/terasaki/work/atelierarith/mvmc-rs/crates/mvmc-cli)
+    Finished `dev` profile [unoptimized] target(s) in 4.21s

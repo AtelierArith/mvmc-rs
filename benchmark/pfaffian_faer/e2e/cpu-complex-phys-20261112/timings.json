@@ -1,0 +1,66 @@
+[
+  {
+    "label": "before",
+    "rep": 0,
+    "warmup": true,
+    "started_unix": 1794419971.8623958,
+    "loadavg": "2.73 3.09 5.09 4/1493 1264621",
+    "seconds": 5.157052227
+  },
+  {
+    "label": "after",
+    "rep": 0,
+    "warmup": true,
+    "started_unix": 1794419977.0216613,
+    "loadavg": "2.67 3.07 5.07 6/1422 1264821",
+    "seconds": 3.995438875
+  },
+  {
+    "label": "after",
+    "rep": 1,
+    "warmup": false,
+    "started_unix": 1794419981.020334,
+    "loadavg": "2.61 3.06 5.06 3/1428 1265019",
+    "seconds": 4.004220534
+  },
+  {
+    "label": "before",
+    "rep": 1,
+    "warmup": false,
+    "started_unix": 1794419985.0325882,
+    "loadavg": "2.61 3.06 5.06 3/1430 1265217",
+    "seconds": 5.074941085
+  },
+  {
+    "label": "before",
+    "rep": 2,
+    "warmup": false,
+    "started_unix": 1794419990.1093311,
+    "loadavg": "2.56 3.04 5.04 4/1421 1265408",
+    "seconds": 5.089917153
+  },
+  {
+    "label": "after",
+    "rep": 2,
+    "warmup": false,
+    "started_unix": 1794419995.2082813,
+    "loadavg": "2.52 3.02 5.02 3/1431 1265619",
+    "seconds": 3.994356849
+  },
+  {
+    "label": "after",
+    "rep": 3,
+    "warmup": false,
+    "started_unix": 1794419999.2047467,
+    "loadavg": "2.48 3.00 5.01 3/1426 1265811",
+    "seconds": 4.038246569
+  },
+  {
+    "label": "before",
+    "rep": 3,
+    "warmup": false,
+    "started_unix": 1794420003.2507157,
+    "loadavg": "2.52 3.00 5.00 4/1429 1266161",
+    "seconds": 5.154991275
+  }
+]

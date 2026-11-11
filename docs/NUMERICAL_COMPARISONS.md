@@ -336,14 +336,14 @@ The optional [probe](../c_toolbox/pfaffian_block_info/README.md) records the
 unmodified C-reference-library source hashes, compiler, BLAS and results.
 It is a small standalone library check, not a full sampling/MPI comparison.
 
-The experimental faer rebuild accepts nonsingular block inputs under the
+The faer rebuild accepts nonsingular block inputs under the
 existing clear-C-defect policy. Its analytic block-inverse/sign regression
 is `faer_rebuild_uses_negative_inverse_and_restores_failed_input`; random
 inverse residuals are checked separately. This case's C INFO/failure-induced
 Pfaffian publication is excluded from parity expectations, with no tolerance
 change or Rust-generated C fixture. Genuine singular/zero inputs still fail
-the provider and use the reference fallback. The default CPU backend remains
-unchanged until the faer adoption work is complete. Reported upstream as
+the provider and use the reference fallback. The default size dispatch selects
+faer for real n>=128 and complex n>=64. Reported upstream as
 [Julia-mVMC#98](https://github.com/tmisawa/Julia-mVMC/issues/98).
 
 ## OptTrans optimization flags (#676)

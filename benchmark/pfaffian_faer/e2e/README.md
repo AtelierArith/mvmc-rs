@@ -123,3 +123,71 @@ counters pass; Opt retains 28 uploads / 63,067,392 bytes, four downloads /
 3,256 bytes and 11 explicit synchronizations, while PhysCal retains 27 uploads /
 21,648,912 bytes, three downloads / 392 bytes and 11 synchronizations.
 These counters cover explicit raw-execution calls, as defined in metadata.
+
+## Final CPU cohorts
+
+`cpu-{real,complex}-{opt,phys}-20261112` compares baseline `fae8eb14` with
+CPU source `da97a821` (immutable provider pin `a3dd7b45`). Later report/test-only
+commits do not change the measured numerical implementation. Both release
+workers use Rust 1.99.0 in the same cached development image, OpenBLAS 0.3.26,
+CPU 17, one BLAS/OMP/inner worker, seed 79 and separate target volumes. Source,
+workspace/lock and input hashes, exact image ID and compiler output are recorded.
+There were no edits, commits or builds in the measured checkout during the
+cohorts. This is a shared host with one L3 domain; load and raw repetitions
+are retained, without claiming exclusive-host or strict provider-campaign results.
+
+Prepare bounded inputs without editing existing fixtures:
+
+```sh
+uv run --no-project python benchmark/pfaffian_faer/prepare_cpu_inputs.py /tmp/cpu-pf-inputs
+```
+
+The generator copies the established L128 real scaling and complex Hubbard
+inputs, changes only `NVMCSample` to 32 and selects `NVMCCalMode=0/1` for
+Opt/PhysCal. Opt's public `RunConfig` sets 20 steps and retains all 20 history
+points (`nsmp=20`); PhysCal retains the input's one measurement iteration.
+Real uses eight QP planes, complex sixteen. API timing includes parsing,
+initialization, sampling, SR and normal output IO; it excludes worker startup,
+post-call serialization and destruction of the returned observed state.
+The worker removes only its own fresh API output directory after serialization.
+
+Copy the identical `crates/mvmc-cli/examples/pfaffian_e2e_worker.rs` into both
+checkouts and build with `cargo build --release -p mvmc-cli --example
+pfaffian_e2e_worker --locked`. Use the development container and separate named
+cache volumes, as in `docs/DEV_CONTAINER.md`; the script expects their standard
+`target/linux-x86_64/release/examples` layout. Then run, substituting the image
+and volume names of those builds:
+
+```sh
+uv run --no-project python benchmark/pfaffian_faer/run_cpu_e2e.py \
+  --before /path/to/baseline --after "$PWD" \
+  --before-volume before-cpu-cache --after-volume after-cpu-cache \
+  --input /tmp/cpu-pf-inputs/cpu-complex-opt/namelist.def \
+  --output /tmp/cpu-complex-opt-results --mode opt --dtype cmp \
+  --steps 20 --reps 3 --cpu 17 --image YOUR_DEVELOPMENT_IMAGE
+```
+
+Change `--dtype real` / input for real; use `--mode phys` and its measurement
+input for PhysCal. The output directory must be new. Repetition zero warms
+caches; subsequent repetitions alternate order. Same-implementation repeats
+use a separate `1e-14 + 1e-13*max(|a|,|b|)` floating bound and exact discrete
+comparisons. Across implementations, all recorded RNG words/count/index,
+configurations and acceptance counters match for all four cohorts. Thus no
+acceptance-trajectory divergence needs a tolerance exemption in these runs.
+
+The first recorded floating differences occur in step zero: maximum
+unit-scaled errors over its energy/moment/parameter section are 4.03e-13 real
+and 1.14e-13 complex. Panel reduction and triangular inversion have different
+operation order; the inverse residual tests bound the kernel independently.
+Later optimizer roundoff propagates into parameters and Pfaffian products;
+the final large-magnitude Pfaffians differ by up to 5.77e-12 relative (real)
+and 7.35e-11 (complex). These trajectory observations are not standalone
+Pfaffian accuracy bounds. Full raw step histories and section errors remain
+in `numerical.json` and `before/after/rep-*.txt`; no cross-provider tolerance
+was added or historical reference expectation replaced.
+
+Committed CPU cohorts store those raw text files in `raw-results.tar.gz` to
+keep generated repetitions out of the code diff. Run `tar -xzf raw-results.tar.gz`
+inside a cohort to restore `before/after/rep-*.txt`. The archive was verified
+against every original file before packaging; `raw-results.sha256.json` retains
+the individual checksums. Fresh benchmark runs still write ordinary text files.

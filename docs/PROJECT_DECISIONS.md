@@ -159,7 +159,7 @@ Recorded instances:
 
 | C defect | mvmc-rs | Upstream report | Rust behaviour |
 |---|---|---|---|
-| Full `SKTRF` INFO flags an even-index tridiagonal separator although the skew matrix is invertible; `matrix.c:264-265` treats it as a failed plane | #731 (experimental faer path; default adoption pending) | [Julia-mVMC#98](https://github.com/tmisawa/Julia-mVMC/issues/98) | paired rebuild accepts nonsingular blocks; genuinely singular inputs still fail |
+| Full `SKTRF` INFO flags an even-index tridiagonal separator although the skew matrix is invertible; `matrix.c:264-265` treats it as a failed plane | #731 (default faer size dispatch) | [Julia-mVMC#98](https://github.com/tmisawa/Julia-mVMC/issues/98) | paired rebuild accepts nonsingular blocks; genuinely singular inputs still fail |
 | Real-mode `calculateOptTransDiff` writes through a complex pointer, dropping derivative 1 (`vmccal.c`) | #370 | Julia-mVMC#55 | correct real-mode slots |
 | `-b` varbin writes only half of the complex parameters | (2026-10-06) | — | all parameters, with the C header shape |
 | Real-mode samplers and Hamiltonian omit the RBM factor; `RBMDiff` reads an unfilled `RBMCnt` (`vmcmake_real.c`, `calham_real.c`, `vmccal.c:120,214`) | #669, PR #671 | Julia-mVMC#59 | RBM factor in sampling and every Green kernel, following the complex path |
@@ -242,6 +242,15 @@ performance evidence. Standalone-Pfaffian gains do not establish rebuild or E2E
 gains. The owner authorizes creating the PR and merging to `main` after the
 performance and correctness gates pass. The implementation investigation is
 recorded in `docs/design/faer-pfaffian-migration.md`.
+
+The implementation uses the public `AtelierArith/faer` fork pinned at
+`a3dd7b450e81df16065ebf51788414d87bb44171` for a shared Pfaffian/inverse API,
+based on tensor4all/faer `14462105`. CPU default dispatch selects real n>=128
+and complex n>=64; small matrices and numerical failures retain C-order
+execution. CUDA ports the panel organization while retaining the established
+faster large-real path. The matched CPU/GPU results and unchanged RNG/transfer
+contracts are recorded in `benchmark/pfaffian_faer/README.md`. This downstream
+Git pin does not claim a registry release or adoption into tensor4all/faer main.
 
 ## Development hosts
 
