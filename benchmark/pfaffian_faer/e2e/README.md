@@ -53,3 +53,22 @@ original-input preservation fix in `4fef0a87`. They are preliminary evidence,
 not final-source measurements. Cohorts named `final-*` use the fixed kernel;
 the first records the source snapshot separately because the fix was committed
 while its measurement was already running.
+
+## Fixed-kernel complex Opt result
+
+`final-complex-opt-20261112` measures the kernel in `4fef0a87` with the
+settings above. Median time falls from 73.0904 s to 63.0455 s: 1.1593x
+throughput, or 13.74% less elapsed time. Individual measured values are
+73.0581/73.0904/73.1690 s before and 63.0455/62.9816/63.2192 s after.
+The complete calls warm the JIT before these measurements.
+
+Every repetition has the same explicit raw traffic: 28 uploads totaling
+63,067,392 bytes, four downloads totaling 3,256 bytes, 11 synchronizations
+and seven scopes. Both implementations pass their 20-step same-seed
+repeatability checks. Cross-revision maximum absolute differences are
+7.25e-13 in energies, 2.48e-13 in real parameters and 1.96e-13 in imaginary
+parameters. The first parameter entries exceeding 64 epsilon at unit scale
+are recorded in `numerical.json`; these observations accompany the kernel
+residual and stage gates, rather than excusing an RNG discrepancy.
+
+Real Opt and real/complex PhysCal final measurements are still pending.
