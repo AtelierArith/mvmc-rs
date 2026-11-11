@@ -1,0 +1,196 @@
+   Compiling num-traits v0.2.19
+   Compiling pulp v0.22.2
+   Compiling bitflags v2.10.0
+   Compiling dyn-stack v0.13.2
+   Compiling once_cell v1.19.0
+   Compiling raw-cpuid v11.6.0
+   Compiling num-complex v0.4.6
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling t4a-gemm-common v0.20.4
+   Compiling qd v0.8.0
+   Compiling t4a-faer-traits v0.24.3 (/tmp/mvmc731-faer/faer-traits)
+   Compiling t4a-gemm-f32 v0.20.1
+   Compiling t4a-gemm-c32 v0.20.1
+   Compiling t4a-gemm-f64 v0.20.1
+   Compiling t4a-gemm-c64 v0.20.1
+   Compiling nano-gemm v0.2.2
+   Compiling t4a-gemm v0.20.1
+   Compiling t4a-faer v0.32.0 (/tmp/mvmc731-faer/faer)
+warning: unused import: `core::num::NonZeroUsize`
+   --> faer/src/lib.rs:265:5
+    |
+265 | use core::num::NonZeroUsize;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::mat::matmut::SyncCell`
+ --> faer/src/col/colmut.rs:2:5
+  |
+2 | use crate::mat::matmut::SyncCell;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::utils::thread::par_split_indices`
+ --> faer/src/linalg/lu/full_pivoting/factor.rs:4:5
+  |
+4 | use crate::utils::thread::par_split_indices;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::temp_mat_scratch`
+ --> faer/src/linalg/matmul/mod.rs:2:5
+  |
+2 | use super::temp_mat_scratch;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `MemBuffer`
+  --> faer/src/linalg/matmul/mod.rs:11:17
+   |
+11 | use dyn_stack::{MemBuffer, MemStack};
+   |                 ^^^^^^^^^
+
+warning: unused import: `crate::utils::bound::IdxInc`
+   --> faer/src/linalg/matmul/mod.rs:888:6
+    |
+888 |     use crate::utils::bound::IdxInc;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> faer/src/linalg/householder.rs:689:7
+    |
+689 |         let mut tmp = tmp.as_mat_mut();
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> faer/src/linalg/lu/partial_pivoting/factor.rs:414:38
+    |
+414 |         with_width(par.reborrow(), width, |mut par_here| {
+    |                                            ----^^^^^^^^
+    |                                            |
+    |                                            help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> faer/src/linalg/matmul/mod.rs:214:3
+    |
+214 |         mut par: Par,
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> faer/src/linalg/matmul/mod.rs:487:3
+    |
+487 |         mut par: Par,
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `estimate`
+   --> faer/src/utils/cost.rs:570:47
+    |
+570 | pub(crate) fn par_pays_time(par: &crate::Par, estimate: Duration, sections: u32, width: usize) -> bool {
+    |                                               ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_estimate`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `sections`
+   --> faer/src/utils/cost.rs:570:67
+    |
+570 | pub(crate) fn par_pays_time(par: &crate::Par, estimate: Duration, sections: u32, width: usize) -> bool {
+    |                                                                   ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sections`
+
+warning: unused variable: `width`
+   --> faer/src/utils/cost.rs:572:11
+    |
+572 |     let Some(width) = NonZeroUsize::new(width).filter(|w| w.get() >= 2) else {
+    |              ^^^^^ help: if this is intentional, prefix it with an underscore: `_width`
+
+warning: unused variable: `estimate`
+   --> faer/src/utils/cost.rs:593:50
+    |
+593 | pub(crate) fn par_can_pay_time(par: &crate::Par, estimate: Duration, sections: u32) -> bool {
+    |                                                  ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_estimate`
+
+warning: unused variable: `sections`
+   --> faer/src/utils/cost.rs:593:70
+    |
+593 | pub(crate) fn par_can_pay_time(par: &crate::Par, estimate: Duration, sections: u32) -> bool {
+    |                                                                      ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sections`
+
+warning: method `as_type` is never used
+   --> faer/src/col/colmut.rs:656:23
+    |
+451 | impl<'a, T, Rows: Shape, RStride: Stride> ColMut<'a, T, Rows, RStride> {
+    | ---------------------------------------------------------------------- method in this implementation
+...
+656 |     pub(crate) unsafe fn as_type<U>(self) -> ColMut<'a, U, Rows, RStride> {
+    |                          ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `copy_tasks` is never used
+  --> faer/src/linalg/mod.rs:81:4
+   |
+81 | fn copy_tasks(lines: usize, degree: usize) -> (usize, usize) {
+   |    ^^^^^^^^^^
+
+warning: struct `SyncCell` is never constructed
+   --> faer/src/mat/matmut.rs:172:19
+    |
+172 | pub(crate) struct SyncCell<T>(T);
+    |                   ^^^^^^^^
+
+warning: method `as_type` is never used
+    --> faer/src/mat/matmut.rs:1458:23
+     |
+1144 | / impl<'a, T, Rows: Shape, Cols: Shape, RStride: Stride, CStride: Stride>
+1145 | |     MatMut<'a, T, Rows, Cols, RStride, CStride>
+     | |_______________________________________________- method in this implementation
+...
+1458 |       pub(crate) unsafe fn as_type<U>(
+     |                            ^^^^^^^
+
+warning: method `as_type` is never used
+   --> faer/src/row/rowmut.rs:574:23
+    |
+361 | impl<'a, T, Cols: Shape, CStride: Stride> RowMut<'a, T, Cols, CStride> {
+    | ---------------------------------------------------------------------- method in this implementation
+...
+574 |     pub(crate) unsafe fn as_type<U>(self) -> RowMut<'a, U, Cols, CStride> {
+    |                          ^^^^^^^
+
+warning: struct `Slot` is never constructed
+  --> faer/src/utils/mod.rs:16:9
+   |
+16 |     struct Slot<T>(core::cell::UnsafeCell<Option<T>>);
+   |            ^^^^
+
+warning: associated items `new` and `take` are never used
+  --> faer/src/utils/mod.rs:20:6
+   |
+19 |     impl<T> Slot<T> {
+   |     --------------- associated items in this implementation
+20 |         fn new(value: T) -> Self {
+   |            ^^^
+...
+25 |         unsafe fn take(&self) -> T {
+   |                   ^^^^
+
+warning: fields `re` and `im` are never read
+  --> faer/src/stats/mod.rs:19:2
+   |
+18 | pub struct ComplexDistribution<Re, Im = Re> {
+   |            ------------------- fields in this struct
+19 |     re: Re,
+   |     ^^
+20 |     im: Im,
+   |     ^^
+   |
+   = note: `ComplexDistribution` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `t4a-faer` (lib) generated 23 warnings (run `cargo fix --lib -p t4a-faer` to apply 15 suggestions)
+    Finished `dev` profile [optimized] target(s) in 32.46s

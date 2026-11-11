@@ -124,8 +124,11 @@ kernel improves complex L128 Opt by 1.1593x and PhysCal by 1.1260x. The same
 source regresses real L128 Opt and short PhysCal by roughly 7% and 5%.
 Retaining the established real standalone loop removes that regression at the
 measured resolution (0.9974x Opt, 0.9942x short PhysCal), with no real L128
-speedup claimed. The selected-source complex timing and full CUDA gate are
-being repeated. CPU default adoption remains pending; its full-factor INFO
+speedup claimed. The selected-source complex timing confirms 1.1575x Opt and
+1.1230x PhysCal (`selected-complex-*-20261112`). Its final broad CUDA gate
+passes all 132 tests, including supplied-tape rebuilds at real
+n=64/126/128/130/192; see `validation/cuda-selected-paths-gate.log`.
+CPU default validation remains pending; its full-factor INFO
 difference is documented under the existing clear-C-defect policy, with an
 independent native-library probe and upstream report Julia-mVMC#98.
 

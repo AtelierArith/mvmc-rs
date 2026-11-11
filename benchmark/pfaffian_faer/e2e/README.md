@@ -110,6 +110,16 @@ PhysCal 0.5588 s before and 0.5620 s after (0.9942x). This controlled comparison
 removes the earlier regression at this workload's measured resolution; it
 does not claim a real L128 speedup. Outputs and explicit traffic still agree.
 The production real standalone wrapper therefore retains the established loop.
-Complex final-source timing and the broad CUDA gate are repeated after this
-selection change. The only later change to that wrapper is an explanatory
-comment; its executed body is the one measured here.
+`selected-complex-*-20261112` repeats complex timing after this selection:
+
+| Input | Before median | After median | Before/after |
+| --- | ---: | ---: | ---: |
+| Complex Opt, 20 steps | 73.0071 s | 63.0738 s | 1.1575x |
+| Complex PhysCal, one window | 5.8701 s | 5.2273 s | 1.1230x |
+
+The 132-test final CUDA gate passes at `d71edcee`, including the expanded
+real n=64/126 supplied-tape rebuild cases. Repeated outputs and transfer
+counters pass; Opt retains 28 uploads / 63,067,392 bytes, four downloads /
+3,256 bytes and 11 explicit synchronizations, while PhysCal retains 27 uploads /
+21,648,912 bytes, three downloads / 392 bytes and 11 synchronizations.
+These counters cover explicit raw-execution calls, as defined in metadata.

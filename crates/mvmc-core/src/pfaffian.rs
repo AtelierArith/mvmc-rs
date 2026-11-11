@@ -8,8 +8,12 @@
 //! chunks. Each parallel chunk owns its temporary inverse and Pfaffian output;
 //! chunks are copied back in QP order so the sampling/RNG contract is unchanged.
 //!
-//! The kernels are direct ports of `calculate_m_all_child_{fcmp,real}!`
-//! and reproduce the upstream pipeline exactly:
+//! Assembly follows `calculate_m_all_child_{fcmp,real}!`. With the default
+//! `faer-pfaffian` feature, real matrices of order >=128 and complex matrices
+//! of order >=64 share a panelized faer factorization for Pfaffian and inverse.
+//! Each worker retains its scratch; smaller matrices and failed faer calls use
+//! the C-order pipeline below. A failed call restores the original input first.
+//! Both paths preserve upper-triangle authority and the stored negative inverse.
 //!
 //! 1. Build `inv_m[msj, msi] = -slater_elm[ rsi*n_site2 + rsj ]`
 //!    (column-major store; the explicit transpose mirrors the
@@ -26,6 +30,9 @@
 //!
 //! See `matrix.c:285-387` for the C reference the upstream Julia port
 //! traces back to.
+//!
+//! Explicit `c-order` and `tenferro` measurement stages retain their independent
+//! C-order executors; the default `calc-m-all` measurement path uses this module.
 
 #![allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 

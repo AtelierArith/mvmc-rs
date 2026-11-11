@@ -1,0 +1,1402 @@
+   Compiling t4a-faer v0.32.0 (/tmp/mvmc731-faer/faer)
+warning: unused imports: `apply_block_householder_on_the_left_in_place_scratch` and `apply_block_householder_on_the_left_in_place_with_conj`
+    --> faer/src/linalg/householder.rs:1080:3
+     |
+1080 |         apply_block_householder_on_the_left_in_place_scratch,
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1081 |         apply_block_householder_on_the_left_in_place_with_conj,
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::internal_prelude::*`
+   --> faer/src/linalg/lq/no_pivoting/factor.rs:113:6
+    |
+113 |     use crate::internal_prelude::*;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::num::NonZeroUsize`
+    --> faer/src/linalg/matmul/mod.rs:2085:6
+     |
+2085 |     use std::num::NonZeroUsize;
+     |         ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `c0`
+   --> faer/src/linalg/lq/no_pivoting/factor.rs:182:14
+    |
+182 |                 let (p0, c0, r0) = run(0, &mut 0, false);
+    |                          ^^ help: if this is intentional, prefix it with an underscore: `_c0`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `fnv` is never used
+   --> faer/tests/qr_rank_truncation.rs:144:4
+    |
+144 | fn fnv(h: &mut u64, x: u64) {
+    |    ^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `hash_f64` is never used
+   --> faer/tests/qr_rank_truncation.rs:150:4
+    |
+150 | fn hash_f64(h: &mut u64, a: MatRef<'_, f64>) {
+    |    ^^^^^^^^
+
+warning: function `hash_c64` is never used
+   --> faer/tests/qr_rank_truncation.rs:157:4
+    |
+157 | fn hash_c64(h: &mut u64, a: MatRef<'_, c64>) {
+    |    ^^^^^^^^
+
+warning: `t4a-faer` (test "qr_rank_truncation") generated 3 warnings
+warning: `t4a-faer` (lib test) generated 4 warnings (run `cargo fix --lib -p t4a-faer --tests` to apply 4 suggestions)
+    Finished `test` profile [optimized] target(s) in 39.40s
+     Running unittests src/lib.rs (target/debug/deps/faer-f21c6f0fffaa73aa)
+
+running 856 tests
+test col::colmut::tests::test_col_max ... ok
+test col::colown::tests::test_col_min ... ok
+test col::colown::tests::test_col_max ... ok
+test col::colmut::tests::test_col_min ... ok
+test col::colown::tests::test_from_iter ... ok
+test col::colref::tests::test_col_max ... ok
+test col::colref::tests::test_col_min ... ok
+test linalg::cholesky::lapack::c32::lapack_cholesky_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test io::npy::tests::as_aligned_ref_reads_native_endian ... ok
+test io::npy::tests::to_mat_converts_foreign_endian ... ok
+test linalg::cholesky::lapack::c32::lapack_cholesky_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test io::npy::tests::to_mat_reads_unaligned_c_order ... ok
+test io::npy::tests::as_aligned_ref_rejects_foreign_endian - should panic ... ok
+test io::npy::tests::to_mat_reads_unaligned_fortran_order ... ok
+test linalg::cholesky::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::cholesky::lapack::c32::lapack_cholesky_checkers ... ok
+test linalg::cholesky::lapack::c32::lapack_indefinite_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::cholesky::lapack::c32::lapack_indefinite_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::c64::lapack_cholesky_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::cholesky::lapack::c64::lapack_cholesky_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::c32::lapack_lin_checkers ... ok
+test linalg::cholesky::lapack::c32::lapack_indefinite_checkers_and_separate_d ... ok
+test linalg::cholesky::lapack::c64::lapack_cholesky_checkers ... ok
+test linalg::cholesky::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::cholesky::lapack::c64::lapack_indefinite_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::cholesky::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::cholesky::lapack::c64::lapack_indefinite_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f32::lapack_cholesky_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::c64::lapack_lin_checkers ... ok
+test linalg::cholesky::lapack::c64::lapack_indefinite_checkers_and_separate_d ... ok
+test linalg::cholesky::lapack::f32::lapack_cholesky_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f32::lapack_cholesky_checkers ... ok
+test linalg::cholesky::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::cholesky::lapack::f32::lapack_indefinite_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::cholesky::lapack::f32::lapack_indefinite_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::cholesky::lapack::f64::lapack_cholesky_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f32::lapack_indefinite_checkers_and_separate_d ... ok
+test linalg::cholesky::lapack::f32::lapack_lin_checkers ... ok
+test linalg::cholesky::lapack::f64::lapack_cholesky_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f64::lapack_cholesky_checkers ... ok
+test linalg::cholesky::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::cholesky::lapack::f64::lapack_indefinite_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::cholesky::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::cholesky::lapack::f64::lapack_indefinite_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::cholesky::lapack::f64::lapack_indefinite_checkers_and_separate_d ... ok
+test linalg::cholesky::lapack::f64::lapack_lin_checkers ... ok
+test linalg::cholesky::lblt::reconstruct::tests::test_reconstruct_separate_diagonal ... ok
+test linalg::cholesky::ldlt::inverse::tests::test_inverse ... ok
+test linalg::cholesky::ldlt::reconstruct::tests::test_reconstruct ... ok
+test linalg::cholesky::lblt::reconstruct::tests::test_reconstruct ... ok
+test linalg::cholesky::lblt::reconstruct::tests::test_factor_clears_stale_subdiag ... ok
+test linalg::cholesky::ldlt::update::tests::test_rank_update ... ok
+test linalg::cholesky::lblt::tests::test_real ... ok
+test linalg::cholesky::llt::update::tests::test_rank_update ... ok
+test linalg::cholesky::ldlt::factor::tests::test_cholesky ... ok
+test linalg::cholesky::llt::inverse::tests::test_inverse ... ok
+test linalg::cholesky::llt_pivoting::reconstruct::tests::test_early_rank_reconstruct ... ok
+test linalg::cholesky::llt::reconstruct::tests::test_reconstruct ... ok
+test linalg::cholesky::llt_pivoting::reconstruct::tests::test_zero_matrix_rank_zero ... ok
+test linalg::evd::eig_2131_tests::complex_eigenvectors_have_unit_norm ... ok
+test linalg::evd::eig_2131_tests::conjugate_pair_eigenvector_has_unit_norm ... ok
+test linalg::cholesky::ldlt::factor::tests::test_simd_cholesky ... ok
+test linalg::cholesky::llt_pivoting::inverse::tests::test_inverse ... ok
+test linalg::evd::geev_scaling_tests::defective_double_eigenvalue_has_small_residuals ... ok
+test linalg::evd::geev_scaling_tests::evd_scaling_at_the_complex_range_ends ... ok
+test linalg::cholesky::ldlt::solve::tests::test_solve ... ok
+test linalg::cholesky::llt::solve::tests::test_solve ... ok
+test linalg::cholesky::llt_pivoting::solve::tests::test_solve ... ok
+test linalg::cholesky::llt_pivoting::reconstruct::tests::test_reconstruct ... ok
+test linalg::evd::eig_2131_tests::jordan_eigenvectors_are_finite_and_unit_norm ... ok
+test linalg::evd::hessenberg::tests::test_hessenberg_real ... ok
+test linalg::evd::lapack::c32::lapack_balance_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_balance_checkers_and_literal_backtransform ... ok
+test linalg::evd::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::evd::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::evd::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::evd::lapack::c32::lapack_hessenberg_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_hessenberg_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_checkers_require_left_adjoint ... ok
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_checkers_require_pair_signs ... ok
+test linalg::cholesky::lblt::tests::test_cplx ... ok
+test linalg::evd::general_tests::test_cplx ... ok
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_mode_agreement_budget_composes ... ok
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_pair_solve_with_a_small_determinant ... ok
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_real_shift_block_below_the_square_root_of_min_positive ... ok
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_threshold_keeps_a_residual_growing_with_n_visible ... ok
+test linalg::evd::lapack::c32::lapack_schur_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_schur_checkers ... ok
+test linalg::evd::lapack::c32::lapack_schur_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_schur_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_schur_reorder_checkers ... ok
+test linalg::evd::lapack::c32::lapack_self_adjoint_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_self_adjoint_evd_checkers ... ok
+test linalg::evd::lapack::c32::lapack_self_adjoint_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::general_tests::test_real ... ok
+test linalg::evd::lapack::c32::lapack_self_adjoint_evd_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_tridiagonal_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c32::lapack_tridiagonal_evd_checkers ... ok
+test linalg::evd::lapack::c32::lapack_tridiagonal_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_balance_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_balance_checkers_and_literal_backtransform ... ok
+test linalg::evd::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::evd::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::evd::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::evd::lapack::c64::lapack_hessenberg_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_hessenberg_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_checkers_require_left_adjoint ... ok
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_checkers_require_pair_signs ... ok
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_clustered_residuals_do_not_grow_with_n ... ok
+test linalg::evd::hessenberg::tests::test_hessenberg_cplx_gqvdg ... ok
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_mode_agreement_budget_composes ... ok
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_pair_solve_with_a_small_determinant ... ok
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_real_shift_block_below_the_square_root_of_min_positive ... ok
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_threshold_keeps_a_residual_growing_with_n_visible ... ok
+test linalg::evd::lapack::c64::lapack_schur_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_schur_checkers ... ok
+test linalg::evd::lapack::c64::lapack_schur_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_schur_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_schur_reorder_checkers ... ok
+test linalg::evd::lapack::c64::lapack_self_adjoint_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_self_adjoint_evd_checkers ... ok
+test linalg::evd::lapack::c64::lapack_self_adjoint_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::geev_scaling_tests::evd_scales_its_input_into_range ... ok
+test linalg::evd::lapack::c64::lapack_self_adjoint_evd_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_tridiagonal_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_tridiagonal_evd_checkers ... ok
+test linalg::evd::lapack::c64::lapack_tridiagonal_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_balance_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_balance_checkers_and_literal_backtransform ... ok
+test linalg::evd::hessenberg::tests::test_hessenberg_cplx ... ok
+test linalg::evd::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::evd::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::evd::lapack::f32::lapack_hessenberg_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_hessenberg_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_checkers_require_left_adjoint ... ok
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_checkers_require_pair_signs ... ok
+test linalg::evd::lapack::c32::lapack_nonsymmetric_evd_graded_pairs_keep_their_residual ... ok
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_mode_agreement_budget_composes ... ok
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_pair_solve_with_a_small_determinant ... ok
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_real_shift_block_below_the_square_root_of_min_positive ... ok
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_threshold_keeps_a_residual_growing_with_n_visible ... ok
+test linalg::evd::lapack::f32::lapack_schur_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_schur_checkers ... ok
+test linalg::evd::lapack::f32::lapack_schur_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_schur_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_schur_reorder_checkers ... ok
+test linalg::evd::lapack::f32::lapack_self_adjoint_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_self_adjoint_evd_checkers ... ok
+test linalg::evd::lapack::f32::lapack_self_adjoint_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_clustered_residuals_do_not_grow_with_n ... ok
+test linalg::evd::lapack::c32::lapack_self_adjoint_evd_qr_spectrum_accuracy ... ok
+test linalg::evd::lapack::f32::lapack_self_adjoint_evd_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::hessenberg::tests::test_hessenberg_cplx_team_reconstructs_blocked ... ok
+test linalg::evd::lapack::c64::lapack_nonsymmetric_evd_graded_pairs_keep_their_residual ... ok
+test linalg::evd::lapack::f32::lapack_tridiagonal_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_tridiagonal_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_tridiagonal_evd_checkers ... ok
+test linalg::evd::lapack::f64::lapack_balance_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_balance_checkers_and_literal_backtransform ... ok
+test linalg::evd::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::evd::lapack::f64::lapack_hessenberg_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_hessenberg_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::evd::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_checkers_require_left_adjoint ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_checkers_require_pair_signs ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_mode_agreement_budget_composes ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_pair_solve_with_a_small_determinant ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_real_shift_block_below_the_square_root_of_min_positive ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_threshold_keeps_a_residual_growing_with_n_visible ... ok
+test linalg::evd::lapack::f64::lapack_schur_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_schur_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_schur_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_schur_checkers ... ok
+test linalg::evd::lapack::f64::lapack_self_adjoint_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_self_adjoint_evd_checkers ... ok
+test linalg::evd::lapack::f64::lapack_self_adjoint_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_clustered_residuals_do_not_grow_with_n ... ok
+test linalg::evd::lapack::f64::lapack_self_adjoint_evd_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_tridiagonal_evd_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::lapack::f64::lapack_tridiagonal_evd_checkers ... ok
+test linalg::evd::lapack::f64::lapack_tridiagonal_evd_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::evd::range_limit_vector_tests::complex_triangular_at_the_range_limit ... ok
+test linalg::evd::range_limit_vector_tests::conjugate_pair_block_is_never_a_wrong_success ... ok
+test linalg::evd::range_limit_vector_tests::conjugate_pair_with_a_wide_dynamic_range ... ok
+test linalg::evd::range_limit_vector_tests::jordan_chains_at_both_ends_of_the_range ... ok
+test linalg::evd::range_limit_vector_tests::subnormal_shift_clamp_is_unchanged ... ok
+test linalg::evd::range_limit_vector_tests::two_by_two_at_the_range_limit ... ok
+test linalg::evd::scale_and_empty_tests::empty_matrix ... ok
+test linalg::evd::scale_and_empty_tests::empty_tridiagonal_with_vectors ... ok
+test linalg::evd::scale_and_empty_tests::two_by_two_finite_spectrum_at_the_range_limit ... ok
+test linalg::evd::scale_and_empty_tests::two_by_two_subnormal_diagonal ... ok
+test linalg::evd::schur::complex_schur::tests::test_3 ... ok
+test linalg::evd::lapack::f64::lapack_schur_reorder_checkers ... ok
+test linalg::evd::lapack::c64::lapack_self_adjoint_evd_qr_spectrum_accuracy ... ok
+test linalg::evd::lapack::f32::lapack_self_adjoint_evd_qr_spectrum_accuracy ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::laexc_rejects_nan_without_touching_inputs ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::laexc_12_and_21_swap_with_a_similarity ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::laexc_thresh_is_dlaexc_threshold ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::lahqr_schur22_scaled_norm ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::lapy2_avoids_overflow_and_underflow ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::larfg3_and_larfx3_annihilate_and_rescale ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::lasy2_solves_the_1x2_and_2x1_sylvester_equations ... ok
+test linalg::evd::schur::real_schur::tests::test_5 ... ok
+test linalg::evd::schur::real_schur::tests::test_5_2 ... ok
+test linalg::evd::schur::real_schur::tests::lapack_ports::lahqr_schur22_standardizes_a_lower_triangular_result ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_clustered_residuals_do_not_grow_with_n ... ok
+test linalg::evd::lapack::f32::lapack_nonsymmetric_evd_graded_pairs_keep_their_residual ... ok
+test linalg::evd::lapack::f64::lapack_self_adjoint_evd_qr_spectrum_accuracy ... ok
+test linalg::evd::self_adjoint_tests::test_cplx ... ok
+test linalg::evd::tridiag::tests::test_tridiag_cplx ... ok
+test linalg::evd::tridiag::tests::test_tridiag_real ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_evd_2_0 ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_evd_2_1 ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_evd_3 ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_evd_5 ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_evd_wilkinson ... ok
+test linalg::evd::self_adjoint_tests::test_pinv ... ok
+test linalg::evd::lapack::f64::lapack_nonsymmetric_evd_graded_pairs_keep_their_residual ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_gh_82_mini ... ok
+test linalg::evd::tridiagonal_range_tests::spectrum_at_both_range_limits ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_glued_wilkinson ... ok
+test linalg::evd::tridiagonal_range_tests::subnormal_three_by_three ... ok
+test linalg::evd::tridiagonal_range_tests::two_by_two_at_the_range_limit ... ok
+test linalg::gevd::gen_hessenberg::tests::test_givens ... ok
+test linalg::evd::self_adjoint_tests::test_real ... ok
+test linalg::evd::tridiag_evd::evd_qr_tests::test_gh_82 ... ok
+test linalg::gevd::qz_real::tests::aed_workspace_covers_full_sylvester_swap ... ok
+test linalg::gevd::qz_real::tests::qz_scratch_covers_the_even_rounded_aed_window ... ok
+test linalg::evd::schur::real_schur::tests::test_n ... ok
+test linalg::evd::self_adjoint_tests::test_special ... ok
+test linalg::gevd::qz_real::tests::test_swap_qz_edge_case ... ok
+test linalg::gevd::qz_real::tests::test_swap_qz_random ... ok
+test linalg::gevd::reorder::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::gevd::reorder::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::gevd::reorder::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::gevd::reorder::lapack::c32::lapack_qz_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::c32::lapack_qz_reorder_checkers ... ok
+test linalg::gevd::reorder::lapack::c32::lapack_qz_reorder_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::c32::lapack_qz_reorder_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::c32::lapack_qz_reorder_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::gevd::reorder::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::gevd::reorder::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::gevd::reorder::lapack::c64::lapack_qz_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::c64::lapack_qz_reorder_checkers ... ok
+test linalg::gevd::reorder::lapack::c64::lapack_qz_reorder_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::c64::lapack_qz_reorder_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::c64::lapack_qz_reorder_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::gevd::reorder::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::gevd::reorder::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::gevd::reorder::lapack::f32::lapack_qz_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f32::lapack_qz_reorder_checkers ... ok
+test linalg::gevd::reorder::lapack::f32::lapack_qz_reorder_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f32::lapack_qz_reorder_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f32::lapack_qz_reorder_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::gevd::reorder::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::gevd::reorder::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::gevd::reorder::lapack::f64::lapack_qz_reorder_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f64::lapack_qz_reorder_checkers ... ok
+test linalg::gevd::reorder::lapack::f64::lapack_qz_reorder_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f64::lapack_qz_reorder_range ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::lapack::f64::lapack_qz_reorder_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::gevd::reorder::tests::homogeneous_pairs_distinguish_infinite_and_nonregular_blocks ... ok
+test linalg::gevd::reorder::tests::invalid_shapes_and_indices_panic_before_mutation ... ok
+test linalg::gevd::reorder::tests::no_op_requires_no_scratch ... ok
+test linalg::gevd::reorder::tests::scratch_shortage_panics_before_mutation ... ok
+test linalg::gevd::t::eigenvalues_only_gives_wrong_complex_pairs ... ok
+test linalg::gevd::t::gevd_scratch_is_too_small_for_n2 ... ok
+test linalg::gevd::t::reused_eigenvector_buffers ... ok
+test linalg::gevd::tests::complex_shifted_1x1_zero_shift_zero_rhs_stays_finite ... ok
+test linalg::gevd::tests::complex_shifted_2x2_large_rhs_f32 ... ok
+test linalg::gevd::tests::complex_shifted_2x2_large_rhs_f64 ... ok
+test linalg::gevd::tests::complex_shifted_2x2_singular_block_stays_finite ... ok
+test linalg::gevd::tests::complex_shifted_2x2_tiny_block_is_a_scaling ... ok
+test linalg::gevd::tests::shifted_1x1_zero_shift_zero_rhs_stays_finite ... ok
+test linalg::gevd::tests::test_cplx ... ok
+test linalg::gevd::tests::test_lishen_ ... ok
+test linalg::gevd::qz_real::tests::test_qz_real_unblocked ... ok
+test linalg::evd::schur::real_schur::tests::aed_sort_terminates_when_a_swap_fails ... ok
+test linalg::householder::gate_tests::block_apply_gates_agree_with_serial ... ok
+test linalg::householder::gate_tests::matvec_gate_agrees_with_serial ... ok
+test linalg::householder::gate_tests::triangular_gates_agree_with_serial ... ok
+test linalg::householder::gate_tests::triangular_solve_split_gate_agrees_with_serial ... ok
+test linalg::householder::gate_tests::upgrade_factor_gate_agrees_with_serial ... ok
+test linalg::householder::tests::rank_one_negates_its_own_reflector_column ... ok
+test linalg::householder::tests::threaded_rank_one_matches_the_sequential_one ... ok
+test linalg::jacobi::tests::complex_apply_on_the_right_2x2_matches_explicit_product ... ok
+test linalg::jacobi::tests::complex_rotg_with_zero_q_returns_p ... ok
+test linalg::jacobi::tests::real_apply_on_the_right_2x2_matches_explicit_product ... ok
+test linalg::kron::tests::test_kron_ones ... ok
+test linalg::lq::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::lq::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lq::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::lq::lapack::c32::lapack_lin_checkers ... ok
+test linalg::lq::lapack::c32::lapack_lq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::c32::lapack_lq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::c32::lapack_lq_reflector_checkers ... ok
+test linalg::lq::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::lq::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lq::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::lq::lapack::c64::lapack_lin_checkers ... ok
+test linalg::lq::lapack::c64::lapack_lq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::c64::lapack_lq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::c64::lapack_lq_reflector_checkers ... ok
+test linalg::lq::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::lq::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lq::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::lq::lapack::f32::lapack_lin_checkers ... ok
+test linalg::lq::lapack::f32::lapack_lq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::f32::lapack_lq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::f32::lapack_lq_reflector_checkers ... ok
+test linalg::lq::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::lq::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lq::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::lq::lapack::f64::lapack_lin_checkers ... ok
+test linalg::lq::lapack::f64::lapack_lq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::f64::lapack_lq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lq::lapack::f64::lapack_lq_reflector_checkers ... ok
+test linalg::gevd::qz_cplx::tests::test_qz_cplx_unblocked ... ok
+test linalg::householder::tests::threaded_panel_matches_the_sequential_one ... ok
+test linalg::lq::no_pivoting::reconstruct::tests::test_reconstruct ... ok
+test linalg::lq::no_pivoting::unitary::tests::test_rank_deficient ... ok
+test linalg::lq::no_pivoting::unitary::tests::test_unitary_and_null ... ok
+test linalg::lu::full_pivoting::factor::tests::pivot_search_breaks_ties_by_column_then_row ... ok
+test linalg::lq::no_pivoting::factor::tests::test_lookahead_rank_loss ... ok
+test linalg::householder::tests::threaded_upgrade_matches_the_sequential_one ... ok
+test linalg::lu::full_pivoting::factor::tests::test_gh238 ... ok
+test linalg::lu::full_pivoting::inverse::tests::test_inverse ... ok
+test linalg::lu::full_pivoting::reconstruct::tests::test_reconstruct ... ok
+test linalg::lu::full_pivoting::solve::tests::test_solve ... ok
+test linalg::lu::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::lu::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lu::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::lu::lapack::c32::lapack_lu_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::c32::lapack_lin_checkers ... ok
+test linalg::lu::lapack::c32::lapack_lu_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::c32::lapack_lu_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::c32::lapack_lu_checkers ... ok
+test linalg::lu::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::lu::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lu::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::lu::lapack::c64::lapack_lu_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::c64::lapack_lin_checkers ... ok
+test linalg::lu::lapack::c64::lapack_lu_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::c64::lapack_lu_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::c64::lapack_lu_checkers ... ok
+test linalg::lu::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::lu::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lu::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::lu::lapack::f32::lapack_lu_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::f32::lapack_lin_checkers ... ok
+test linalg::lu::lapack::f32::lapack_lu_checkers ... ok
+test linalg::lu::lapack::f32::lapack_lu_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::f32::lapack_lu_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::lu::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::lu::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::lu::lapack::f64::lapack_lu_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::f64::lapack_lin_checkers ... ok
+test linalg::lu::lapack::f64::lapack_lu_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::f64::lapack_lu_subnormal ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::lu::lapack::f64::lapack_lu_checkers ... ok
+test linalg::lu::full_pivoting::factor::tests::test_flu ... ok
+test linalg::lu::partial_pivoting::factor::tests::region_rules_follow_the_serial_time ... ok
+test linalg::lu::partial_pivoting::factor::tests::simd_leaf_picks_the_scalar_pivots ... ok
+test linalg::evd::schur::complex_schur::tests::test_n ... ok
+test linalg::lu::partial_pivoting::factor::tests::test_plu ... ok
+test linalg::lu::partial_pivoting::factor::tests::derived_gates_keep_the_factorization ... ok
+test linalg::gevd::gen_hessenberg::tests::test_hessenberg ... ok
+test linalg::lu::partial_pivoting::inverse::tests::test_inverse ... ok
+test linalg::lu::partial_pivoting::reconstruct::tests::test_reconstruct ... ok
+test linalg::lu::partial_pivoting::solve::tests::test_solve ... ok
+test linalg::mat_ops::test::test_adding_matrices_of_different_sizes_should_panic - should panic ... ok
+test linalg::mat_ops::test::test_col_add ... ok
+test linalg::mat_ops::test::test_col_sub ... ok
+test linalg::mat_ops::test::test_diag_mul ... ok
+test linalg::mat_ops::test::test_matmul_col_row ... ok
+test linalg::mat_ops::test::test_matrix_add ... ok
+test linalg::mat_ops::test::test_matrix_sub ... ok
+test linalg::mat_ops::test::test_neg ... ok
+test linalg::mat_ops::test::test_perm_mul ... ok
+test linalg::mat_ops::test::test_row_add ... ok
+test linalg::mat_ops::test::test_row_sub ... ok
+test linalg::mat_ops::test::test_scalar_mul ... ok
+test linalg::mat_ops::test::test_subtracting_two_matrices_of_different_sizes_should_panic - should panic ... ok
+test linalg::matmul::internal::reversed_depth_tests::a_diagonal_product_reads_the_depth_in_any_direction ... ok
+test linalg::matmul::internal::tests::empty_strict_triangle_preserves_parent_guards ... ok
+test linalg::matmul::internal::tests::strict_triangle_maps_preserve_stored_entries_and_parent_guards ... ok
+test linalg::matmul::internal::tests::strict_triangle_preserves_nonempty_parent_guards ... ok
+test linalg::matmul::internal::tests::strict_triangle_zero_depth_preserves_replace_semantics ... ok
+test linalg::matmul::tests::test_matmul ... ignored, takes too long
+test linalg::matmul::tests::test_matmul_with_conj_uninit ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_batched ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_empty_inner_dimension ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_generic_scalar ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_matrix_vector ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_native_never_reads_destination ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_negative_destination_stride ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_strided_and_conjugated ... ok
+test linalg::gevd::qz_real::tests::test_qz_real_blocked ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_thin_matches_replace_bits ... ok
+test linalg::matmul::tests::test_matmul_with_conj_uninit_team ... ok
+test linalg::lu::partial_pivoting::factor::tests::f64_default_leaf_factors ... ok
+test linalg::lu::partial_pivoting::factor::tests::wide_matrix_parallel_agrees_with_serial ... ok
+test linalg::lq::no_pivoting::factor::tests::test_lookahead_matches_sequential ... ok
+test linalg::pfaffian::tests::outside_panel_exchange_returns_the_exact_pfaffian ... ok
+test linalg::pfaffian::tests::trailing_tiles_have_one_owner_each_and_a_balanced_split ... ok
+test linalg::gevd::qz_cplx::tests::test_qz_cplx_blocked ... ok
+test linalg::lu::partial_pivoting::factor::tests::threaded_lu_matches_the_sequential_one ... ok
+test linalg::qr::col_pivoting::factor::tests::test_unblocked_qr ... ok
+test linalg::qr::col_pivoting::inverse::tests::test_inverse ... ok
+test linalg::qr::col_pivoting::reconstruct::tests::test_reconstruct ... ok
+test linalg::matmul::tests::thread_budget_does_not_change_the_product ... ok
+test linalg::qr::col_pivoting::solve::tests::test_lstsq ... ok
+test linalg::qr::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::qr::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::qr::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::qr::lapack::c32::lapack_lin_checkers ... ok
+test linalg::qr::lapack::c32::lapack_qr_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::c32::lapack_qr_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::c32::lapack_qr_reflector_checkers ... ok
+test linalg::qr::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::qr::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::qr::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::qr::lapack::c64::lapack_lin_checkers ... ok
+test linalg::qr::lapack::c64::lapack_qr_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::c64::lapack_qr_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::c64::lapack_qr_reflector_checkers ... ok
+test linalg::qr::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::qr::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::qr::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::qr::lapack::f32::lapack_lin_checkers ... ok
+test linalg::qr::lapack::f32::lapack_qr_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::f32::lapack_qr_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::f32::lapack_qr_reflector_checkers ... ok
+test linalg::qr::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::qr::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::qr::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::qr::lapack::f64::lapack_lin_checkers ... ok
+test linalg::qr::lapack::f64::lapack_qr_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::f64::lapack_qr_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::qr::lapack::f64::lapack_qr_reflector_checkers ... ok
+test linalg::qr::col_pivoting::solve::tests::test_solve ... ok
+test linalg::qr::no_pivoting::factor::tests::test_near_dependent_columns_are_not_skipped ... ok
+test linalg::qr::no_pivoting::factor::tests::test_near_dependent_rows_are_not_skipped ... ok
+test linalg::qr::col_pivoting::factor::tests::zero_matrix_reconstructs ... ok
+test linalg::qr::no_pivoting::factor::tests::test_rank_deficient ... ok
+test linalg::pfaffian::inverse_tests::retained_factors_reconstruct_all_native_scalar_types ... ok
+test linalg::qr::no_pivoting::factor::tests::zero_column_block_does_not_panic_with_threads ... ok
+test linalg::qr::no_pivoting::inverse::tests::test_inverse ... ok
+test linalg::qr::no_pivoting::reconstruct::tests::test_reconstruct ... ok
+test linalg::qr::no_pivoting::solve::tests::test_lstsq ... ok
+test linalg::qr::no_pivoting::solve::tests::test_solve ... ok
+test linalg::qr::no_pivoting::unitary::tests::test_rank_deficient ... ok
+test linalg::qr::no_pivoting::unitary::tests::test_unitary_and_null ... ok
+test linalg::qr::tests::test_example ... ok
+test linalg::reductions::norm_l1::tests::test_norm_l1 ... ok
+test linalg::reductions::norm_l2::tests::test_norm_l2 ... ok
+test linalg::lu::partial_pivoting::factor::tests::zero_pivot_column_reconstructs ... ok
+test linalg::reductions::norm_l2::tests::test_norm_l2_strided_range ... ok
+test linalg::reductions::norm_l2::tests::test_norm_l2_cplx ... ok
+test linalg::reductions::norm_max::tests::test_norm_max ... ok
+test linalg::reductions::norm_max::tests::test_norm_max_empty_is_zero ... ok
+test linalg::reductions::norm_max::tests::test_norm_max_finite_and_inf_paths_agree ... ok
+test linalg::reductions::norm_max::tests::test_norm_max_propagates_nan ... ok
+test linalg::reductions::sum::tests::test_sum_cplx ... ok
+test linalg::reductions::norm_l2_sqr::tests::test_norm_l2_sqr ... ok
+test linalg::solvers::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::solvers::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::solvers::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::solvers::lapack::c32::lapack_lin_checkers ... ok
+test linalg::solvers::lapack::c32::lapack_lstsq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::lapack::c32::lapack_lstsq_checkers ... ok
+test linalg::solvers::lapack::c32::lapack_lstsq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::solvers::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::solvers::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::solvers::lapack::c64::lapack_lin_checkers ... ok
+test linalg::solvers::lapack::c64::lapack_lstsq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::lapack::c64::lapack_lstsq_checkers ... ok
+test linalg::solvers::lapack::c64::lapack_lstsq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::solvers::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::solvers::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::solvers::lapack::f32::lapack_lin_checkers ... ok
+test linalg::solvers::lapack::f32::lapack_lstsq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::lapack::f32::lapack_lstsq_checkers ... ok
+test linalg::solvers::lapack::f32::lapack_lstsq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::solvers::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::solvers::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::solvers::lapack::f64::lapack_lin_checkers ... ok
+test linalg::solvers::lapack::f64::lapack_lstsq_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::lapack::f64::lapack_lstsq_checkers ... ok
+test linalg::solvers::lapack::f64::lapack_lstsq_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::solvers::tests::codeberg_295 ... ok
+test linalg::solvers::tests::svd_lstsq_rank_deficient ... ok
+test linalg::reductions::sum::tests::test_sum_real ... ok
+test linalg::solvers::tests::test_all_solvers ... ok
+test linalg::solvers::tests::test_eigen_cplx ... ok
+test linalg::solvers::tests::test_eigen_real ... ok
+test linalg::solvers::tests::test_geigen_cplx ... ok
+test linalg::solvers::tests::test_svd_solver_for_rectangular_matrix ... ok
+test linalg::solvers::tests::test_geigen_real ... ok
+test linalg::svd::bidiag::tests::test_bidiag_cplx ... ok
+test linalg::qr::no_pivoting::factor::tests::test_qr ... ok
+test linalg::svd::bidiag_svd::tests::prescale_outside_normal_range ... ok
+test linalg::svd::bidiag_svd::tests::subnormal_diag_at_split ... ok
+test linalg::svd::bidiag_svd::tests::test_both_deflation ... ok
+test linalg::svd::bidiag_svd::tests::test_deflation43 ... ok
+test linalg::svd::bidiag_svd::tests::test_deflation44 ... ok
+test linalg::svd::bidiag::tests::test_bidiag_real ... ok
+test linalg::svd::bidiag_svd::tests::test_divide_and_conquer ... ok
+test linalg::svd::bidiag_svd::tests::test_divide_and_conquer_exact_scratch_rayon ... ok
+test linalg::svd::bidiag_svd::tests::test_issue81_qr_near_repeated_pair ... ok
+test linalg::svd::bidiag_svd::tests::test_josef ... ignored, large (n = 8660): runs in the nightly LAPACK validation
+test linalg::svd::bidiag_svd::tests::test_qr_algorithm ... ok
+test linalg::svd::bidiag_svd::tests::test_secular_eq_flat_away_from_root ... ok
+test linalg::svd::dqds::tests::diagonal_is_its_own_answer ... ok
+test linalg::svd::dqds::tests::matches_the_reference_on_a_dense_bidiagonal ... ok
+test linalg::svd::dqds::tests::matches_the_reference_on_bidiagonals ... ok
+test linalg::svd::dqds::tests::scale_does_not_change_the_answer ... ok
+test linalg::svd::tests::cplx_phase_reduction_outside_normal_range ... ok
+test linalg::svd::tests::full_factors_ignore_old_output_entries ... ok
+test linalg::svd::tests::lapack_svd_c32::c32_fixtures_use_single_precision_limits ... ok
+test linalg::svd::tests::lapack_svd_c32::complex_tests::checkers_reject_imaginary_corruption ... ok
+test linalg::svd::tests::lapack_svd_c32::complex_tests::checkers_require_conjugation ... ok
+test linalg::svd::tests::lapack_svd_c32::complex_tests::fixtures_have_known_complex_phases ... ok
+test linalg::svd::tests::lapack_svd_c32::lapack::bidiagonal_family ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c32::lapack::bidiagonal_merge_boundary_rotation_is_orthogonal ... ok
+test linalg::svd::tests::lapack_svd_c32::lapack::checkers_dchkbd_mode_agreement_has_no_dimension_factor ... ok
+test linalg::svd::tests::lapack_svd_c32::lapack::checkers_handle_zero_and_extreme_scales ... ok
+test linalg::svd::tests::lapack_svd_c32::lapack::checkers_reject_corrupted_outputs ... ok
+test linalg::svd::tests::lapack_svd_c32::lapack::dchkbd_15_to_19 ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c32::lapack::dchkbd_type_16_values_only_finishes ... ok
+test linalg::svd::tests::lapack_svd_c32::lapack::diagonal_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c32::lapack::panics_and_errors_do_not_skip_later_cases ... ok
+test linalg::svd::tests::lapack_svd_c32::lapack::prefilled_outputs ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c32::lapack::rank_one_at_recursion_splits ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c32::lapack::rotated_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c32::svd_views::guards_detect_writes_outside_output_views ... ok
+test linalg::svd::tests::lapack_svd_c32::svd_views::known_spectra_include_repeated_and_tight_clusters ... ok
+test linalg::svd::tests::lapack_svd_c32::svd_views::layouts_and_reused_buffers ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c32::svd_views::parallel_paths ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::complex_tests::checkers_reject_imaginary_corruption ... ok
+test linalg::svd::tests::lapack_svd_c64::complex_tests::checkers_require_conjugation ... ok
+test linalg::svd::tests::lapack_svd_c64::complex_tests::fixtures_have_known_complex_phases ... ok
+test linalg::svd::tests::lapack_svd_c64::lapack::bidiagonal_family ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::pfaffian::tests::mirrored_tiled_updates_match_dense_skew_oracle ... ok
+test linalg::svd::tests::lapack_svd_c64::lapack::checkers_dchkbd_mode_agreement_has_no_dimension_factor ... ok
+test linalg::svd::tests::lapack_svd_c64::lapack::checkers_handle_zero_and_extreme_scales ... ok
+test linalg::svd::tests::lapack_svd_c64::lapack::checkers_reject_corrupted_outputs ... ok
+test linalg::svd::tests::lapack_svd_c64::lapack::dchkbd_15_to_19 ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::lapack::bidiagonal_merge_boundary_rotation_is_orthogonal ... ok
+test linalg::svd::tests::lapack_svd_c64::lapack::diagonal_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::lapack::panics_and_errors_do_not_skip_later_cases ... ok
+test linalg::svd::tests::lapack_svd_c64::lapack::prefilled_outputs ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::lapack::rank_one_at_recursion_splits ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::lapack::rotated_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::svd_views::guards_detect_writes_outside_output_views ... ok
+test linalg::svd::tests::lapack_svd_c64::svd_views::known_spectra_include_repeated_and_tight_clusters ... ok
+test linalg::svd::tests::lapack_svd_c64::svd_views::layouts_and_reused_buffers ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::svd_views::parallel_paths ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::f32_fixtures_use_single_precision_limits ... ok
+test linalg::svd::tests::lapack_svd_f32::lapack::bidiagonal_family ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_c64::lapack::dchkbd_type_16_values_only_finishes ... ok
+test linalg::svd::tests::lapack_svd_f32::lapack::checkers_dchkbd_mode_agreement_has_no_dimension_factor ... ok
+test linalg::svd::tests::lapack_svd_f32::lapack::checkers_handle_zero_and_extreme_scales ... ok
+test linalg::svd::tests::lapack_svd_f32::lapack::checkers_reject_corrupted_outputs ... ok
+test linalg::svd::tests::lapack_svd_f32::lapack::dchkbd_15_to_19 ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::bidiag::tests::bidiag_on_a_team_reconstructs ... ok
+test linalg::svd::tests::lapack_svd_f32::lapack::diagonal_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::lapack::panics_and_errors_do_not_skip_later_cases ... ok
+test linalg::svd::tests::lapack_svd_f32::lapack::prefilled_outputs ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::lapack::rank_one_at_recursion_splits ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::lapack::rotated_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::svd_views::guards_detect_writes_outside_output_views ... ok
+test linalg::svd::tests::lapack_svd_f32::svd_views::known_spectra_include_repeated_and_tight_clusters ... ok
+test linalg::svd::tests::lapack_svd_f32::svd_views::layouts_and_reused_buffers ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::svd_views::parallel_paths ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f64::lapack::bidiagonal_family ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::lapack::bidiagonal_merge_boundary_rotation_is_orthogonal ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::checkers_dchkbd_mode_agreement_has_no_dimension_factor ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::checkers_handle_zero_and_extreme_scales ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::checkers_reject_corrupted_outputs ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::dchkbd_15_to_19 ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f32::lapack::dchkbd_type_16_values_only_finishes ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::diagonal_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f64::lapack::panics_and_errors_do_not_skip_later_cases ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::prefilled_outputs ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f64::lapack::rank_one_at_recursion_splits ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f64::lapack::rotated_families ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f64::svd_views::guards_detect_writes_outside_output_views ... ok
+test linalg::svd::tests::lapack_svd_f64::svd_views::known_spectra_include_repeated_and_tight_clusters ... ok
+test linalg::svd::tests::lapack_svd_f64::svd_views::layouts_and_reused_buffers ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::lapack_svd_f64::svd_views::parallel_paths ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::svd::tests::qr_stall::test_issue81_complex_qr_stall ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::bidiagonal_merge_boundary_rotation_is_orthogonal ... ok
+test linalg::svd::tests::test_extreme_scale ... ok
+test linalg::svd::tests::test_pinv ... ok
+test linalg::svd::tests::test_pinv2 ... ok
+test linalg::svd::tests::lapack_svd_f64::lapack::dchkbd_type_16_values_only_finishes ... ok
+test linalg::qr::no_pivoting::factor::tests::test_row_major_factor_is_the_column_major_one ... ok
+test linalg::svd::tests::test_sorted_with_subnormal_at_split ... ok
+test linalg::svd::tests::test_real ... ok
+test linalg::svd::tests::test_cplx ... ok
+test linalg::svd::tests::test_v_only_rank_one_exact_scratch ... ok
+test linalg::svd::tests::test_rank_one_subnormal_cascade ... ok
+test linalg::svd::bidiag_svd::tests::test_divide_and_conquer_exact_scratch ... ok
+test linalg::svd::tests::test_zink ... ok
+test linalg::svd::tests::test_zero_block_at_split ... ok
+test linalg::tests::test_copy_tasks_cover_the_lines_in_whole_tiles ... ok
+test linalg::svd::tests::test_special ... ok
+test linalg::pfaffian::tests::trailing_update_keeps_ranks_inside_the_offered_slots ... ok
+test linalg::tests::tiled_triangular_copy_writes_what_the_elementwise_one_does ... ok
+test linalg::triangular_inverse::tests::test_invert_lower ... ok
+test linalg::triangular_inverse::tests::test_invert_unit_lower ... ok
+test linalg::triangular_inverse::tests::test_invert_unit_upper ... ok
+test linalg::triangular_inverse::tests::test_invert_upper ... ok
+test linalg::svd::tests::test_zero_child_at_split ... ok
+test linalg::triangular_solve::lapack::c32::lapack_common_checkers_reject_corruption ... ok
+test linalg::triangular_solve::lapack::c32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::triangular_solve::lapack::c32::lapack_common_fixtures_and_guards ... ok
+test linalg::triangular_solve::lapack::c32::lapack_lin_checkers ... ok
+test linalg::triangular_solve::lapack::c32::lapack_triangular_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::lapack::c32::lapack_triangular_checkers ... ok
+test linalg::triangular_solve::lapack::c32::lapack_triangular_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::lapack::c64::lapack_common_checkers_reject_corruption ... ok
+test linalg::triangular_solve::lapack::c64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::triangular_solve::lapack::c64::lapack_common_fixtures_and_guards ... ok
+test linalg::triangular_solve::lapack::c64::lapack_lin_checkers ... ok
+test linalg::triangular_solve::lapack::c64::lapack_triangular_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::lapack::c64::lapack_triangular_checkers ... ok
+test linalg::triangular_solve::lapack::c64::lapack_triangular_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::lapack::f32::lapack_common_checkers_reject_corruption ... ok
+test linalg::triangular_solve::lapack::f32::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::triangular_solve::lapack::f32::lapack_common_fixtures_and_guards ... ok
+test linalg::triangular_solve::lapack::f32::lapack_lin_checkers ... ok
+test linalg::triangular_solve::lapack::f32::lapack_triangular_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::lapack::f32::lapack_triangular_checkers ... ok
+test linalg::triangular_solve::lapack::f32::lapack_triangular_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::lapack::f64::lapack_common_checkers_reject_corruption ... ok
+test linalg::triangular_solve::lapack::f64::lapack_common_continues_after_errors_and_panics ... ok
+test linalg::triangular_solve::lapack::f64::lapack_common_fixtures_and_guards ... ok
+test linalg::triangular_solve::lapack::f64::lapack_lin_checkers ... ok
+test linalg::triangular_solve::lapack::f64::lapack_triangular_cases ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::lapack::f64::lapack_triangular_checkers ... ok
+test linalg::triangular_solve::lapack::f64::lapack_triangular_parallel ... ignored, opt-in LAPACK numerical validation (#31)
+test linalg::triangular_solve::tests::subnormal_complex_diagonal_solve ... ok
+test linalg::triangular_solve::tests::subnormal_coupled_solve ... ok
+test linalg::triangular_solve::tests::subnormal_real_diagonal_solve ... ok
+test linalg::triangular_solve::aliased_rhs::staged_solve_is_bitwise_the_in_place_one ... ok
+test linalg::triangular_solve::tests::tiny_imaginary_pivot_scalar_solve ... ok
+test linalg::triangular_solve::tests::tiny_pivot_scalar_solve ... ok
+test mat::matmut::tests::codeberg_305 ... ok
+test mat::matmut::tests::test_min ... ok
+test mat::matmut::tests::test_max ... ok
+test mat::matown::tests::test_drop ... ok
+test mat::matown::tests::test_max ... ok
+test mat::matown::tests::test_min ... ok
+test mat::matown::tests::test_push_col ... ok
+test mat::matown::tests::test_push_col_panic - should panic ... ok
+test mat::matown::tests::test_push_row ... ok
+test mat::matown::tests::test_push_row_panic - should panic ... ok
+test mat::matown::tests::test_resize ... ok
+test mat::matown::tests::test_resize_5 ... ok
+test mat::matown::tests::test_resize_5_1 ... ok
+test mat::matref::tests::test_cloned_does_not_replicate_the_first_heap_value ... ok
+test mat::matref::tests::test_max ... ok
+test mat::matref::tests::test_min ... ok
+test mat::matref::tests::test_cloned_from_a_strided_source ... ok
+test mat::tests::test_mat ... ok
+test mat::tests::test_mat_complex ... ok
+test matrix_free::bicgstab::tests::breakdown_on_the_first_step_with_a_zero_guess ... ok
+test matrix_free::bicgstab::tests::breakdown_when_the_operator_maps_the_direction_to_zero ... ok
+test matrix_free::bicgstab::tests::codeberg_326 ... ok
+test matrix_free::bicgstab::tests::codeberg_327 ... ok
+test matrix_free::bicgstab::tests::codeberg_328 ... ok
+test matrix_free::bicgstab::tests::nonfinite_second_half_step_keeps_the_first ... ok
+test matrix_free::bicgstab::tests::test_bicgstab ... ok
+test matrix_free::bicgstab::tests::zero_guess_is_written_out_without_an_iteration ... ok
+test matrix_free::conjugate_gradient::tests::codeberg_326 ... ok
+test matrix_free::bicgstab::tests::block_rhs_with_identity_is_not_a_breakdown ... ok
+test matrix_free::conjugate_gradient::tests::test_cg ... ok
+test matrix_free::conjugate_gradient::tests::codeberg_328 ... ok
+test matrix_free::conjugate_gradient::tests::test_cg_breakdown ... ok
+test linalg::tests::llt_and_partial_piv_lu_factor_both_orders_bit_for_bit ... ok
+test matrix_free::conjugate_gradient::tests::zero_guess_is_written_out_without_an_iteration ... ok
+test linalg::tests::test_layout_copies_on_a_team ... ok
+test matrix_free::eigen::tests::test_small_cplx ... ok
+test matrix_free::eigen::tests::test_small_real ... ok
+test matrix_free::eigen::tests::test_toeplitz ... ok
+test matrix_free::lsmr::tests::test_abs_tolerance_is_honoured ... ok
+test matrix_free::eigen::tests::test_self_adjoint_full_subspace_exact_scratch_real ... ok
+test matrix_free::eigen::tests::test_arnoldi_real ... ok
+test matrix_free::self_adjoint_eigen::full::tests::complex_hermitian ... ok
+test matrix_free::eigen::tests::test_arnoldi_cplx ... ok
+test matrix_free::self_adjoint_eigen::full::tests::degenerate_spectrum ... ok
+test matrix_free::self_adjoint_eigen::full::tests::diagonal_small_n ... ok
+test matrix_free::self_adjoint_eigen::full::tests::explicit_full_projection ... ok
+test matrix_free::self_adjoint_eigen::full::tests::mwe_identity_default_params ... ok
+test matrix_free::self_adjoint_eigen::full::tests::n_equals_one ... ok
+test matrix_free::self_adjoint_eigen::full::tests::non_finite_operator_is_reported ... ok
+test matrix_free::self_adjoint_eigen::full::tests::prefix_stable_in_k ... ok
+test matrix_free::svd::full::tests::complex_input ... ok
+test matrix_free::svd::full::tests::degenerate_spectrum ... ok
+test matrix_free::svd::full::tests::diagonal_small_n ... ok
+test matrix_free::svd::full::tests::empty_shape_is_reported ... ok
+test matrix_free::svd::full::tests::explicit_full_projection ... ok
+test matrix_free::svd::full::tests::mwe_identity_default_params ... ok
+test matrix_free::svd::full::tests::n_equals_one ... ok
+test matrix_free::svd::full::tests::non_finite_operator_is_reported ... ok
+test matrix_free::svd::full::tests::prefix_stable_in_k ... ok
+test matrix_free::svd::full::tests::projection_clip_boundary ... ok
+test matrix_free::svd::full::tests::rectangular ... ok
+test matrix_free::lsmr::tests::test_breakdown ... ok
+test row::rowmut::tests::test_row_max ... ok
+test row::rowmut::tests::test_row_min ... ok
+test row::rowown::tests::test_from_iter ... ok
+test row::rowown::tests::test_row_max ... ok
+test row::rowown::tests::test_row_min ... ok
+test row::rowref::tests::test_row_max ... ok
+test row::rowref::tests::test_row_min ... ok
+test sort::tests::test_quicksort ... ok
+test sort::tests::test_quicksort_big ... ok
+test sparse::linalg::amd::tests::test_gh_258 ... ok
+test sparse::linalg::cholesky::tests::test_amd ... ok
+test sparse::linalg::cholesky::tests::test_counts ... ok
+test matrix_free::lsmr::tests::test_lsmr ... ok
+test sparse::linalg::cholesky::tests::test_simplicial ... ok
+test matrix_free::self_adjoint_eigen::tests::test_small_cplx ... ok
+test linalg::svd::tests::test_tiny_diagonal_at_split ... ok
+test sparse::linalg::cholesky::tests::test_supernodal ... ok
+test sparse::linalg::lu::tests::codeberg_339 ... ok
+test sparse::linalg::lu::tests::nonzero_subnormal_pivot_is_not_singular ... ok
+test sparse::linalg::lu::tests::numeric_singular_after_an_elimination_step ... ok
+test sparse::linalg::cholesky::tests::test_solver_bk ... ok
+test sparse::linalg::lu::tests::test_numeric_lu_multifrontal ... ok
+test sparse::linalg::cholesky::tests::test_solver_ldlt ... ok
+test sparse::linalg::lu::tests::test_solver_lu_simplicial ... ok
+test sparse::linalg::cholesky::tests::test_solver_llt ... ok
+test sparse::linalg::matmul::tests::test_sp_matmul ... ok
+test sparse::linalg::qr::tests::test_numeric_qr_1_no_transpose ... ok
+test sparse::linalg::qr::tests::test_numeric_qr_1_transpose ... ok
+test sparse::linalg::qr::tests::test_numeric_simplicial_qr_1_transpose ... ok
+test sparse::linalg::qr::tests::test_solver_qr_edge_case ... ok
+test sparse::linalg::qr::tests::test_symbolic_qr ... ok
+test sparse::linalg::solvers::tests::codeberg_292 ... ok
+test sparse::tests::test_from_indices ... ok
+test sparse::tests::test_from_indices_oob_col ... ok
+test sparse::tests::test_from_indices_oob_row ... ok
+test sparse::tests::test_from_nonnegative_indices ... ok
+test sparse::utils::tests::test_permute_self_adjoint ... ok
+test sparse::utils::tests::test_transpose ... ok
+test stats::meanvar::tests::test_meanvar_ignore_nan_nonan_c32 ... ok
+test stats::meanvar::tests::test_meanvar_ignore_nan_nonan_c64 ... ok
+test sparse::linalg::qr::tests::test_solver_qr_1_transpose ... ok
+test stats::meanvar::tests::test_meanvar_ignore_nan_yesnan_c32 ... ok
+test stats::meanvar::tests::test_meanvar_ignore_nan_yesnan_c64 ... ok
+test stats::meanvar::tests::test_meanvar_propagate ... ok
+test stats::meanvar::tests::test_meanvar_reversed_output_axis ... ok
+test stats::meanvar::tests::test_row_meanvar_reverse_cols_issue_317 ... ok
+test sparse::linalg::lu::tests::test_numeric_lu_simplicial ... ok
+test utils::cost::join_results::bidiagonal_svd_agrees_with_serial ... ok
+test sparse::linalg::solvers::tests::codeberg_301 ... ok
+test utils::cost::tests::block_apply_split_starts_where_the_estimate_pays ... ok
+test utils::cost::tests::derived_floors_on_a_team_follow_the_rule ... ok
+test utils::cost::tests::derived_gates_never_pay_on_a_sequential_shape ... ok
+test utils::cost::tests::detection_is_stable_and_the_host_row_is_its_class ... ok
+test utils::cost::tests::every_class_resolves_to_its_table ... ok
+test utils::cost::join_results::triangular_inverse_agrees_with_serial ... ok
+test utils::cost::join_results::sparse_matmul_agrees_with_serial ... ok
+test utils::cost::join_results::tridiagonal_evd_agrees_with_serial ... ok
+test utils::cost::tests::gemm_rates_are_per_dtype ... ok
+test utils::cost::tests::generic_is_the_per_entry_minimum_of_the_measured_rows ... ok
+test utils::cost::tests::fixed_and_never_keep_their_meaning ... ok
+test utils::cost::tests::host_class_agrees_with_threadteam ... ok
+test utils::cost::tests::join_gates_on_a_team_follow_the_width_two_cost ... ok
+test matrix_free::svd::tests::test_small_cplx ... ok
+test utils::cost::tests::min_dispatch_cost_is_the_cheapest_width ... ok
+test utils::cost::tests::lookahead_width_follows_the_step_model ... ok
+test utils::cost::tests::pays_is_the_multiple_of_the_cost ... ok
+test utils::cost::tests::rates_are_per_dtype ... ok
+test utils::cost::tests::rows_are_positive ... ok
+test utils::cost::tests::seq_never_pays ... ok
+test utils::cost::tests::team_shape_carries_the_costs_of_its_token ... ok
+test utils::cost::tests::the_team_cost_is_threadteams_table_at_every_width ... ok
+test utils::partition::tests::lower_area_parts_boundaries ... ok
+test utils::partition::tests::lower_area_parts_caps_the_trailing_block_of_a_1024_cholesky ... ok
+test utils::cost::tests::halves_join_gates_follow_the_rule ... ok
+test utils::partition::tests::lower_boundaries_are_the_rounded_roots ... ok
+test utils::partition::tests::lower_parts_cover_the_triangle_with_equal_areas ... ok
+test utils::cost::tests::forced_parallel::forced_parallel_steps_equal_serial_f64 ... ok
+test utils::partition::tests::lower_area_parts_keeps_every_part_non_empty ... ok
+test utils::cost::tests::par_width_reads_the_degree_of_the_token ... ok
+test utils::team::tests::a_team_of_one_behaves_exactly_like_seq ... ok
+test utils::team::tests::for_each_child_deals_every_item_once ... ok
+test utils::cost::tests::forced_parallel::forced_parallel_steps_equal_serial_c64 ... ok
+test utils::team::tests::for_each_child_unwinds_and_keeps_the_team ... ok
+test utils::team::tests::grid_uses_the_team_and_stays_in_bounds ... ok
+test utils::team::tests::gemm_on_the_team_matches_sequential ... ok
+test linalg::tests::test_row_major_adaptation_matches_the_column_major_one ... ok
+test utils::team::tests::job_tables_are_not_lent_twice ... ok
+test utils::team::tests::gemm_team_reuses_its_workspace_across_shapes ... ok
+test utils::team::tests::gemm_tiled_matches_the_gemm_crate_for_every_dtype ... ok
+test utils::team::tests::for_each_deals_every_item_once_and_nests ... ok
+test utils::team::tests::join_raw_leaves_match_the_width ... ok
+test utils::team::tests::kernel_width_finds_the_widest_paying_width_on_a_falling_row ... ok
+test utils::team::tests::kernel_width_rejects_at_the_cheapest_width ... ok
+test utils::team::tests::join_sized_on_a_team_hands_out_exactly_the_team ... ok
+test utils::team::tests::lu_qr_cholesky_on_the_team_match_sequential ... ok
+test utils::team::tests::high_level_singular_values_run_on_the_team ... ok
+test utils::team::tests::high_level_qr_and_lu_solve_on_the_team ... ok
+test utils::team::tests::lu_swap_stage_forks_a_square_matrix_too ... ok
+test utils::team::tests::lu_swap_stage_forks_the_team_it_is_handed ... ok
+test utils::team::tests::never_reaches_the_compact_factor_upgrades ... ok
+test utils::team::tests::par_pays_time_is_the_shape_gate ... ok
+test utils::team::tests::par_width_takes_the_widest_width_that_pays ... ok
+test utils::team::tests::small_qr_on_a_team_is_the_sequential_one ... ok
+test utils::team::tests::sparse_matmul_on_a_team_runs_on_the_team ... ok
+test utils::team::tests::spicy_matmul_on_a_team_matches_sequential ... ok
+test utils::team::tests::team_kernel_qr_matches_sequential ... ok
+test utils::team::tests::teams_of_odd_and_unit_width_match_sequential ... ok
+test utils::team::tests::the_kernel_forks_only_on_members_of_the_team ... ok
+test utils::team::tests::the_team_floor_is_per_dtype ... ok
+test utils::team::tests::with_team_calls_of_one_width_reuse_the_threads ... ok
+test utils::team::tests::triangular_products_on_the_team_match_sequential_and_stay_on_it ... ok
+test utils::team::tests::with_team_has_width_participants ... ok
+test utils::team::tests::with_width_runs_on_a_sub_team_of_that_width ... ok
+test utils::team::tests::team_kernel_products_match_sequential_for_every_dtype ... ok
+test utils::thread::tests::for_each_region_reaches_the_team ... ok
+test utils::thread::tests::join_raw_leaves_do_not_exceed_requested_width ... ok
+test utils::thread::tests::join_sized_children_stay_within_their_share ... ok
+test utils::team::tests::team_kernel_triangular_indexed_and_factorizations_match_sequential ... ok
+test utils::team::tests::lower_product_by_area_matches_sequential ... ok
+test utils::team::tests::the_families_narrow_their_regions_and_match_sequential ... ok
+test linalg::matmul::tests::test_triangular ... ok
+test linalg::qr::no_pivoting::factor::tests::test_lookahead_matches_sequential ... ok
+
+test result: ok. 694 passed; 0 failed; 162 ignored; 0 measured; 0 filtered out; finished in 66.75s
+
+     Running tests/evd_svd_vectors_no_alloc.rs (target/debug/deps/evd_svd_vectors_no_alloc-fdb9895e021a001d)
+
+running 1 test
+test evd_and_bidiagonal_svd_with_vectors_allocate_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests/generalized_hessenberg_rotations.rs (target/debug/deps/generalized_hessenberg_rotations-5e250686ec074443)
+
+running 4 tests
+test c32_safe_rotations ... ok
+test f32_safe_rotations ... ok
+test f64_safe_rotations ... ok
+test c64_safe_rotations ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generalized_schur_reorder.rs (target/debug/deps/generalized_schur_reorder-481f3f4c80a827e7)
+
+running 31 tests
+test c32_clustered ... ok
+test c32_failure_modes ... ok
+test c32_accumulated_vectors ... ok
+test c32_exact_range ... ok
+test c64_accumulated_vectors ... ok
+test c64_failure_modes ... ok
+test c64_exact_range ... ok
+test f32_accumulated_vectors ... ok
+test c64_clustered ... ok
+test f32_clustered ... ok
+test f32_exact_range ... ok
+test f32_failure_modes ... ok
+test f32_graded_real_pairs ... ok
+test f32_repeated_real_pairs ... ok
+test f32_saved_eigenvalues ... ok
+test f64_accumulated_vectors ... ok
+test f64_clustered ... ok
+test f64_failure_modes ... ok
+test f64_graded_real_pairs ... ok
+test f64_exact_range ... ok
+test f64_saved_eigenvalues ... ok
+test f64_repeated_real_pairs ... ok
+test f32_blocks ... ok
+test f64_blocks ... ok
+test overflowing_stripe_restores_all_factors ... ok
+test unsafe_eigenvalue_scaling_keeps_the_unwritten_suffix ... ok
+test f32_triangular ... ok
+test f64_triangular ... ok
+test c32_triangular ... ok
+test sequential_and_team_agree ... ok
+test c64_triangular ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/generalized_schur_reorder_no_alloc.rs (target/debug/deps/generalized_schur_reorder_no_alloc-b395f75866439dfa)
+
+running 1 test
+test all_native_scalars_allocate_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gevd_repeated_complex_pair.rs (target/debug/deps/gevd_repeated_complex_pair-6f06be83a76281b1)
+
+running 8 tests
+test reported_pencil_right_vectors_are_finite ... ok
+test defective_repeated_pair_f64 ... ok
+test semisimple_repeated_pair_vectors_are_independent ... ok
+test defective_repeated_pair_f32 ... ok
+test semisimple_repeated_pair_f32 ... ok
+test semisimple_repeated_pair_f64 ... ok
+test repeated_pair_chain_f32 ... ok
+test repeated_pair_chain_f64 ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/gevd_repeated_eigen.rs (target/debug/deps/gevd_repeated_eigen-de596a810f89b4a4)
+
+running 13 tests
+test complex_identity_pencil_both_sides_are_finite ... ok
+test complex_identity_pencil_left_vectors_are_finite ... ok
+test complex_identity_pencil_right_vectors_are_finite ... ok
+test f32_identity_pencil_right_vectors_are_finite ... ok
+test identity_pencil_both_sides_are_finite ... ok
+test identity_pencil_left_vectors_are_finite ... ok
+test near_repeated_tiny_shift ... ok
+test identity_pencil_right_vectors_are_finite ... ok
+test repeated_block_in_nonsymmetric_pencil ... ok
+test spectrum_does_not_depend_on_which_eigenvectors_are_requested ... ok
+test spectrum_does_not_depend_on_which_eigenvectors_are_requested_f32 ... ok
+test spectrum_does_not_depend_on_which_eigenvectors_are_requested_c32 ... ok
+test spectrum_does_not_depend_on_which_eigenvectors_are_requested_c64 ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/iteration_control.rs (target/debug/deps/iteration_control-50c190e35a0262ce)
+
+running 5 tests
+test initial_convergence_does_not_call_stop_callback ... ok
+test f32_control ... ok
+test f64_control ... ok
+test c64_control ... ok
+test c32_control ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/lq.rs (target/debug/deps/lq-91a87681a20db21b)
+
+running 3 tests
+test lq_views ... ok
+test lq_contract ... ok
+test lq_parallel_matches_sequential ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/lq_no_alloc.rs (target/debug/deps/lq_no_alloc-fcb7d1fcd33d09f8)
+
+running 8 tests
+test lq_allocates_nothing_128x128 ... ok
+test lq_allocates_nothing_17x17 ... ok
+test lq_allocates_nothing_1x1 ... ok
+test lq_allocates_nothing_2x2 ... ok
+test lq_allocates_nothing_33x40 ... ok
+test lq_allocates_nothing_300x60 ... ok
+test lq_allocates_nothing_60x300 ... ok
+test lq_allocates_nothing_40x33 ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/lsmr_initial_residual.rs (target/debug/deps/lsmr_initial_residual-c3c1f809c4d6c543)
+
+running 4 tests
+test f32_initial ... ok
+test c64_initial ... ok
+test f64_initial ... ok
+test c32_initial ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lsmr_scale.rs (target/debug/deps/lsmr_scale-8d700b450cfb30d6)
+
+running 5 tests
+test complex_double_precision ... ok
+test nonzero_initial_guess_at_both_range_ends ... ok
+test real_double_precision ... ok
+test complex_single_precision ... ok
+test real_single_precision ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lu_rank_truncation.rs (target/debug/deps/lu_rank_truncation-fe69d0b5e8ffea93)
+
+running 6 tests
+test non_finite_input_is_never_a_truncated_rank ... ok
+test rel_tol_is_relative_to_the_first_pivot ... ok
+test no_option_is_the_previous_factorization ... ok
+test numerical_rank_is_returned ... ok
+test max_rank_stops_on_the_untruncated_pivots ... ok
+test inactive_options_change_no_bit ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/no_step_alloc.rs (target/debug/deps/no_step_alloc-9691f78f408469a9)
+
+running 1 test
+test parallel_regions_allocate_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running tests/owned_capacity.rs (target/debug/deps/owned_capacity-1e1f4b28d9d816aa)
+
+running 6 tests
+test capacity_getters_do_not_require_clone_or_numeric_traits ... ok
+test cleanup_of_aligned_and_zero_sized_elements_uses_a_byte_stride ... ok
+test empty_and_zero_extent_capacities ... ok
+test native_scalar_capacity_preserves_storage ... ok
+test typed_shapes_preserve_capacities ... ok
+test zero_sized_elements_reserve_without_panicking ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pfaffian.rs (target/debug/deps/pfaffian-94a8676a6f54fa44)
+
+running 12 tests
+test finite_range_and_nonfinite_failures ... ok
+test insufficient_scratch_panics - should panic ... ok
+test generic_extended_precision_real_and_complex ... ok
+test oracle_comparison_rejects_infinity - should panic ... ok
+test runtime_selected_lane ... ok
+test shapes_singularity_and_negative_pfaffian ... ok
+test lower_triangle_strides_and_input_preservation ... ok
+test nonfinite_pivot_candidate_is_not_a_zero_pivot ... ok
+test real_and_complex_definition_and_determinant ... ok
+test team_validation_checks_nonleading_columns ... ok
+test team_agreement_and_actual_row_dispatch ... ok
+test known_pfaffian_across_panel_and_simd_tail_boundaries ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/pfaffian_inverse.rs (target/debug/deps/pfaffian_inverse-a4a3f5f0f91feb52)
+
+running 4 tests
+test real_double_precision_contract ... ok
+test real_single_precision_contract ... ok
+test complex_double_precision_contract ... ok
+test complex_single_precision_contract ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/piv_llt_block_size.rs (target/debug/deps/piv_llt_block_size-6f4484b19c3f74c3)
+
+running 5 tests
+test non_square_input_still_panics_on_its_own_contract - should panic ... ok
+test zero_block_size_panics_in_the_scratch_query - should panic ... ok
+test zero_block_size_panics_on_empty_input - should panic ... ok
+test zero_block_size_panics_on_the_issue_input - should panic ... ok
+test positive_block_sizes_factor ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/public_balance.rs (target/debug/deps/public_balance-d9a5d2731c23932e)
+
+running 5 tests
+test jobs_select_the_permutation_and_the_scaling ... ok
+test nonfinite_does_not_mutate_and_extreme_input_terminates ... ok
+test permutation_isolates_and_preserves_eigenvalues ... ok
+test exact_similarity_balance_criterion_and_backtransform ... ok
+test eigenvalues_and_right_eigenvectors_survive_balancing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/public_bidiag_sequential.rs (target/debug/deps/public_bidiag_sequential-0462e9211f70413e)
+
+running 2 tests
+test small_bidiagonalization_reconstructs ... ok
+test blocked_bidiagonalization_reconstructs ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/public_bidiagonal_svd.rs (target/debug/deps/public_bidiagonal_svd-15aba3464f816a4d)
+
+running 6 tests
+test nonfinite_and_empty ... ok
+test subnormal_one_by_one_in_every_scalar_type ... ok
+test reviewer_subnormal_one_by_one ... ok
+test reviewer_magnitude_boundaries ... ok
+test tiny_and_large_magnitudes ... ok
+test reconstruction_upper_lower_zero_and_repeated ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/public_hessenberg_schur.rs (target/debug/deps/public_hessenberg_schur-7ba057dfce818b59)
+
+running 2 tests
+test accumulator_empty_and_nonfinite ... ok
+test reconstruction_and_spectrum ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/public_qz_aed.rs (target/debug/deps/public_qz_aed-667de1a63072be5a)
+
+running 1 test
+test fully_deflated_row_zero_window_does_not_overflow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/public_qz_scratch.rs (target/debug/deps/public_qz_scratch-2eddfdcfaf339f4b)
+
+running 1 test
+test scratch_query_covers_the_requested_deflation_window ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.55s
+
+     Running tests/public_schur_eigenvectors.rs (target/debug/deps/public_schur_eigenvectors-8d90323c52f8a8a3)
+
+running 4 tests
+test into_never_reads_previous_output ... ok
+test nonfinite_is_an_error ... ok
+test tridiagonal_dedicated_scratch ... ok
+test normalized_right_residuals_in_diagonal_order ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.38s
+
+     Running tests/public_schur_reorder.rs (target/debug/deps/public_schur_reorder-459cf8a761e493d2)
+
+running 9 tests
+test extreme_diagonal_swap_stays_finite ... ok
+test rejected_swap_preserves_last_successful_state ... ok
+test overflowing_swap_is_rejected_unchanged ... ok
+test ordinary_2x1_and_1x2_swaps ... ok
+test reviewer_2x1_and_mirrored_1x2_swaps_are_accepted_and_stable ... ok
+test rejection_keeps_earlier_successful_swaps ... ok
+test swap_keeps_large_outside_window_column_finite ... ok
+test standardization_of_extreme_pair_stays_orthogonal ... ok
+test swaps_preserve_similarity_and_pairs ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/public_sparse_qr_symbolic.rs (target/debug/deps/public_sparse_qr_symbolic-bda9851a82d1d45f)
+
+running 1 test
+test selected_symbolic_structure_is_public ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/qr_rank_truncation.rs (target/debug/deps/qr_rank_truncation-2ba01665f9b84dbe)
+
+running 5 tests
+test non_finite_input_is_never_a_truncated_rank ... ok
+test rel_tol_is_relative_to_the_first_diagonal ... ok
+test numerical_rank_is_returned ... ok
+test max_rank_stops_after_the_untruncated_steps ... ok
+test inactive_options_change_no_bit ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/qz_scratch.rs (target/debug/deps/qz_scratch-0e02e5e822d28a70)
+
+running 5 tests
+test f32_recursive_qz_scratch ... ignored, opt-in recursive AED workspace validation; runs in scheduled CI
+test f64_recursive_qz_scratch ... ignored, opt-in recursive AED workspace validation; runs in scheduled CI
+test dedicated_team_qz_scratch ... ok
+test f32_exact_qz_scratch ... ok
+test f64_exact_qz_scratch ... ok
+
+test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 50.74s
+
+     Running tests/self_adjoint_generalized_eigen.rs (target/debug/deps/self_adjoint_generalized_eigen-6fd75d0cbe1659e9)
+
+running 9 tests
+test complex::non_positive_definite_is_an_error ... ok
+test complex::conjugated_view ... ok
+test real::non_positive_definite_is_an_error ... ok
+test real::conjugated_view ... ok
+test real::matches_qz_and_is_b_orthonormal ... ok
+test complex::matches_qz_and_is_b_orthonormal ... ok
+test complex::team_matches_seq ... ok
+test team_is_actually_used ... ok
+test real::team_matches_seq ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/sparse_column_ordering.rs (target/debug/deps/sparse_column_ordering-d4280d0e2eaa6c19)
+
+running 7 tests
+test default_and_none_agree ... ok
+test lu_rejects_wrong_permutation_length - should panic ... ok
+test qr_rejects_wrong_permutation_length - should panic ... ok
+test f32_ordering ... ok
+test f64_ordering ... ok
+test c32_ordering ... ok
+test c64_ordering ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sparse_lu_components.rs (target/debug/deps/sparse_lu_components-06692564f4b05b82)
+
+running 4 tests
+test f32_components ... ok
+test c32_components ... ok
+test f64_components ... ok
+test c64_components ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sparse_lu_no_rayon.rs (target/debug/deps/sparse_lu_no_rayon-1b3fc348744af8d8)
+
+running 4 tests
+test c64_residual ... ok
+test f32_residual ... ok
+test f64_residual ... ok
+test c32_residual ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/svd_values_no_alloc.rs (target/debug/deps/svd_values_no_alloc-b9623ae286ab3a0b)
+
+running 8 tests
+test values_only_svd_allocates_nothing_128x128 ... ok
+test values_only_svd_allocates_nothing_17x17 ... ok
+test values_only_svd_allocates_nothing_1x1 ... ok
+test values_only_svd_allocates_nothing_2x2 ... ok
+test values_only_svd_allocates_nothing_300x60 ... ok
+test values_only_svd_allocates_nothing_33x40 ... ok
+test values_only_svd_allocates_nothing_40x33 ... ok
+test values_only_svd_allocates_nothing_700x700 ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.87s
+
+   Doc-tests faer
+
+running 92 tests
+test faer/src/lib.rs - Par (line 1027) - compile fail ... ok
+test faer/src/lib.rs - Par (line 1013) ... ok
+test faer/src/lib.rs - Par (line 1034) - compile fail ... ok
+test faer/src/lib.rs - Par (line 1041) - compile fail ... ok
+test faer/src/diag/diagown.rs - diag::diagown::Diag<T,Dim>::capacity (line 20) ... ok
+test faer/src/col/colown.rs - col::colown::Col<T,Rows>::capacity (line 21) ... ok
+test faer/src/lib.rs - Par (line 1050) - compile fail ... ok
+test faer/src/lib.rs - Par (line 1058) - compile fail ... ok
+test faer/src/lib.rs - col (line 522) ... ok
+test faer/src/lib.rs - mat (line 472) ... ok
+test faer/src/lib.rs - row (line 556) ... ok
+test faer/src/lib.rs - Zip (line 399) ... ok
+test faer/src/lib.rs - unzip (line 432) ... ok
+test faer/src/lib.rs - zip (line 369) ... ok
+test faer/src/linalg/evd/balance.rs - linalg::evd::balance::BalanceError (line 8) ... ok
+test faer/src/linalg/evd/balance.rs - linalg::evd::balance::BalanceJob (line 34) ... ok
+test faer/src/linalg/evd/balance.rs - linalg::evd::balance::balance_eigenvectors_scratch (line 322) ... ok
+test faer/src/linalg/evd/balance.rs - linalg::evd::balance::balance_scratch (line 69) ... ok
+test faer/src/linalg/evd/balance.rs - linalg::evd::balance::balance_eigenvectors_in_place (line 341) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::SchurReorderError (line 1538) ... ok
+test faer/src/linalg/evd/balance.rs - linalg::evd::balance::balance_in_place_with (line 160) ... ok
+test faer/src/lib.rs - (line 164) ... ok
+test faer/src/lib.rs - (line 36) ... ok
+test faer/src/linalg/evd/balance.rs - linalg::evd::balance::balance_in_place (line 100) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::eigenvectors_from_schur_scratch (line 1756) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::hessenberg_schur_scratch (line 1350) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::reorder_schur_cplx (line 1713) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::reorder_schur_scratch (line 1553) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::tridiagonal_self_adjoint_evd_scratch (line 158) ... ok
+test faer/src/linalg/gevd/reorder.rs - linalg::gevd::reorder::SchurReorderError (line 9) ... ok
+test faer/src/./operator/mod.rs - matrix_free::IterationControl (line 30) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::reorder_schur_real (line 1586) ... ok
+test faer/src/linalg/gevd/reorder.rs - linalg::gevd::reorder::reorder_schur_scratch (line 75) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::eigenvectors_from_schur_real (line 1779) ... ok
+test faer/src/linalg/gevd/schur_eigenvalues.rs - linalg::gevd::schur_eigenvalues::SchurEigenvalueError (line 10) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::eigenvectors_from_schur_cplx (line 1848) ... ok
+test faer/src/linalg/kron.rs - linalg::kron::kron (line 21) ... ok
+test faer/src/linalg/gevd/schur_eigenvalues.rs - linalg::gevd::schur_eigenvalues::schur_eigenvalues_real (line 183) ... ok
+test faer/src/lib.rs - (line 192) ... ok
+test faer/src/linalg/gevd/reorder.rs - linalg::gevd::reorder::reorder_schur_cplx (line 700) ... ok
+test faer/src/linalg/matmul/mod.rs - linalg::matmul::matmul (line 1922) ... ok
+test faer/src/linalg/matmul/mod.rs - linalg::matmul::matmul_with_conj_uninit (line 1848) ... ok
+test faer/src/linalg/matmul/mod.rs - linalg::matmul::matmul_with_conj (line 2007) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::hessenberg_schur_real (line 1381) ... ok
+test faer/src/linalg/evd/mod.rs - linalg::evd::hessenberg_schur_cplx (line 1466) ... ok
+test faer/src/linalg/pfaffian/mod.rs - linalg::pfaffian::pfaffian_scratch (line 69) ... ok
+test faer/src/linalg/matmul/triangular.rs - linalg::matmul::triangular::matmul (line 1317) ... ok
+test faer/src/linalg/pfaffian/mod.rs - linalg::pfaffian::PfaffianError (line 27) ... ok
+test faer/src/linalg/matmul/triangular.rs - linalg::matmul::triangular::matmul_with_conj (line 1201) ... ok
+test faer/src/linalg/svd/mod.rs - linalg::svd::bidiagonal_svd_scratch (line 394) ... ok
+test faer/src/linalg/pfaffian/mod.rs - linalg::pfaffian::pfaffian (line 126) ... ok
+test faer/src/mat/matmut.rs - mat::matmut::MatMut<'a,T,Rows,Cols,RStride,CStride>::from_raw_parts_mut (line 292) ... ok
+test faer/src/linalg/gevd/reorder.rs - linalg::gevd::reorder::reorder_schur_real (line 638) ... ok
+test faer/src/mat/matmut.rs - mat::matmut::MatMut<'a,T,Rows,Cols>::from_column_major_slice_mut (line 1801) ... ok
+test faer/src/mat/matmut.rs - mat::matmut::MatMut<'a,T,Rows,Cols>::from_row_major_slice_mut (line 1873) ... ok
+test faer/src/mat/matown.rs - mat::matown::Mat<T,Rows,Cols>::col_capacity (line 646) ... ok
+test faer/src/mat/matown.rs - mat::matown::Mat<T,Rows,Cols>::row_capacity (line 625) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::from_raw_parts (line 331) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::reverse_cols (line 735) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::reverse_rows (line 703) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::reverse_rows_and_cols (line 768) ... ok
+test faer/src/linalg/pfaffian/mod.rs - linalg::pfaffian::pfaffian_inverse (line 473) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::subcols (line 903) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::submatrix (line 794) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::subrows (line 854) ... ok
+test faer/src/linalg/pfaffian/mod.rs - linalg::pfaffian::pfaffian_inverse_scratch (line 421) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols,RStride,CStride>::transpose (line 603) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols>::from_column_major_slice (line 198) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols>::from_row_major_slice (line 264) ... ok
+test faer/src/mat/mod.rs - mat::MatMut (line 121) - compile fail ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols>::max (line 2041) ... ok
+test faer/src/mat/matref.rs - mat::matref::MatRef<'a,T,Rows,Cols>::min (line 2061) ... ok
+test faer/src/mat/mod.rs - mat::MatMut (line 138) ... ok
+test faer/src/mat/matref.rs - mat::matref::generic::Mat<Inner>::kron (line 1755) ... ok
+test faer/src/perm/mod.rs - perm::swap_cols (line 14) ... ok
+test faer/src/perm/mod.rs - perm::swap_rows (line 48) ... ok
+test faer/src/perm/mod.rs - perm::swap_cols_idx (line 116) ... ok
+test faer/src/row/rowown.rs - row::rowown::Row<T,Cols>::capacity (line 15) ... ok
+test faer/src/perm/mod.rs - perm::swap_rows_idx (line 79) ... ok
+test faer/src/linalg/qr/mod.rs - linalg::qr (line 22) ... ok
+test faer/src/linalg/svd/mod.rs - linalg::svd::bidiagonal_svd (line 436) ... ok
+test faer/src/sparse/linalg/lu.rs - sparse::linalg::lu::factorize_symbolic_lu_with_column_ordering (line 2367) ... ok
+test faer/src/sparse/linalg/qr.rs - sparse::linalg::qr::SymbolicQr<I>::raw (line 2132) ... ok
+test faer/src/sparse/linalg/cholesky.rs - sparse::linalg::cholesky (line 14) ... ok
+test faer/src/sparse/linalg/qr.rs - sparse::linalg::qr::factorize_symbolic_qr_with_column_ordering (line 2395) ... ok
+test faer/src/sparse/linalg/../solvers.rs - sparse::linalg::solvers::Lu<I,T>::as_ref (line 193) ... ok
+test faer/src/utils/team.rs - utils::team::with_team (line 27) ... ok
+test faer/src/sparse/linalg/../solvers.rs - sparse::linalg::solvers::SymbolicLu<I>::try_new_with_column_ordering (line 126) ... ok
+test faer/src/sparse/linalg/../solvers.rs - sparse::linalg::solvers::SymbolicLu<I>::try_new_with_params (line 93) ... ok
+test faer/src/utils/team.rs - utils::team::with_team (line 52) ... ok
+test faer/src/sparse/linalg/lu.rs - sparse::linalg::lu::LuRef<'a,I,T>::factors (line 1990) ... ok
+test faer/src/sparse/linalg/cholesky.rs - sparse::linalg::cholesky (line 198) ... ok
+
+test result: ok. 92 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.44s
+
