@@ -36,8 +36,9 @@ __device__ void pfinv_panel_plane(typename Ops::T* A, typename Ops::T* W,
     return;
   }
   if (!Ops::finite(pf)) {
-    for (size_t i=tid;i<nn;i+=nt) OUT[i]=Ops::zero();
-    if (tid==0) { *PF=pf; *ST=-1; }
+    for (size_t i=tid;i<nn;i+=nt) A[i]=W[i];
+    __syncthreads();
+    Ops::reference(A,W,OUT,PF,ST,n);
     return;
   }
   int bad_reciprocal=0;
@@ -52,44 +53,44 @@ __device__ void pfinv_panel_plane(typename Ops::T* A, typename Ops::T* W,
     Ops::reference(A,W,OUT,PF,ST,n);
     return;
   }
-  // B=L^-1, held row-major for coalesced accesses across columns.
-  for (size_t i=tid;i<nn;i+=nt) W[i]=Ops::zero();
+  // Reuse A for B=L^-1, row-major for coalesced accesses across columns.
+  // Keep W's exact original input through inversion, not just factorization:
+  // a finite inverse can have nonrepresentable intermediate lower factors.
+  for (size_t i=tid;i<nn;i+=nt) A[i]=Ops::zero();
   __syncthreads();
   for (int row=0;row<n;++row) {
     for (int col=tid;col<=row;col+=nt) {
       T value=row==col ? Ops::one() : Ops::zero();
       for (int k=0;k<row;++k)
-        value=Ops::sub(value,Ops::mul(OUT[row+(size_t)k*n],W[col+(size_t)k*n]));
-      W[col+(size_t)row*n]=value;
+        value=Ops::sub(value,Ops::mul(OUT[row+(size_t)k*n],A[col+(size_t)k*n]));
+      A[col+(size_t)row*n]=value;
     }
     __syncthreads();
   }
   // B^T D^-1 B: only one triangle is evaluated. Pair products avoid
   // materializing D^-1 B and reuse the diagonal in shared memory.
+  int bad=0;
+  for (int j=tid;j<n;j+=nt) OUT[permutation[j]+(size_t)permutation[j]*n]=Ops::zero();
   for (size_t index=tid;index<nn;index+=nt) {
     const int row=index%n, col=index/n;
     if (row<=col) continue;
     T value=Ops::zero();
     for (int k=row & ~1;k<n;k+=2) {
-      const T delta=Ops::sub(Ops::mul(W[row+(size_t)k*n],W[col+(size_t)(k+1)*n]),
-                            Ops::mul(W[row+(size_t)(k+1)*n],W[col+(size_t)k*n]));
+      const T delta=Ops::sub(Ops::mul(A[row+(size_t)k*n],A[col+(size_t)(k+1)*n]),
+                            Ops::mul(A[row+(size_t)(k+1)*n],A[col+(size_t)k*n]));
       value=Ops::add(value,Ops::mul(delta,diagonal[k/2]));
     }
-    A[index]=value;
-  }
-  __syncthreads();
-  int bad=0;
-  for (int j=tid;j<n;j+=nt) OUT[permutation[j]+(size_t)permutation[j]*n]=Ops::zero();
-  for (size_t index=tid;index<nn;index+=nt) {
-    const int row=index%n,col=index/n;
-    if (row<=col) continue;
-    const T value=A[index];
     bad |= !Ops::finite(value);
     OUT[permutation[row]+(size_t)permutation[col]*n]=value;
     OUT[permutation[col]+(size_t)permutation[row]*n]=Ops::neg(value);
   }
   bad=__syncthreads_or(bad);
-  if (bad) for (size_t i=tid;i<nn;i+=nt) OUT[i]=Ops::zero();
-  if (tid==0) { *PF=pf; *ST=bad ? -1 : 0; }
+  if (bad) {
+    for (size_t i=tid;i<nn;i+=nt) A[i]=W[i];
+    __syncthreads();
+    Ops::reference(A,W,OUT,PF,ST,n);
+    return;
+  }
+  if (tid==0) { *PF=pf; *ST=0; }
 }
 #endif

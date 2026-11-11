@@ -1,0 +1,25 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+lanes,reference,status,pf_real,pf_imag,nonfinite_inverse_lanes
+1,1,0,0.99999999999999989,0,1
+1,0,-1,0.99999999999999989,0,0
+2,1,0,0.99999999999999989,0,122
+2,0,-1,0.99999999999999989,0,0
+lanes,reference,status,pf_real,pf_imag,nonfinite_inverse_lanes
+1,1,0,0.99999999999999989,0,1
+1,0,0,0.99999999999999989,0,1
+2,1,0,0.99999999999999989,0,122
+2,0,0,0.99999999999999989,0,122

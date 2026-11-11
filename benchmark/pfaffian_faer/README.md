@@ -87,13 +87,22 @@ along with its independent C-order cancellation fallback. Production now uses
 the new kernel for real n=64..126 and complex n>=64. Complex launch geometry
 reserves `44n` shared bytes and stays within 48 KiB at the supported n<=1024.
 The same three global matrices are reused, with no new allocation, launch or
-host round trip. Numerical/pivot failures and overflowing reciprocals take the
-reference path on device before the original input backup is reused.
+host round trip. The original input backup is retained through inversion;
+numerical/pivot failures, overflowing reciprocals and nonfinite inverse entries
+restore it and take the reference path on device. `scaled_fallback_probe.cu`
+provides a negative control: with the `38f2849b` inverse header, a connected
+tridiagonal n=64 input incorrectly changes reference INFO=0 to -1. The fixed
+kernel preserves INFO, Pfaffian and reference nonfinite-output classes for both
+real and complex storage. This preserves the existing extreme-scale contract;
+it does not claim accurate inverse entries where the reference produces NaNs.
 
 Rust tests of the production dispatch pass for real/complex n=24/26/64/128/130/256,
 covering an independent CPU Pfaffian/inverse, exact zero-pivot status, zero
 failed output, normwise backward residual and conditioning-scaled inverse
 comparison. The production complex L128 Opt stage test passes too. Full final
 GPU gates, repeated timings, transfer counters and Opt/PhysCal E2E measurements
-remain pending; the earlier 128-test gate validates only the standalone-panel
-commit, not this later change.
+for the final source remain pending. The earlier standalone-panel gate passed
+128 tests; `validation/cuda-full-rebuild-gate.log` passed 131 tests before the
+later original-input preservation fix. Targeted inverse residual and scaled
+fallback tests and all-target CUDA Clippy pass after that fix; the final broad
+gate is being rerun. Validation logs identify these distinct source stages.

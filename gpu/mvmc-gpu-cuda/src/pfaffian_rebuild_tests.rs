@@ -16,7 +16,15 @@ const SOURCE: &str = concat!(
     "\n",
     include_str!("pfaffian_inverse_panel.cuh"),
     "\n",
-    include_str!("pfaffian_batched.cu")
+    include_str!("pfaffian_batched.cu"),
+    r#"
+extern "C" __global__ void pfinv_reference_f64(double* a,double* w,double* out,double* pf,int* st,int n) {
+  PfinvRealPanelOps::reference(a,w,out,pf,st,n);
+}
+extern "C" __global__ void pfinv_reference_c64(rcx* a,rcx* w,rcx* out,rcx* pf,int* st,int n) {
+  PfinvComplexPanelOps::reference(a,w,out,pf,st,n);
+}
+"#
 );
 
 #[test]
@@ -131,6 +139,129 @@ fn check<T: PfScalar + TestScalar>(engine: &mut CudaEngine, kernel: &str) {
                 difference <= bound * (norm_a * norm_inv).max(1.0) * norm_inv,
                 "n={n} plane={plane} inverse difference={difference:e}"
             );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA; restore original input after paired inverse overflow"]
+fn paired_inverse_overflow_restores_reference_input() {
+    let mut engine = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let n = 64;
+    // A tridiagonal prefix with a=1e-308, b=2, d=1e308:
+    // Pf=a*d ~= 1; inv01=-1/a, inv03=-b/(a*d), inv23=-1/d.
+    // Every exact inverse entry is finite, but the lower paired L entry
+    // -b/a overflows. The reference also has arithmetic-generated NaNs at
+    // this scale; preserve its INFO/Pf and output classification rather than
+    // claiming stronger extreme-scale accuracy than the retained contract.
+    // Unit connecting edges retain the full C tridiagonal INFO contract;
+    // disconnected 2x2 blocks can report zero intermediate pivot columns.
+    for lanes in [1, 2] {
+        let mut input = vec![0.0f64; n * n * lanes];
+        let mut expected = vec![0.0f64; n * n * lanes];
+        for i in (0..n).step_by(2) {
+            let value = if i == 0 {
+                1e-308
+            } else if i == 2 {
+                1e308
+            } else {
+                1.0
+            };
+            input[(i + (i + 1) * n) * lanes] = value;
+            input[(i + 1 + i * n) * lanes] = -value;
+        }
+        for i in (1..n - 1).step_by(2) {
+            let edge = if i == 1 { 2.0 } else { 1.0 };
+            input[(i + (i + 1) * n) * lanes] = edge;
+            input[(i + 1 + i * n) * lanes] = -edge;
+        }
+        // Closed-form tridiagonal inverse: only even-row/odd-column
+        // upper entries are nonzero. Form ratios before products to avoid
+        // overflow in the independent expected-value calculation itself.
+        for i in (0..n).step_by(2) {
+            let mut value = -1.0 / input[(i + (i + 1) * n) * lanes];
+            for j in ((i + 1)..n).step_by(2) {
+                if j > i + 1 {
+                    value *= input[(j - 2 + (j - 1) * n) * lanes] / input[(j - 1 + j * n) * lanes];
+                }
+                expected[(i + j * n) * lanes] = value;
+                expected[(j + i * n) * lanes] = -value;
+            }
+        }
+        let mut reference_output = None;
+        for reference in [true, false] {
+            let kernel = match (lanes, reference) {
+                (1, true) => "pfinv_reference_f64",
+                (1, false) => "pfinv_f64",
+                (_, true) => "pfinv_reference_c64",
+                (_, false) => "pfinv_c64",
+            };
+            let (actual, pf, status) =
+                with_raw_exec(&mut engine, "pfaffian.scaled.probe", |exec| {
+                    let module = exec.module(
+                        SOURCE,
+                        &[
+                            "pfinv_f64",
+                            "pfinv_c64",
+                            "pfinv_reference_f64",
+                            "pfinv_reference_c64",
+                        ],
+                    )?;
+                    let a = exec.alloc_f64(input.len())?;
+                    let w = exec.alloc_f64(input.len())?;
+                    let out = exec.alloc_f64(input.len())?;
+                    let pf = exec.alloc_f64(lanes)?;
+                    let status = exec.alloc_bytes(4)?;
+                    let mut host = (vec![0.0f64; input.len()], vec![0.0f64; lanes], vec![0i32]);
+                    let (nt, shared) = super::launch_geometry(n, 8, lanes);
+                    unsafe {
+                        exec.upload(exec.ptr(&a)?, &input)?;
+                        exec.launch(
+                            module.function(kernel)?,
+                            (1, 1, 1),
+                            nt,
+                            shared,
+                            &[
+                                Arg::P(exec.ptr(&a)?),
+                                Arg::P(exec.ptr(&w)?),
+                                Arg::P(exec.ptr(&out)?),
+                                Arg::P(exec.ptr(&pf)?),
+                                Arg::P(exec.ptr(&status)?),
+                                Arg::I(n as i32),
+                            ],
+                        )?;
+                        exec.download(&mut host.0, exec.ptr(&out)?)?;
+                        exec.download(&mut host.1, exec.ptr(&pf)?)?;
+                        exec.download(&mut host.2, exec.ptr(&status)?)?;
+                    }
+                    Ok(host)
+                })
+                .unwrap();
+            assert_eq!(
+                status,
+                [0],
+                "lanes={lanes} reference={reference}: preserve C-order INFO"
+            );
+            assert!((pf[0] - 1.0).abs() <= 1e-13);
+            if reference {
+                reference_output = Some(actual);
+                continue;
+            }
+            let baseline = reference_output.as_ref().unwrap();
+            for (i, (&a, &e)) in actual.iter().zip(&expected).enumerate() {
+                if baseline[i].is_nan() {
+                    assert!(a.is_nan(), "lanes={lanes} NaN class {i}");
+                    continue;
+                }
+                if baseline[i].is_infinite() {
+                    assert_eq!(a, baseline[i], "infinity sign {i}");
+                    continue;
+                }
+                assert!(
+                    a.is_finite() && (a - e).abs() <= 1e-13 * e.abs().max(1.0),
+                    "lanes={lanes} inverse[{i}] {a} vs {e}"
+                );
+            }
         }
     }
 }
