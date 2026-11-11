@@ -1,0 +1,28 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+   Compiling mvmc-gpu-cuda v0.0.0 (/work/gpu/mvmc-gpu-cuda)
+    Finished `test` profile [optimized] target(s) in 11.89s
+     Running unittests src/lib.rs (/cuda-target/debug/deps/mvmc_gpu_cuda-351da723e20303a8)
+
+running 1 test
+test interval::resident::tests::delayed_updates_flush_partial_queues_and_rebuild_boundaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 117 filtered out; finished in 46.28s
+
+    Checking mvmc-gpu-cuda v0.0.0 (/work/gpu/mvmc-gpu-cuda)
+    Finished `dev` profile [unoptimized] target(s) in 1.39s
+   Compiling mvmc-gpu-cuda v0.0.0 (/work/gpu/mvmc-gpu-cuda)
+    Finished `release` profile [optimized] target(s) in 4.85s

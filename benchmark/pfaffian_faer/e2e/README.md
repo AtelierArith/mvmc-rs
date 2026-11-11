@@ -94,3 +94,11 @@ to remove that potential resource interaction. The table records a regression,
 not a successful real-path speedup or a resolved explanation. Final adoption
 requires measuring and explaining the effect; later cohorts must retain these
 results rather than overwrite them.
+
+Two subsequent controlled experiments do not cure the real regression.
+`separated-real-*` uses `../separate-entry-experiment.patch`; the real Opt
+ratio is 0.9336x and PhysCal is 0.9490x. `noinline-real-*` adds only
+`__noinline__` to `resident_block_pfaffian` relative to the combined source;
+the respective ratios are 0.9292x and 0.9426x. These production changes were
+reverted after measurement. All outputs and raw traffic remain reproducible.
+The resource diagnostics do not establish the cause of the regression.

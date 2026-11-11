@@ -146,5 +146,5 @@ that source with `separate-entry-experiment.patch`, and the noinline experiment
 (only `resident_block_pfaffian` gains `__noinline__`). The separated entry lowers
 its register count but does not cure the measured real E2E regression, so that
 patch is retained as a reproducible experiment and is not applied to production.
-The noinline experiment is still being measured. Resource counts alone do not
-establish a performance explanation.
+The noinline experiment also does not cure the regression and is not retained
+in production. Resource counts alone do not establish a performance explanation.
