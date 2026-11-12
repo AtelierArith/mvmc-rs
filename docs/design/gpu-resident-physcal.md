@@ -53,10 +53,14 @@ is also returned, alongside the existing overall means.
 `PhysCalResult::green_windows = Some(Vec<GreenWindow>)`; otherwise it is `None`.
 Each record has the same parsed operator order and real/imaginary components
 as the overall Green arrays. Defaults store only three energy values per window.
-Optional Green history costs `8 * K * G * lanes` extra bytes on the device and
-host (`G = OneBodyG + TwoBodyG + TwoBodyGEx` rows, `lanes=1` real or `2` complex).
-All histories share the final output allocation/download with the overall
-means. No per-window transfer or stream synchronization is added.
+Optional Green history costs `8 * K * G * lanes` extra device bytes
+(`G = OneBodyG + TwoBodyG + TwoBodyGEx` rows, `lanes=1` real or `2` complex).
+Returned host arrays cost `16 * K * G` bytes because both components are
+provided, including zero imaginary components for real inputs. The contiguous
+download buffer temporarily adds another `8 * K * G * lanes` host bytes during
+result decoding. These estimates exclude the existing overall means and small
+energy history. All histories share the final output allocation/download with
+the overall means. No per-window transfer or stream synchronization is added.
 
 The arithmetic mean of window values agrees with the overall mean within
 `8*K*epsilon*max(1, max_window_magnitude)`, including accumulation and host
