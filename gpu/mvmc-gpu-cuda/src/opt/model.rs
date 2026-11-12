@@ -221,13 +221,12 @@ impl Model {
         } else {
             mvmc_core::validation::validate_para_opt(&data)?;
         }
-        // Match Julia's GPU setup: normalize translations before model construction.
-        data.modpara.nmp_trans = data
-            .modpara
+        // Preserve C's antiperiodic flag: translated_site gates QPTransSgn
+        // on NMPTrans < 0. Only the plane count uses its magnitude below.
+        data.modpara
             .nmp_trans
             .checked_abs()
-            .ok_or("NMPTrans out of range")?
-            .max(1);
+            .ok_or("NMPTrans out of range")?;
         if data.modpara.nelec == 0 {
             data.modpara.nelec = (data.modpara.nlocspin + data.modpara.ncond) / 2;
         }

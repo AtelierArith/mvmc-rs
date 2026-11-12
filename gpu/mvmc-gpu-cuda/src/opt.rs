@@ -4,6 +4,8 @@
 //! energy/derivatives, direct or CG SR, and parameter refresh execute on one stream.
 //! Only initialization status and final parameters/energy history are downloaded.
 
+#[cfg(test)]
+mod antiperiodic_tests;
 mod cg;
 #[cfg(test)]
 mod cg_tests;
