@@ -6,6 +6,43 @@ use crate::opt::complex_tests::{budget, download};
 use num_complex::Complex64;
 
 #[test]
+#[ignore = "requires CUDA; reported square AP/P configuration and PhysCal second moment"]
+fn resident_physcal_square_ap_p_matches_cpu_configuration() {
+    use crate::opt::antiperiodic_tests::{assert_square_snapshot, square_config, square_input};
+    let path = square_input();
+    let config = square_config();
+    let model =
+        Model::prepare_physcal(&path, &config, Some(&path.with_file_name("zqp_opt.dat"))).unwrap();
+    let ops = Operators::prepare(&model).unwrap();
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let mut state = State::prepare_with_derivatives(&mut backend, model, &config, false).unwrap();
+    state.resident.delayed_updates = false;
+    state.initialize(&mut backend).unwrap();
+    let mut measurement = Measurement::prepare(&mut backend, ops, &state, false).unwrap();
+    measurement.run(&mut backend, &mut state).unwrap();
+    let result = measurement.result(&mut backend, &state).unwrap();
+    let (ip, values) = with_raw_exec(&mut backend, "square.ap.physcal", |exec| {
+        Ok((
+            download::<f64>(exec, &state.buffers.overlaps, 1)?[0],
+            download::<f64>(exec, &measurement.values, state.model.energies.len())?,
+        ))
+    })
+    .unwrap();
+    let scale = state
+        .model
+        .energies
+        .iter()
+        .zip(&values)
+        .map(|(c, v)| (c * v).abs())
+        .sum();
+    assert_square_snapshot(&mut backend, &state, ip, result.energy, scale);
+    assert!(
+        (result.energy_second_moment - result.energy * result.energy).abs()
+            <= 8. * f64::EPSILON * (result.energy * result.energy).max(1.)
+    );
+}
+
+#[test]
 fn window_green_layout_preserves_operator_order_and_complex_components() {
     let ops = Operators {
         ops: vec![],

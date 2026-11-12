@@ -1,0 +1,31 @@
+{
+  "source_commit": "7b93c39227faf8e48b34474677e9bafac6823b32",
+  "source_directory": "benchmark/square_hubbard_a100/inputs/ap_p_L8_U4_SP/",
+  "source_files_sha256": {
+    "coulombintra.def": "8e3064f0570fe093556afc2bedd4988ab8702a64c573f074230b589c6a0ffe6c",
+    "gutzwilleridx.def": "3c96e0613c6555c9739cd33eae9d1536538113775fd37163df5e173aa72a8563",
+    "jastrowidx.def": "d895b644c2797d5da4a34d989c3cb3a2fab8adb3aa5b2110d049a10c97517b68",
+    "locspn.def": "93a2cb6aa891bf763a0b61ed8280578ad0c4f89fcc832499db79590f2ae7f8b8",
+    "modpara.def": "58568f0698e342b4e9013a3dda3bc8635e809b34cd8d14e4ff59fda0d0056fdc",
+    "namelist.def": "17a048e21dd4b71167ee20af5f1452f2019d04ab37a0cdea217c8de7bf693c1f",
+    "orbitalidx.def": "4febb452c325c2a73523518370a615ffd42a44ba6c4cebe3ca2cf50b279bbbdd",
+    "qptransidx.def": "9390206bfc3c1cc2773e2e1c474d5c1f44f18c1d6d40061077c45150fe920ffa",
+    "trans.def": "468854a9c142960f24140bafc1df0e6418003f46f102d01e9be20da0408bf5ac",
+    "zqp_opt.dat": "8bffdf77d4b45c498c782cfc2251f2d51973392b757d86d8c19e3789072693b8"
+  },
+  "fixture_files_sha256": {
+    "coulombintra.def": "8e3064f0570fe093556afc2bedd4988ab8702a64c573f074230b589c6a0ffe6c",
+    "gutzwilleridx.def": "3c96e0613c6555c9739cd33eae9d1536538113775fd37163df5e173aa72a8563",
+    "jastrowidx.def": "d895b644c2797d5da4a34d989c3cb3a2fab8adb3aa5b2110d049a10c97517b68",
+    "locspn.def": "93a2cb6aa891bf763a0b61ed8280578ad0c4f89fcc832499db79590f2ae7f8b8",
+    "modpara.def": "58568f0698e342b4e9013a3dda3bc8635e809b34cd8d14e4ff59fda0d0056fdc",
+    "namelist.def": "036602b564e378904546ef20ca48d27e052b892f5c3f4d08b51d16c9cac95a19",
+    "orbitalidx.def": "4febb452c325c2a73523518370a615ffd42a44ba6c4cebe3ca2cf50b279bbbdd",
+    "qptransidx.def": "9390206bfc3c1cc2773e2e1c474d5c1f44f18c1d6d40061077c45150fe920ffa",
+    "trans.def": "468854a9c142960f24140bafc1df0e6418003f46f102d01e9be20da0408bf5ac",
+    "zqp_opt.dat": "8bffdf77d4b45c498c782cfc2251f2d51973392b757d86d8c19e3789072693b8"
+  },
+  "transformation": "Omit OneBodyG and TwoBodyG namelist entries; generated Green request files are unnecessary for projected-overlap/local-energy checks. All other bytes are unchanged.",
+  "numerical_reference": "Runtime CPU C-order kernels in mvmc-core, ported from authoritative C 1.4.0 e83aa6cb; no development-build numerical output is used as an expectation.",
+  "upstream_measurement_context": "The source benchmark used this input parameter record for C-mVMC development build d4430b9d fixed-parameter measurements on Fugaku. Parameter generation/compiler details are not separately asserted. This is input, not a C 1.4.0 numerical expected-value fixture."
+}

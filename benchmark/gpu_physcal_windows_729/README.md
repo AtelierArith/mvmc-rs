@@ -44,7 +44,8 @@ The before executable was saved before editing the production code.
 Rust/compiler, binary hashes, linked libraries, image ID, GPU/driver and raw
 worker logs (`*.log.gz`) are in `results/`. The device backend is cuBLAS 12.9.2, with
 NVRTC 12.9 and cuSOLVER 11.7.5, driver 580.178.04 (driver API 13.0).
-The linked CPU OpenBLAS path is recorded by `ldd`; it is not the device backend.
+`ldd.txt` records the executable's dynamic dependencies. CUDA libraries are
+loaded at runtime and their actual versions are recorded in the worker logs.
 
 L128 uses the existing `benchmark/cpu_scaling_l128/inputs/phys` inputs and
 fixed parameters. L16 copies `benchmark/hubbard_chain/inputs/hubbard_chain_L16`,
