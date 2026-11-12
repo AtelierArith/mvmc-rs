@@ -1,5 +1,48 @@
 # GPU-resident Opt (#560)
 
+## Command-line optimization
+
+```sh
+mvmc-cuda resident-opt opt/namelist.def optimized --steps 2000 --seed 79
+mvmc-cuda resident-opt refine/namelist.def refined optimized/zqp_opt.dat --steps 300
+mvmc-cuda resident-physcal measure/namelist.def refined/zqp_opt.dat measured
+```
+
+`resident-opt` (#728) uses `NVMCSample` walkers and `NSROptItrStep` steps.
+The input seed follows the library's `RndSeed` resolution. Default interval
+is `NVMCInterval * Nsite` proposals per walker; default warmup is
+`NVMCWarmUp * NVMCInterval * Nsite`. Options `--walkers`, `--steps`, `--seed`,
+`--device`, `--warmup` and `--interval` override these settings. The two length
+overrides count proposals, not sweeps. `sampling.txt` records resolved lengths,
+seed, device, solver and cuRAND XORWOW. Output directories must be new.
+
+The optional `INITPARA` has the CPU CLI's initial-parameter role: it loads a
+C record before explicit `In*.def` overlays and parameter normalization.
+Without it, the library's automatic `initial.def` behavior applies.
+
+`zqp_opt.dat` is one C-layout record: six diagnostic fields followed by
+`(real, imaginary, deviation)` triples in projection/RBM/Slater/OptTrans order.
+It stores the **final** parameter vector, not an average over optimization
+steps. Each component uses C's 18-digit scientific format and round-trips
+through the shared C-compatible readers. Deviation slots are zero placeholders
+for this single snapshot; parameter uncertainties are unavailable.
+The first diagnostic is the last measured energy (before the final update).
+The API does not return its imaginary part, second moment or sampling errors:
+the imaginary placeholder is zero and unavailable moment/error diagnostics
+are `NaN`. C's `ReadInitParameter` and the Rust parameter readers ignore these six
+diagnostics. They must not be used to estimate an energy variance.
+
+`zvo_out.dat` has a header and rows `(zero_based_step, energy_total_before_update)`.
+`zvo_SRinfo.dat` has a header and rows
+`(step, fallback_used, fallback_info, cg_info)`; the last column retains C's
+first CG solve status. A missing fallback has `(fallback_used, fallback_info)
+equal to `(0, 0)`. Direct SR writes zero status placeholders and is identified
+in `sampling.txt`. These two history files have documented GPU layouts rather
+than the full set of C diagnostic columns. The library API and persistent
+benchmark workers retain their existing computation and timing scope.
+
+## Library API
+
 `mvmc_gpu_cuda::opt::run_gpu_para_opt_from_namelist` is the ensemble GPU Opt
 entry point. It follows Julia GPU's lifecycle and returns the energy history
 and final parameter vector:
