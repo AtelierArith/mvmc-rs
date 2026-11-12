@@ -390,7 +390,7 @@ mod tests {
         )
         .unwrap();
         let measured = scratch("phys-output");
-        super::super::resident_physcal(&[
+        super::super::physcal::run(&[
             phys.join("namelist.def").into(),
             params.into(),
             measured.clone().into(),

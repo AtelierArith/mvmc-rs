@@ -32,7 +32,7 @@ fn download<T: Copy + Default>(
 /// Per-walker operator values `[walker][term]` after one observation.
 fn values(backend: &mut CudaEngine, state: &State, measurement: &Measurement) -> Vec<f64> {
     with_raw_exec(backend, "rbm.physcal.observe", |exec| {
-        measurement.observe(exec, state)
+        measurement.observe(exec, state, 0)
     })
     .map_err(|e| e.to_string())
     .unwrap();
@@ -198,7 +198,7 @@ fn assert_physcal(name: &str) {
         let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
         state.resident.delayed_updates = false;
         state.initialize(backend)?;
-        let measurement = Measurement::prepare(backend, operators, &state)?;
+        let measurement = Measurement::prepare(backend, operators, &state, false)?;
         let initial = state.resident.snapshot(backend)?.ele;
         assert_values(
             name,
@@ -303,7 +303,7 @@ fn resident_physcal_rbm_repeats_twenty_windows() {
             let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
             state.resident.delayed_updates = false;
             state.initialize(backend)?;
-            let mut measurement = Measurement::prepare(backend, operators, &state)?;
+            let mut measurement = Measurement::prepare(backend, operators, &state, false)?;
             let before = raw_exec_counters();
             let start = std::time::Instant::now();
             measurement.run(backend, &mut state)?;

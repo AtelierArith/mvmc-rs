@@ -199,7 +199,7 @@ fn resident_physcal_repeats_and_keeps_sampling_resident() {
         let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
         state.resident.delayed_updates = false;
         state.initialize(backend)?;
-        let mut measurement = Measurement::prepare(backend, operators, &state)?;
+        let mut measurement = Measurement::prepare(backend, operators, &state, false)?;
         let before = raw_exec_counters();
         measurement.run(backend, &mut state)?;
         let traffic = raw_exec_counters() - before;
@@ -268,7 +268,7 @@ fn resident_physcal_matches_julia_observables_and_tape() {
         let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
         state.resident.delayed_updates = false;
         state.initialize(backend)?;
-        let measurement = Measurement::prepare(backend, operators, &state)?;
+        let measurement = Measurement::prepare(backend, operators, &state, false)?;
         let expected_cfg = |name| fixture[name].iter().map(|x| *x as i32).collect::<Vec<_>>();
         let initial = state.resident.snapshot(backend)?;
         assert_eq!(
@@ -299,7 +299,7 @@ fn resident_physcal_matches_julia_observables_and_tape() {
                         measurement.operators.rows() * 8,
                     )?;
                 }
-                measurement.observe(exec, &state)
+                measurement.observe(exec, &state, 0)
             })
             .map_err(|e| e.to_string())?;
             let result = measurement.result(backend, &state)?;
@@ -394,7 +394,7 @@ fn resident_physcal_fallback_matches_inverse_path() {
         let operators = Operators::prepare(&model)?;
         let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
         state.initialize(backend)?;
-        let measurement = Measurement::prepare(backend, operators, &state)?;
+        let measurement = Measurement::prepare(backend, operators, &state, false)?;
         let mut observed = vec![];
         for flagged in [false, true] {
             with_raw_exec(backend, "physcal.fallback.observe", |exec| {
@@ -407,7 +407,7 @@ fn resident_physcal_fallback_matches_inverse_path() {
                         exec.upload(exec.ptr(&state.resident.valid)?, &mask)?;
                     }
                 }
-                measurement.observe(exec, &state)
+                measurement.observe(exec, &state, 0)
             })
             .map_err(|e| e.to_string())?;
             let result = measurement.result(backend, &state)?;

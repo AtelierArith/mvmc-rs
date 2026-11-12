@@ -22,6 +22,8 @@ mod opttrans_tests;
 mod rbm_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod window_tests;
 
 const PHYS_SOURCE: &str = concat!(
     include_str!("../resident_status.cuh"),
@@ -41,6 +43,49 @@ pub struct PhysCalConfig {
     pub seed: Option<i64>,
     pub initial_def: InitialDef,
     pub opt_para: Option<PathBuf>,
+    /// Save Green-function means for every window (potentially large).
+    pub window_greens: bool,
+}
+
+/// One walker-averaged measurement window. For complex local energies the
+/// second moment is mean(|E_loc|²), as in C vmccal.c, not mean(E_loc²).
+#[derive(Debug)]
+pub struct EnergyWindow {
+    pub energy: f64,
+    pub energy_imag: f64,
+    pub energy_second_moment: f64,
+}
+
+/// One window's Green-function means, in parsed operator order.
+#[derive(Debug, Default, Clone)]
+pub struct GreenWindow {
+    pub green_one: Vec<f64>,
+    pub green_two: Vec<f64>,
+    pub green_two_ex: Vec<f64>,
+    pub green_one_imag: Vec<f64>,
+    pub green_two_imag: Vec<f64>,
+    pub green_two_ex_imag: Vec<f64>,
+}
+
+impl GreenWindow {
+    fn from_flat(values: &[f64], ops: &Operators, lanes: usize) -> Self {
+        let one = ops.n_one * lanes;
+        let two = one + ops.n_two * lanes;
+        let re = |s: &[f64]| s.chunks_exact(lanes).map(|x| x[0]).collect();
+        let im = |s: &[f64]| {
+            s.chunks_exact(lanes)
+                .map(|x| if lanes == 2 { x[1] } else { 0. })
+                .collect()
+        };
+        Self {
+            green_one: re(&values[..one]),
+            green_two: re(&values[one..two]),
+            green_two_ex: re(&values[two..]),
+            green_one_imag: im(&values[..one]),
+            green_two_imag: im(&values[one..two]),
+            green_two_ex_imag: im(&values[two..]),
+        }
+    }
 }
 
 /// Ensemble means in parsed operator order, averaged over measurement windows.
@@ -60,6 +105,12 @@ pub struct PhysCalResult {
     pub seed: u64,
     pub walkers: usize,
     pub nsamples: usize,
+    pub warmup: usize,
+    pub interval: usize,
+    pub energy_second_moment: f64,
+    pub energy_windows: Vec<EnergyWindow>,
+    /// None unless PhysCalConfig::window_greens was enabled.
+    pub green_windows: Option<Vec<GreenWindow>>,
 }
 
 /// Run normal-orbital Gutzwiller/Jastrow(/DH2/DH4/RBM/OptTrans) PhysCal without Lanczos or SR;
@@ -91,7 +142,8 @@ pub fn run_gpu_phys_cal_from_namelist(
         // into delayed queues. Retain that distinction for proposal decisions.
         state.resident.delayed_updates = false;
         state.initialize(engine)?;
-        let mut measurement = Measurement::prepare(engine, operators, &state)?;
+        let mut measurement =
+            Measurement::prepare(engine, operators, &state, config.window_greens)?;
         measurement.run(engine, &mut state)?;
         measurement.result(engine, &state)
     })
@@ -198,6 +250,8 @@ struct Measurement {
     ops: DeviceBuffer,
     values: DeviceBuffer,
     means: DeviceBuffer,
+    output_len: usize,
+    window_greens: bool,
 }
 
 impl Measurement {
@@ -205,6 +259,7 @@ impl Measurement {
         backend: &mut B,
         operators: Operators,
         state: &State,
+        window_greens: bool,
     ) -> Result<Self, String> {
         let w = state.resident.sampler.geom.walkers;
         let terms = operators.terms();
@@ -217,31 +272,59 @@ impl Measurement {
         if rows > i32::MAX as usize {
             return Err("GPU PhysCal output capacity exceeded".into());
         }
+        // One allocation/download: overall means, then three energy fields
+        // per window, then optional window Green means. No per-window host I/O.
+        let window_width = if window_greens { (rows - 1) * lanes } else { 0 };
+        let output_len = state
+            .steps
+            .checked_mul(3 + window_width)
+            .and_then(|n| n.checked_add(rows * lanes))
+            .ok_or("GPU PhysCal window capacity exceeded")?;
+        let output_bytes = output_len
+            .checked_mul(8)
+            .ok_or("GPU PhysCal window capacity exceeded")?;
         with_raw_exec(backend, "mvmc.physcal.prepare", |exec| {
             let ops = upload(exec, &operators.ops)?;
             let values = exec.alloc_bytes((entries * 8 * lanes).max(1))?;
-            let means = exec.alloc_bytes(rows * 8 * lanes)?;
-            // SAFETY: means owns exactly rows FP64 values (pairs for complex).
+            let means = exec.alloc_bytes(output_bytes)?;
+            // SAFETY: the checked allocation covers overall and window outputs.
             unsafe {
-                exec.zero_bytes(exec.ptr(&means)?, rows * 8 * lanes)?;
+                exec.zero_bytes(exec.ptr(&means)?, output_bytes)?;
             }
             Ok(Self {
                 operators,
                 ops,
                 values,
                 means,
+                output_len,
+                window_greens,
             })
         })
         .map_err(|e| e.to_string())
     }
 
-    fn observe(&self, exec: &RawExec<'_, '_>, state: &State) -> tenferro_tensor::Result<()> {
+    fn observe(
+        &self,
+        exec: &RawExec<'_, '_>,
+        state: &State,
+        window: usize,
+    ) -> tenferro_tensor::Result<()> {
+        debug_assert!(window < state.steps);
         let module = exec.module(SOURCE, KERNELS)?;
         state.counts(exec, &module)?;
         let b = &state.buffers;
         let w = state.resident.sampler.geom.walkers;
         let terms = self.operators.terms();
         let p = |b: &DeviceBuffer| exec.ptr(b).map(Arg::P);
+        let rows = self.operators.rows();
+        let lanes = state.model.lanes();
+        let base = exec.ptr(&self.means)?;
+        let energy_out = base + ((rows * lanes + 3 * window) * 8) as u64;
+        let green_out = if self.window_greens && rows > 1 {
+            base + ((rows * lanes + 3 * state.steps + window * (rows - 1) * lanes) * 8) as u64
+        } else {
+            0
+        };
         // The common operator evaluator reads resident tables and writes disjoint slots.
         if terms != 0 {
             state.energy_terms(exec, &module, &self.values, &self.ops, terms)?;
@@ -268,6 +351,8 @@ impl Measurement {
                     i(terms),
                     i(w),
                     p(&state.resident.error)?,
+                    Arg::P(energy_out),
+                    Arg::P(green_out),
                 ],
             )?;
         }
@@ -281,9 +366,9 @@ impl Measurement {
     ) -> Result<(), String> {
         with_raw_exec(backend, "mvmc.physcal.run", |exec| {
             state.resident.enqueue_random(exec, state.warmup)?;
-            for _ in 0..state.steps {
+            for window in 0..state.steps {
                 state.resident.enqueue_random(exec, state.interval)?;
-                self.observe(exec, state)?;
+                self.observe(exec, state, window)?;
             }
             Ok(())
         })
@@ -298,7 +383,7 @@ impl Measurement {
         with_raw_exec(backend, "mvmc.physcal.result", |exec| {
             let mut error = [0i32];
             let lanes = state.model.lanes();
-            let mut means = vec![0.0f64; self.operators.rows() * lanes];
+            let mut output = vec![0.0f64; self.output_len];
             // SAFETY: allocations have these exact lengths, execution has
             // completed before the public API returns host observations. A
             // failed run exposes only the status word.
@@ -309,39 +394,60 @@ impl Measurement {
                 return Err(gpu_error(format!("GPU PhysCal failed: {failure}")));
             }
             unsafe {
-                exec.download(&mut means, exec.ptr(&self.means)?)?;
+                exec.download(&mut output, exec.ptr(&self.means)?)?;
             }
-            if means.iter().any(|x| !x.is_finite()) {
+            if output.iter().any(|x| !x.is_finite()) {
                 return Err(gpu_error("GPU PhysCal produced nonfinite means"));
             }
-            for mean in &mut means {
+            let mean_len = self.operators.rows() * lanes;
+            let (means, windows) = output.split_at_mut(mean_len);
+            for mean in means.iter_mut() {
                 *mean /= state.steps as f64;
             }
-            let (re, im): (Vec<f64>, Vec<f64>) = if lanes == 2 {
-                means
-                    .as_chunks::<2>()
-                    .0
-                    .iter()
-                    .map(|z| (z[0], z[1]))
-                    .unzip()
-            } else {
-                let zeros = vec![0.0; means.len()];
-                (means, zeros)
-            };
-            let one_end = 1 + self.operators.n_one;
-            let two_end = one_end + self.operators.n_two;
+            let greens = GreenWindow::from_flat(&means[lanes..], &self.operators, lanes);
+            let energy_windows: Vec<_> = windows[..3 * state.steps]
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|v| EnergyWindow {
+                    energy: v[0],
+                    energy_imag: v[1],
+                    energy_second_moment: v[2],
+                })
+                .collect();
+            let energy_second_moment = energy_windows
+                .iter()
+                .map(|v| v.energy_second_moment)
+                .sum::<f64>()
+                / state.steps as f64;
+            let green_windows = self.window_greens.then(|| {
+                let width = (self.operators.rows() - 1) * lanes;
+                if width == 0 {
+                    vec![GreenWindow::default(); state.steps]
+                } else {
+                    windows[3 * state.steps..]
+                        .chunks_exact(width)
+                        .map(|v| GreenWindow::from_flat(v, &self.operators, lanes))
+                        .collect()
+                }
+            });
             Ok(PhysCalResult {
-                energy: re[0],
-                green_one: re[1..one_end].to_vec(),
-                green_two: re[one_end..two_end].to_vec(),
-                green_two_ex: re[two_end..].to_vec(),
-                energy_imag: im[0],
-                green_one_imag: im[1..one_end].to_vec(),
-                green_two_imag: im[one_end..two_end].to_vec(),
-                green_two_ex_imag: im[two_end..].to_vec(),
+                energy: means[0],
+                energy_imag: if lanes == 2 { means[1] } else { 0. },
+                green_one: greens.green_one,
+                green_two: greens.green_two,
+                green_two_ex: greens.green_two_ex,
+                green_one_imag: greens.green_one_imag,
+                green_two_imag: greens.green_two_imag,
+                green_two_ex_imag: greens.green_two_ex_imag,
                 seed: state.model.seed,
                 walkers: state.resident.sampler.geom.walkers,
                 nsamples: state.steps,
+                warmup: state.warmup,
+                interval: state.interval,
+                energy_second_moment,
+                energy_windows,
+                green_windows,
             })
         })
         .map_err(|e| e.to_string())
