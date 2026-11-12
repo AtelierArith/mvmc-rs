@@ -1,6 +1,8 @@
-//! `mvmc-cuda`: command line for the device-resident GPU runners. `resident-physcal` runs the
-//! Julia-compatible GPU ensemble PhysCal and exports its averaged observables. The CPU C-order
-//! runner is the `mvmc` binary of `mvmc-cli`.
+//! `mvmc-cuda`: command line for device-resident Opt and PhysCal.
+//! The CPU C-order runner is the `mvmc` binary of `mvmc-cli`.
+
+#[path = "mvmc_cuda/opt.rs"]
+mod opt;
 
 fn resident_physcal(args: &[std::ffi::OsString]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -49,12 +51,13 @@ fn resident_physcal(args: &[std::ffi::OsString]) -> Result<(), String> {
     Ok(())
 }
 
-const USAGE: &str = "usage: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR";
+const USAGE: &str = "usage: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR\n       mvmc-cuda resident-opt NAMELIST NEW_OUTPUT_DIR [INITPARA] [OPTIONS]";
 
 /// Dispatch one subcommand; only the resident GPU subcommands exist.
 fn run(args: &[std::ffi::OsString]) -> Result<(), String> {
     match args.first() {
         Some(arg) if arg == "resident-physcal" => resident_physcal(&args[1..]),
+        Some(arg) if arg == "resident-opt" => opt::run(&args[1..]),
         Some(arg) if arg == "--help" || arg == "-h" => {
             println!("{USAGE}");
             Ok(())
