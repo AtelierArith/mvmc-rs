@@ -22,26 +22,37 @@
 // per slot and use the FSZ proposals of resident_propose (interval_kernels.cu);
 // a slot then needs no spin offset (split = n).
 
-// Complex C UpdateMAll_child_fcmp for one QP plane, by the whole block:
+// Complex C UpdateMAll_child_fcmp for one QP plane, by its block or one warp:
 // vec1 = -invM^T sltE_a, PfM *= -vec1[a], vec2 = invM_a / -vec1[a],
 // invM += vec1 vec2^T - vec2 vec1^T with the unit-vector corrections.
+template <bool Warp>
 __device__ inline void interval_complex_update(rcx* invq, rcx* pfq, const rcx* tab, int qp,
                                                const int* rs, int n, int n2, int msa, rcx* v1,
                                                rcx* v2, rcx* v3) {
-  const int tid = threadIdx.x, nt = blockDim.x;
+  const int tid = Warp ? (threadIdx.x & 31) : threadIdx.x;
+  const int nt = Warp ? 32 : blockDim.x;
   const int rsa = rs[msa];
   for (int j = tid; j < n; j += nt) v3[j] = SLT(tab, qp, rsa, rs[j], n2);
-  __syncthreads();
+  if (Warp) __syncwarp(); else __syncthreads();
   for (int i = tid; i < n; i += nt) {
     rcx acc = rc(0.0, 0.0);
     for (int j = 0; j < n; ++j) acc = rc_sub(acc, rc_mul(invq[(size_t)j * n + i], v3[j]));
     v1[i] = acc;
   }
-  __syncthreads();
-  const rcx inv_vec1_a = rc_div(rc(-1.0, 0.0), v1[msa]);
+  if (Warp) __syncwarp(); else __syncthreads();
+  // v3 is dead after the dot products. Share the identical reciprocal within
+  // this warp instead of evaluating Smith division in every lane.
+  rcx inv_vec1_a;
+  if (Warp) {
+    if (tid == 0) v3[0] = rc_div(rc(-1.0, 0.0), v1[msa]);
+    __syncwarp();
+    inv_vec1_a = v3[0];
+  } else {
+    inv_vec1_a = rc_div(rc(-1.0, 0.0), v1[msa]);
+  }
   for (int i = tid; i < n; i += nt) v2[i] = rc_mul(invq[(size_t)msa * n + i], inv_vec1_a);
   if (tid == 0) *pfq = rc_mul(*pfq, rc_neg(v1[msa]));
-  __syncthreads();
+  if (Warp) __syncwarp(); else __syncthreads();
   const int warp = tid >> 5, lane = tid & 31, nwarp = nt >> 5;
   for (int i = warp; i < n; i += nwarp) {
     const rcx vi1 = v1[i], vi2 = v2[i];
@@ -53,30 +64,70 @@ __device__ inline void interval_complex_update(rcx* invq, rcx* pfq, const rcx* t
       invq[e] = x;
     }
   }
-  __syncthreads();
+  if (Warp) __syncwarp(); else __syncthreads();
 }
 
 // One block per walker. State per walker: ele [n], occ [2 nsite], inv
 // [nqp][n*n] (invM = -X^-1), pf [nqp], aw (accepts since rebuild), logip
 // (log|ip| with the 1e-100 floor). Dynamic shared memory: aligned n ints,
-// nqp complex candidate Pfaffians, 3n complex vectors, 8 ints.
-extern "C" __global__ void interval_complex_hop(
-    int* ele, int* occ, rcx* inv, rcx* pf, int* aw, double* logip, const rcx* slater,
-    const rcx* weights, const int* gutz, const int* jast, const double* params,
-    const unsigned int* tape, int total_hops, int* hop_off, int n, int ne, int nsite, int nqp,
-    int ngutz, int nproj, int* hops_done, int* rebuild, int* accepts, int* total_accepts,
-    int* error, int* valid, rcx* fac, rcx* work, double exchange_fraction, int fsz,
-    int spin_free, double flip_fraction) {
+// nqp complex candidate Pfaffians, 3n complex vectors per update group, 8 ints.
+#define MVMC_COMPLEX_HOP_PARAMS \
+    int* ele, \
+    int* occ, \
+    rcx* inv, \
+    rcx* pf, \
+    int* aw, \
+    double* logip, \
+    const rcx* slater, \
+    const rcx* weights, \
+    const int* gutz, \
+    const int* jast, \
+    const double* params, \
+    const unsigned int* tape, \
+    int total_hops, \
+    int* hop_off, \
+    int n, \
+    int ne, \
+    int nsite, \
+    int nqp, \
+    int ngutz, \
+    int nproj, \
+    int* hops_done, \
+    int* rebuild, \
+    int* accepts, \
+    int* total_accepts, \
+    int* error, \
+    int* valid, \
+    rcx* fac, \
+    rcx* work, \
+    double exchange_fraction, \
+    int fsz, \
+    int spin_free, \
+    double flip_fraction
+#define MVMC_COMPLEX_HOP_FORWARD \
+    ele, occ, inv, pf, aw, logip, \
+    slater, weights, gutz, jast, params, tape, \
+    total_hops, hop_off, n, ne, nsite, nqp, \
+    ngutz, nproj, hops_done, rebuild, accepts, total_accepts, \
+    error, valid, fac, work, exchange_fraction, fsz, \
+    spin_free, flip_fraction
+
+template <bool WarpUpdates>
+__device__ __forceinline__ void interval_complex_hop_body(MVMC_COMPLEX_HOP_PARAMS) {
   if (*error) return;  // block-uniform; previous launch owns the error flag
+  const int nt = blockDim.x;
+  // The host selects the specialized entry and its matching scratch layout.
+  const bool warp_updates = WarpUpdates;
+  const int update_groups = WarpUpdates ? (nt >> 5) : 1;
   extern __shared__ char smem_raw[];
   int* rs = reinterpret_cast<int*>(smem_raw);
   rcx* pfnew = reinterpret_cast<rcx*>(rs + ((n + 1) & ~1));  // [nqp]
   rcx* scratch = pfnew + nqp;                                 // [3n]
-  int* mvw = reinterpret_cast<int*>(scratch + 3 * (size_t)n);  // [8]
+  int* mvw = reinterpret_cast<int*>(scratch + 3 * (size_t)n * update_groups);  // [8]
   rcx* v1 = scratch;
   rcx* v2 = v1 + n;
   rcx* v3 = v2 + n;
-  const int w = blockIdx.x, tid = threadIdx.x, nt = blockDim.x;
+  const int w = blockIdx.x, tid = threadIdx.x;
   const int n2 = 2 * nsite;
   int* ele_w = ele + (size_t)w * n;
   int* occ_w = occ + (size_t)w * 2 * nsite;
@@ -210,9 +261,17 @@ extern "C" __global__ void interval_complex_hop(
       }
       __syncthreads();
     } else if (mvw[5]) {
-      for (int q = 0; q < nqp; ++q)
-        interval_complex_update(inv_w + (size_t)q * n * n, pf_w + q, slater, q, rs, n, n2, msa, v1,
-                                v2, v3);
+      if (warp_updates) {
+        const int warp = tid >> 5;
+        rcx* vectors = scratch + (size_t)warp * 3 * n;
+        for (int q = warp; q < nqp; q += nt >> 5)
+          interval_complex_update<true>(inv_w + (size_t)q * n * n, pf_w + q, slater, q, rs,
+                                        n, n2, msa, vectors, vectors + n, vectors + 2 * n);
+      } else {
+        for (int q = 0; q < nqp; ++q)
+          interval_complex_update<false>(inv_w + (size_t)q * n * n, pf_w + q, slater, q, rs,
+                                         n, n2, msa, v1, v2, v3);
+      }
       if (tid == 0) {
         log_old = s_log;
         ++accepted;
@@ -236,6 +295,16 @@ extern "C" __global__ void interval_complex_hop(
     logip[w] = log_old;
   }
 }
+
+extern "C" __global__ void interval_complex_hop(MVMC_COMPLEX_HOP_PARAMS) {
+  interval_complex_hop_body<false>(MVMC_COMPLEX_HOP_FORWARD);
+}
+
+extern "C" __global__ void interval_complex_hop_warp(MVMC_COMPLEX_HOP_PARAMS) {
+  interval_complex_hop_body<true>(MVMC_COMPLEX_HOP_FORWARD);
+}
+#undef MVMC_COMPLEX_HOP_PARAMS
+#undef MVMC_COMPLEX_HOP_FORWARD
 
 // Assemble the complex plane A = -S(rs, rs) of a requested walker and factor
 // it with a paired panel factorization (n>=64) or the C-order reference.

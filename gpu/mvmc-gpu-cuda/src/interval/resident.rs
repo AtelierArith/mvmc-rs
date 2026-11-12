@@ -587,7 +587,11 @@ impl ResidentInterval {
             exec.zero_bytes(exec.ptr(&self.total_accepts)?, g.walkers * 4)?;
             for _ in 0..rounds {
                 exec.launch(
-                    module.function("interval_complex_hop")?,
+                    module.function(if complex_warp_updates(g) {
+                        "interval_complex_hop_warp"
+                    } else {
+                        "interval_complex_hop"
+                    })?,
                     (g.walkers as u32, 1, 1),
                     COMPLEX_THREADS,
                     complex_shared_bytes(g),
@@ -851,10 +855,28 @@ impl ResidentInterval {
 /// Threads per block of the complex sampler (four warps).
 pub(crate) const COMPLEX_THREADS: u32 = 128;
 
+fn complex_update_shared_bytes(g: IntervalGeometry, groups: usize) -> usize {
+    ((g.n + 1) & !1) * 4 + (g.nqp + 3 * groups * g.n) * 16 + 8 * 4
+}
+
+fn complex_warp_updates(g: IntervalGeometry) -> bool {
+    // On sm_86 the baseline kernel is register-limited to three blocks/SM.
+    // A 32 KiB dynamic budget fits those blocks in its 100 KiB shared store,
+    // leaves room for static scratch, and preserves the old large-QP route.
+    (64..=128).contains(&g.n)
+        && g.nqp >= COMPLEX_THREADS as usize / 32
+        && complex_update_shared_bytes(g, COMPLEX_THREADS as usize / 32) <= 32 * 1024
+}
+
 /// Dynamic shared bytes of `interval_complex_hop`: aligned n ints, nqp complex
-/// candidate Pfaffians, 3n complex vectors and 8 ints.
+/// candidate Pfaffians, 3n complex vectors per update group and 8 ints.
 pub(crate) fn complex_shared_bytes(g: IntervalGeometry) -> u32 {
-    (((g.n + 1) & !1) * 4 + (g.nqp + 3 * g.n) * 16 + 8 * 4) as u32
+    let groups = if complex_warp_updates(g) {
+        COMPLEX_THREADS as usize / 32
+    } else {
+        1
+    };
+    complex_update_shared_bytes(g, groups) as u32
 }
 
 // Four warps balance QP cooperation with the number of resident walker blocks.

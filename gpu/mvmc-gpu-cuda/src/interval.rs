@@ -67,6 +67,7 @@ pub const INTERVAL_KERNELS: &[&str] = &[
     "interval_paired_fallback",
     "interval_resident_complete",
     "interval_complex_hop",
+    "interval_complex_hop_warp",
     "interval_complex_factor",
     "interval_complex_commit",
 ];

@@ -46,6 +46,10 @@ __device__ void pfinv_panel_plane(typename Ops::T* A, typename Ops::T* W,
     diagonal[i]=Ops::div(Ops::one(),diagonal[i]);
     bad_reciprocal |= !Ops::finite(diagonal[i]);
   }
+  // Removing products with structural zeros is valid for finite L. Preserve
+  // the reference fallback when a factor is nonfinite: the old full dot
+  // would encounter nonfinite*0 on its diagonal even if pf stayed finite.
+  for (size_t i=tid;i<nn;i+=nt) bad_reciprocal |= !Ops::finite(OUT[i]);
   bad_reciprocal=__syncthreads_or(bad_reciprocal);
   if (bad_reciprocal) {
     for (size_t i=tid;i<nn;i+=nt) A[i]=W[i];
@@ -61,7 +65,10 @@ __device__ void pfinv_panel_plane(typename Ops::T* A, typename Ops::T* W,
   for (int row=0;row<n;++row) {
     for (int col=tid;col<=row;col+=nt) {
       T value=row==col ? Ops::one() : Ops::zero();
-      for (int k=0;k<row;++k)
+      // Skip complete warp-width runs of structural zeros, retaining a
+      // common k across lanes for coalesced B loads and broadcast L loads.
+      // Remaining terms stay in their original order, including publication.
+      for (int k=col & ~31;k<row;++k)
         value=Ops::sub(value,Ops::mul(OUT[row+(size_t)k*n],A[col+(size_t)k*n]));
       A[col+(size_t)row*n]=value;
     }

@@ -547,10 +547,14 @@ fn stage_config(steps: usize) -> OptConfig {
 }
 
 fn assert_opt_stages(name: &str, steps_per_site: usize) {
-    let probe = Model::prepare(&input(name), &stage_config(1)).unwrap();
+    assert_opt_stages_input(name, &input(name), steps_per_site);
+}
+
+fn assert_opt_stages_input(name: &str, path: &Path, steps_per_site: usize) {
+    let probe = Model::prepare(path, &stage_config(1)).unwrap();
     let steps = steps_per_site * probe.ns;
     let config = stage_config(steps);
-    let model = Model::prepare(&input(name), &config).unwrap();
+    let model = Model::prepare(path, &config).unwrap();
     assert!(model.complex && model.weights.iter().skip(1).step_by(2).any(|&x| x != 0.0));
     let walkers = 8;
     let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
@@ -649,6 +653,44 @@ fn resident_opt_complex_l16_matches_cpu_c_order() {
 #[ignore = "requires CUDA; complex L128 chain against the CPU C-order path"]
 fn resident_opt_complex_l128_matches_cpu_c_order() {
     assert_opt_stages("hubbard_complex_L128", 1);
+}
+
+#[test]
+#[ignore = "requires CUDA; partial QP warp groups against supplied-tape CPU replay"]
+fn resident_opt_complex_partial_warp_groups_match_cpu() {
+    let name = "hubbard_complex_L128";
+    let source = input(name);
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("mvmc733-{}-{unique}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    for entry in std::fs::read_dir(source.parent().unwrap()).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_type().unwrap().is_file() {
+            std::fs::copy(entry.path(), dir.join(entry.file_name())).unwrap();
+        }
+    }
+    let modpara = dir.join("modpara.def");
+    let text = std::fs::read_to_string(&modpara).unwrap();
+    let text = text
+        .lines()
+        .map(|line| {
+            if line.split_whitespace().next() == Some("NSPGaussLeg") {
+                "NSPGaussLeg 5"
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(modpara, text).unwrap();
+    let path = dir.join("namelist.def");
+    let model = Model::prepare(&path, &stage_config(1)).unwrap();
+    assert_eq!(model.nq, 10); // Two QPs remain in the final four-warp batch.
+    assert_opt_stages_input("L128 partial warp groups", &path, 1);
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 /// #573 per-plane recovery on the complex path. Marking one plane of every

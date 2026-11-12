@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import queue
 import statistics
 import subprocess
@@ -79,11 +80,13 @@ class Worker:
         self.stdout_log = (args.output / f"{label}.stdout.log").open("w")
         self.stderr_log = (args.output / f"{label}.stderr.log").open("w")
         argv = [
-            "docker", "run", "--rm", "-i", "--name",
+            "docker", "run", "--rm", "-i", "--user", f"{os.getuid()}:{os.getgid()}", "--name",
             "mvmc731-e2e-" + hashlib.sha256(str(args.output).encode()).hexdigest()[:12] + "-" + label,
             "--gpus", f"device={args.device}",
             "-e", "OPENBLAS_NUM_THREADS=1", "-e", "OMP_NUM_THREADS=1",
             "-e", "RAYON_NUM_THREADS=1", "-e", "MVMC_RS_INNER_THREADS=1",
+            *(["-e", "CUDA_CACHE_PATH=/driver-cache", "-v",
+               f"{args.driver_cache_volume}:/driver-cache"] if args.driver_cache_volume else []),
             "-v", f"{checkout}:/work:ro", "-v", f"{volume}:/cuda-target:ro",
             "-v", f"{args.input.parent}:/inputs:ro", "-v", f"{args.output}:/results",
             "-w", "/work", args.image,
@@ -147,6 +150,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mode", choices=("opt", "phys"), required=True)
     parser.add_argument("--image", required=True)
+    parser.add_argument("--driver-cache-volume", help="writable CUDA driver cache shared by both workers")
     parser.add_argument("--device", default="1")
     parser.add_argument("--cpu", type=int, default=17)
     parser.add_argument("--walkers", type=int, default=320)
