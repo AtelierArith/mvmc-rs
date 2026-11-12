@@ -92,6 +92,10 @@ These documented GPU layouts differ from the CPU runner's full C-format
 moment/parameter files. The CPU executable is `mvmc`. Process startup and file
 output belong to CLI wall time; the warmed API benchmark excludes both.
 
+The [#729 paired API report](../../benchmark/gpu_physcal_windows_729/README.md)
+records L16/L128 timings with Green history off, unchanged transfer and
+synchronization counts, and the additional 24 bytes per energy window.
+
 Supported inputs are real normal orbitals, Gutzwiller/Jastrow projections,
 operators whose individual pairs conserve spin, `NExUpdatePath` 0, 1 or 2 with optional local spins
 (#660, see [GPU-resident Opt](gpu-resident-opt.md)), optional DH2/DH4 factors (#665), optional real RBM factors (#667), optional real OptTrans weights (#674, fixed at their input values),

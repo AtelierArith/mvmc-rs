@@ -1,0 +1,266 @@
+{
+  "reps": 9,
+  "excluded_warmup_calls_per_worker": 1,
+  "cpu": "17",
+  "cases": {
+    "L16": {
+      "input": "target/issue728-smoke/measure-input/namelist.def",
+      "params": "target/issue728-smoke/optimized/zqp_opt.dat",
+      "walkers": 64,
+      "windows": 20,
+      "warmup": 128,
+      "interval": 128,
+      "seed": 79,
+      "seconds": {
+        "before": [
+          0.107474371,
+          0.101582838,
+          0.101287395,
+          0.099051313,
+          0.09895636,
+          0.098925189,
+          0.09884889,
+          0.099020569,
+          0.098851124
+        ],
+        "after": [
+          0.103957793,
+          0.103353486,
+          0.099452027,
+          0.099263134,
+          0.098935326,
+          0.098784925,
+          0.098887457,
+          0.098920973,
+          0.098817874
+        ]
+      },
+      "medians": {
+        "before": 0.099020569,
+        "after": 0.098935326
+      },
+      "paired_ratios": [
+        0.9672798457224747,
+        1.0174305821225431,
+        0.981879601109299,
+        1.0021384976491932,
+        0.9997874416560998,
+        0.9985821204748975,
+        1.00039016118441,
+        0.9989941887730416,
+        0.9996636355900212
+      ],
+      "median_paired_ratio": 0.9996636355900212,
+      "traffic": {
+        "after": {
+          "upload_calls": 27,
+          "upload_bytes": 126372,
+          "download_calls": 3,
+          "download_bytes": 1520,
+          "synchronizations": 11,
+          "scopes": 8
+        },
+        "before": {
+          "upload_calls": 27,
+          "upload_bytes": 126372,
+          "download_calls": 3,
+          "download_bytes": 1040,
+          "synchronizations": 11,
+          "scopes": 8
+        }
+      },
+      "mean_max_abs_difference": 0.0,
+      "input_hashes": {
+        "target/issue728-smoke/measure-input/StdFace.def": "f980b2936eb843794aad0732abc9de368e72246faf6d365a9881465984ba048e",
+        "target/issue728-smoke/measure-input/coulombintra.def": "8bd9499491d53c4f8b758e9b40edd9ef6a7ae663ec2e1674dc7b9e6fe2edea50",
+        "target/issue728-smoke/measure-input/greenone.def": "5e569a3aeaa23d3f9940cf9638c44f3860f5b6271e6067a50522efb18837c819",
+        "target/issue728-smoke/measure-input/greentwo.def": "877eeb8d62d90684586d83845451aff60678a26d637f82967c4744e4bf4675a5",
+        "target/issue728-smoke/measure-input/gutzwilleridx.def": "c9f7a2da366ce8d64e6f1c432797dca1642bb621994e695703bd83c80b60dd80",
+        "target/issue728-smoke/measure-input/jastrowidx.def": "c18d2a09aa0209386fae5e21fe9ad4afbd1f6c354928ab991c9f8f85bbe7da5b",
+        "target/issue728-smoke/measure-input/locspn.def": "385a438ff452a810dadfa4043aa54c65d1704a099a5c72a3d1892aff21ea44a0",
+        "target/issue728-smoke/measure-input/modpara.def": "54881a3bc1539b27ae3c53db24831407c2bdfa7f5ce8953ee5ef392291920dff",
+        "target/issue728-smoke/measure-input/namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+        "target/issue728-smoke/measure-input/orbitalidx.def": "1d8e8134cb3e2ff7242c74365ea9c8894fbce9b87d2df0d65d836b36f0199828",
+        "target/issue728-smoke/measure-input/qptransidx.def": "25715a81bbc8127724cbd666f55a4c9187c7907240ce03e201989fce963c0d16",
+        "target/issue728-smoke/measure-input/trans.def": "dcf42e00265fa2917f9710cf832a888f71c6193e881dea09c04abf5ac3629123",
+        "target/issue728-smoke/optimized/zqp_opt.dat": "83a42e4b71a1307cf59e3a0943cbd36af8c5b709b7e53330f7c408ae529979ad"
+      }
+    },
+    "L128": {
+      "input": "benchmark/cpu_scaling_l128/inputs/phys/namelist.def",
+      "params": "benchmark/cpu_scaling_l128/inputs/phys/zqp_opt.dat",
+      "walkers": 64,
+      "windows": 20,
+      "warmup": 128,
+      "interval": 128,
+      "seed": 79,
+      "seconds": {
+        "before": [
+          1.591128339,
+          1.593507076,
+          1.590080196,
+          1.597045619,
+          1.597587242,
+          1.597902903,
+          1.596538256,
+          1.597660481,
+          1.602933593
+        ],
+        "after": [
+          1.590727003,
+          1.594154311,
+          1.589844574,
+          1.591823167,
+          1.597257134,
+          1.5975258,
+          1.598075018,
+          1.595964673,
+          1.597321699
+        ]
+      },
+      "medians": {
+        "before": 1.597045619,
+        "after": 1.595964673
+      },
+      "paired_ratios": [
+        0.9997477664182312,
+        1.0004061701449263,
+        0.999851817536881,
+        0.9967299293533831,
+        0.9997933709087544,
+        0.9997640013049028,
+        1.0009625588326647,
+        0.9989385679747561,
+        0.996498985345053
+      ],
+      "median_paired_ratio": 0.9997640013049028,
+      "traffic": {
+        "after": {
+          "upload_calls": 27,
+          "upload_bytes": 6543972,
+          "download_calls": 3,
+          "download_bytes": 8688,
+          "synchronizations": 11,
+          "scopes": 8
+        },
+        "before": {
+          "upload_calls": 27,
+          "upload_bytes": 6543972,
+          "download_calls": 3,
+          "download_bytes": 8208,
+          "synchronizations": 11,
+          "scopes": 8
+        }
+      },
+      "mean_max_abs_difference": 0.0,
+      "input_hashes": {
+        "benchmark/cpu_scaling_l128/inputs/phys/StdFace.def": "d6559df80f89308ce6f7c226e9809e21c12bf12d85a48bd8d651c340f108f64e",
+        "benchmark/cpu_scaling_l128/inputs/phys/coulombintra.def": "f608cfa5f25af0acd6403450d6d8530920ae7c2c6956b217d913b224a9f1d313",
+        "benchmark/cpu_scaling_l128/inputs/phys/greenone.def": "4097816d5e525f157ca617cb47c32d0510131f2536ed356ffbe9dc04831eea37",
+        "benchmark/cpu_scaling_l128/inputs/phys/greentwo.def": "eedab353f2de4666b52371015adef4809715de45a017be2a9abb4e8b2afaf919",
+        "benchmark/cpu_scaling_l128/inputs/phys/gutzwilleridx.def": "97f7772c91091614ceaea9356013d407c4d9d712c2db07f12f20298465c625c5",
+        "benchmark/cpu_scaling_l128/inputs/phys/jastrowidx.def": "ccb87406bc9019c7ce0e082f9113230c4defd0dc8e8b7f34ab1b3997dc54777e",
+        "benchmark/cpu_scaling_l128/inputs/phys/locspn.def": "64ce70ddf9bdf63695f23376be2d6f8820864bc2169f3b089c20e38c681e4e76",
+        "benchmark/cpu_scaling_l128/inputs/phys/modpara.def": "ff23a26a37a173d664216e4b21ff1b57ceb3a0ccfe1288ecbae28d958b086782",
+        "benchmark/cpu_scaling_l128/inputs/phys/namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+        "benchmark/cpu_scaling_l128/inputs/phys/orbitalidx.def": "862f5f913bf562b42ff6feeaefeb509a0b7793a150831bde0c09dee86774a697",
+        "benchmark/cpu_scaling_l128/inputs/phys/qptransidx.def": "0a23294988aad3784ba1fc497dd9daa152728ffe622caddebd423a104bd3120d",
+        "benchmark/cpu_scaling_l128/inputs/phys/trans.def": "88c462e6bcc3e81efabdf0411fadd984cbc3e7ef04341fabd45d9e01d70f87da",
+        "benchmark/cpu_scaling_l128/inputs/phys/zqp_opt.dat": "9130219b4af78438bee2f30171833e7a8f86a01ff11e23276af439652230fd90"
+      }
+    },
+    "L128-api": {
+      "input": "benchmark/cpu_scaling_l128/inputs/phys/namelist.def",
+      "params": "benchmark/cpu_scaling_l128/inputs/phys/zqp_opt.dat",
+      "walkers": 320,
+      "windows": 1,
+      "warmup": 128,
+      "interval": 128,
+      "seed": 79,
+      "seconds": {
+        "before": [
+          0.565751407,
+          0.558869179,
+          0.555336516,
+          0.562198035,
+          0.562364704,
+          0.565394941,
+          0.559001614,
+          0.562259422,
+          0.555619046
+        ],
+        "after": [
+          0.563055016,
+          0.562522738,
+          0.558864817,
+          0.560997819,
+          0.563978096,
+          0.564694911,
+          0.565757939,
+          0.561177119,
+          0.561709861
+        ]
+      },
+      "medians": {
+        "before": 0.562198035,
+        "after": 0.562522738
+      },
+      "paired_ratios": [
+        0.9952339650124811,
+        1.0065374136511471,
+        1.0063534467810866,
+        0.997865136615072,
+        1.0028689425003459,
+        0.9987618743125614,
+        1.0120864141190118,
+        0.9980750825016855,
+        1.0109622142074661
+      ],
+      "median_paired_ratio": 1.0028689425003459,
+      "traffic": {
+        "after": {
+          "upload_calls": 27,
+          "upload_bytes": 6952548,
+          "download_calls": 3,
+          "download_bytes": 8232,
+          "synchronizations": 11,
+          "scopes": 8
+        },
+        "before": {
+          "upload_calls": 27,
+          "upload_bytes": 6952548,
+          "download_calls": 3,
+          "download_bytes": 8208,
+          "synchronizations": 11,
+          "scopes": 8
+        }
+      },
+      "mean_max_abs_difference": 0.0,
+      "input_hashes": {
+        "benchmark/cpu_scaling_l128/inputs/phys/StdFace.def": "d6559df80f89308ce6f7c226e9809e21c12bf12d85a48bd8d651c340f108f64e",
+        "benchmark/cpu_scaling_l128/inputs/phys/coulombintra.def": "f608cfa5f25af0acd6403450d6d8530920ae7c2c6956b217d913b224a9f1d313",
+        "benchmark/cpu_scaling_l128/inputs/phys/greenone.def": "4097816d5e525f157ca617cb47c32d0510131f2536ed356ffbe9dc04831eea37",
+        "benchmark/cpu_scaling_l128/inputs/phys/greentwo.def": "eedab353f2de4666b52371015adef4809715de45a017be2a9abb4e8b2afaf919",
+        "benchmark/cpu_scaling_l128/inputs/phys/gutzwilleridx.def": "97f7772c91091614ceaea9356013d407c4d9d712c2db07f12f20298465c625c5",
+        "benchmark/cpu_scaling_l128/inputs/phys/jastrowidx.def": "ccb87406bc9019c7ce0e082f9113230c4defd0dc8e8b7f34ab1b3997dc54777e",
+        "benchmark/cpu_scaling_l128/inputs/phys/locspn.def": "64ce70ddf9bdf63695f23376be2d6f8820864bc2169f3b089c20e38c681e4e76",
+        "benchmark/cpu_scaling_l128/inputs/phys/modpara.def": "ff23a26a37a173d664216e4b21ff1b57ceb3a0ccfe1288ecbae28d958b086782",
+        "benchmark/cpu_scaling_l128/inputs/phys/namelist.def": "8c12fb80972128ac0921a15f957a7bc00b38ac9cc6cf0d3e0e0dd6d9efdbab00",
+        "benchmark/cpu_scaling_l128/inputs/phys/orbitalidx.def": "862f5f913bf562b42ff6feeaefeb509a0b7793a150831bde0c09dee86774a697",
+        "benchmark/cpu_scaling_l128/inputs/phys/qptransidx.def": "0a23294988aad3784ba1fc497dd9daa152728ffe622caddebd423a104bd3120d",
+        "benchmark/cpu_scaling_l128/inputs/phys/trans.def": "88c462e6bcc3e81efabdf0411fadd984cbc3e7ef04341fabd45d9e01d70f87da",
+        "benchmark/cpu_scaling_l128/inputs/phys/zqp_opt.dat": "9130219b4af78438bee2f30171833e7a8f86a01ff11e23276af439652230fd90"
+      }
+    }
+  },
+  "before_commit": "9ffe7141b65a5f91fa00708a7f563b64630d2777",
+  "after_commit": "3c8a09c57b9b4fbbb132cfddb55df66229c506c6",
+  "date_utc": "2026-11-12",
+  "gpu_physical_index": 1,
+  "cuda_visible_ordinal": 0,
+  "profile": "release; standalone default features; --locked",
+  "source_sha256": {
+    "gpu/mvmc-gpu-cuda/src/opt/physcal.rs": "42c6ef932afa1a6a47d803399880328efca767bd34ba700062eb9d59ca67a870",
+    "gpu/mvmc-gpu-cuda/src/opt/physcal.cu": "11dd522db56af0a69d59aada7f06821dc5375b9fc8e9f830e061ba699ecb0bf1"
+  }
+}
