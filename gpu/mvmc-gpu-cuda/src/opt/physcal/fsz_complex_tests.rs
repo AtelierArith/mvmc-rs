@@ -77,7 +77,7 @@ fn assert_physcal(name: &str) {
         let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
         state.resident.delayed_updates = false;
         state.initialize(backend)?;
-        let measurement = Measurement::prepare(backend, operators, &state)?;
+        let measurement = Measurement::prepare(backend, operators, &state, false)?;
         let initial = state.resident.snapshot(backend)?.ele;
         assert_initial(&state.model, &initial);
         assert_values(name, "initial", backend, &state, &measurement, &mut cpu);
@@ -170,7 +170,7 @@ fn resident_physcal_fsz_complex_repeats_twenty_windows() {
             let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
             state.resident.delayed_updates = false;
             state.initialize(backend)?;
-            let mut measurement = Measurement::prepare(backend, operators, &state)?;
+            let mut measurement = Measurement::prepare(backend, operators, &state, false)?;
             let before = raw_exec_counters();
             let start = std::time::Instant::now();
             measurement.run(backend, &mut state)?;

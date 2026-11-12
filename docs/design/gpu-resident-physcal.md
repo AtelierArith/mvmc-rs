@@ -8,7 +8,7 @@ use mvmc_gpu_cuda::physcal::{run_gpu_phys_cal_from_namelist, PhysCalConfig};
 let result = run_gpu_phys_cal_from_namelist("namelist.def", PhysCalConfig {
     opt_para: Some("zqp_opt.dat".into()),
     walkers: Some(320),
-    nsamples: Some(1),
+    nsamples: Some(20),
     warmup: Some(128),
     interval: Some(128),
     seed: Some(79),
@@ -30,21 +30,75 @@ retain their parsed order. Fixed parameters are loaded before `In*.def` overlays
 so explicit overlays take precedence as in C PhysCal. This input rule is retained
 even though Julia GPU currently loads those files in the opposite order.
 
+## Windows and second moments (#729)
+
+One window contains one configuration from each of W walkers, after `interval`
+proposals per walker. The ensemble is initialized and warmed once; successive
+windows continue the same walkers. Defaults are W=`NVMCSample` and
+K=`NDataQtySmp`, with `interval = NVMCInterval * Nsite` and
+`warmup = NVMCWarmUp * NVMCInterval * Nsite`. A window therefore has W samples;
+combine consecutive windows into larger bins when comparing with C's bins.
+Windows can be correlated and are not independent restarts.
+
+`PhysCalResult::energy_windows` contains K `EnergyWindow` records with mean
+energy (real and imaginary parts) and `energy_second_moment`. The latter is
+`mean(|E_loc|²)`, following C 1.4.0 `vmccal.c:200` (`conj(e)*e`) and `:443`
+(`e*e` for real energies). Its imaginary part is identically zero. For a
+Hermitian Hamiltonian, the variance estimate is
+`energy_second_moment - energy² - energy_imag²`. This is the second moment
+over walkers, rather than the square of their mean. The overall second moment
+is also returned, alongside the existing overall means.
+
+`PhysCalConfig::window_greens = true` additionally returns
+`PhysCalResult::green_windows = Some(Vec<GreenWindow>)`; otherwise it is `None`.
+Each record has the same parsed operator order and real/imaginary components
+as the overall Green arrays. Defaults store only three energy values per window.
+Optional Green history costs `8 * K * G * lanes` extra device bytes
+(`G = OneBodyG + TwoBodyG + TwoBodyGEx` rows, `lanes=1` real or `2` complex).
+Returned host arrays cost `16 * K * G` bytes because both components are
+provided, including zero imaginary components for real inputs. The contiguous
+download buffer temporarily adds another `8 * K * G * lanes` host bytes during
+result decoding. These estimates exclude the existing overall means and small
+energy history. All histories share the final output allocation/download with
+the overall means. No per-window transfer or stream synchronization is added.
+
+The arithmetic mean of window values agrees with the overall mean within
+`8*K*epsilon*max(1, max_window_magnitude)`, including accumulation and host
+rounding (`epsilon=f64::EPSILON`). The variance is nonnegative within
+`64*W*epsilon*max(1, energy_second_moment)`; a number-operator eigenstate checks
+zero variance at a nonzero eigenvalue. Separate L16 real/complex and L128 tests
+first check per-configuration energies against CPU C-order kernels using the
+existing condition-number bound, then isolate warp-reduction rounding on the
+same operator values. Green-history on/off preserves all means and energy
+windows. These checks do not replace the independent RNG/tape gates.
+
 The existing CUDA binary exposes an explicit subcommand:
 
 ```bash
 cargo build --locked --release --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml --bin mvmc-cuda
 CUDA_VISIBLE_DEVICES=0 gpu/mvmc-gpu-cuda/target/release/mvmc-cuda \
-  resident-physcal namelist.def zqp_opt.dat new-output
+  resident-physcal namelist.def zqp_opt.dat new-output --green-windows
 ```
 
 This uses the sampling lengths and seed from the input. `new-output` must not
 exist. `energy.dat`, `green_one.dat`, `green_two.dat` and `green_two_ex.dat`
-contain one FP64 mean per line in the parsed order above; `sampling.txt` records the seed,
-walker/window counts and RNG. These are ensemble means rather than the ordinary
-CLI's full C-format moment/parameter files. Omitting the subcommand selects the
-usual CLI and its original sampling/output contract. Process startup and file
+contain one FP64 mean per line in the parsed order above. `energy_imag.dat` and
+`energy_second_moment.dat` contain the overall imaginary energy and second moment.
+`energy_windows.dat` has a header followed by
+`window energy_real energy_imag energy_second_moment` (zero-based window indices).
+The optional `--green-windows` flag creates `green_one_windows.dat`,
+`green_two_windows.dat` and `green_two_ex_windows.dat`, with header and rows
+`window operator real imaginary`; operator indices are zero-based within each
+parsed list. Without the flag these three history files are not created.
+`sampling.txt` records the resolved seed, walker/window counts, warmup and
+interval in proposals, RNG, history flag and second-moment convention.
+These documented GPU layouts differ from the CPU runner's full C-format
+moment/parameter files. The CPU executable is `mvmc`. Process startup and file
 output belong to CLI wall time; the warmed API benchmark excludes both.
+
+The [#729 paired API report](../../benchmark/gpu_physcal_windows_729/README.md)
+records L16/L128 timings with Green history off, unchanged transfer and
+synchronization counts, and the additional 24 bytes per energy window.
 
 Supported inputs are real normal orbitals, Gutzwiller/Jastrow projections,
 operators whose individual pairs conserve spin, `NExUpdatePath` 0, 1 or 2 with optional local spins

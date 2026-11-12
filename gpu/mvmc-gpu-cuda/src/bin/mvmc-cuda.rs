@@ -3,60 +3,15 @@
 
 #[path = "mvmc_cuda/opt.rs"]
 mod opt;
+#[path = "mvmc_cuda/physcal.rs"]
+mod physcal;
 
-fn resident_physcal(args: &[std::ffi::OsString]) -> Result<(), String> {
-    if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
-        println!("{USAGE}\nOutputs: energy.dat, green_one.dat, green_two.dat, green_two_ex.dat (ensemble means in parsed operator order).");
-        return Ok(());
-    }
-    if args.len() != 3 {
-        return Err(USAGE.into());
-    }
-    let output = std::path::PathBuf::from(&args[2]);
-    if output.exists() {
-        return Err(format!("output already exists: {}", output.display()));
-    }
-    let result = mvmc_gpu_cuda::physcal::run_gpu_phys_cal_from_namelist(
-        std::path::PathBuf::from(&args[0]),
-        mvmc_gpu_cuda::physcal::PhysCalConfig {
-            opt_para: Some(std::path::PathBuf::from(&args[1])),
-            ..Default::default()
-        },
-    )?;
-    std::fs::create_dir(&output).map_err(|e| e.to_string())?;
-    for (name, values) in [
-        ("energy.dat", std::slice::from_ref(&result.energy)),
-        ("green_one.dat", result.green_one.as_slice()),
-        ("green_two.dat", result.green_two.as_slice()),
-        ("green_two_ex.dat", result.green_two_ex.as_slice()),
-    ] {
-        let text = values
-            .iter()
-            .map(|v| format!("{v:.17e}\n"))
-            .collect::<String>();
-        std::fs::write(output.join(name), text).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(
-        output.join("sampling.txt"),
-        format!(
-            "walkers {}\nwindows {}\nseed {}\nrng cuRAND XORWOW\n",
-            result.walkers, result.nsamples, result.seed
-        ),
-    )
-    .map_err(|e| e.to_string())?;
-    println!(
-        "Completed resident PhysCal: {} walkers, {} windows; energy={:.17e}",
-        result.walkers, result.nsamples, result.energy
-    );
-    Ok(())
-}
-
-const USAGE: &str = "usage: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR\n       mvmc-cuda resident-opt NAMELIST NEW_OUTPUT_DIR [INITPARA] [OPTIONS]";
+const USAGE: &str = "usage: mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR [--green-windows]\n       mvmc-cuda resident-opt NAMELIST NEW_OUTPUT_DIR [INITPARA] [OPTIONS]";
 
 /// Dispatch one subcommand; only the resident GPU subcommands exist.
 fn run(args: &[std::ffi::OsString]) -> Result<(), String> {
     match args.first() {
-        Some(arg) if arg == "resident-physcal" => resident_physcal(&args[1..]),
+        Some(arg) if arg == "resident-physcal" => physcal::run(&args[1..]),
         Some(arg) if arg == "resident-opt" => opt::run(&args[1..]),
         Some(arg) if arg == "--help" || arg == "-h" => {
             println!("{USAGE}");
@@ -91,9 +46,7 @@ mod tests {
 
     #[test]
     fn resident_physcal_requires_explicit_paths_before_cuda() {
-        assert!(resident_physcal(&[])
-            .unwrap_err()
-            .contains("NAMELIST PARAMS"));
+        assert!(physcal::run(&[]).unwrap_err().contains("NAMELIST PARAMS"));
     }
 
     #[test]
@@ -105,7 +58,7 @@ mod tests {
         let output = std::env::temp_dir().join(format!("mvmc-resident-cli-{nonce}"));
         std::fs::create_dir(&output).unwrap();
         std::fs::write(output.join("keep"), "user data").unwrap();
-        let error = resident_physcal(&[
+        let error = physcal::run(&[
             "missing-namelist".into(),
             "missing-params".into(),
             output.clone().into_os_string(),

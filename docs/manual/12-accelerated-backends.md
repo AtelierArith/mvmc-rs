@@ -68,7 +68,7 @@ The CUDA dependency tree (`tenferro-gpu` with `cuda`, cudarc and the vendored `g
 
 - Build **from `gpu/mvmc-gpu-cuda`** (`cargo build --release --manifest-path gpu/mvmc-gpu-cuda/Cargo.toml ...`).
 - **`mvmc-cuda resident-opt NAMELIST NEW_OUTPUT_DIR [INITPARA] [OPTIONS]`** runs the resident optimizer and writes C-layout final parameters (`zqp_opt.dat`), per-step energy (`zvo_out.dat`), CG information (`zvo_SRinfo.dat`) and resolved settings (`sampling.txt`). See [resident Opt CLI](../design/gpu-resident-opt.md#command-line-optimization).
-- **`mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR`** writes `energy.dat`, `green_one.dat`, `green_two.dat`, `green_two_ex.dat` and `sampling.txt`. Both resident commands require a new output directory; the CPU runner is `mvmc`.
+- **`mvmc-cuda resident-physcal NAMELIST PARAMS NEW_OUTPUT_DIR [--green-windows]`** writes overall means, `energy_windows.dat`, the energy second moment and `sampling.txt`. Optional Green histories use `(window, operator, real, imaginary)` rows. See [window statistics](../design/gpu-resident-physcal.md#windows-and-second-moments-729). Both resident commands require a new output directory; the CPU runner is `mvmc`.
 - The library calls and benchmark workers `examples/resident_opt_worker.rs` and `examples/resident_physcal_worker.rs` retain their timing scope ([gpu-resident-opt.md](../design/gpu-resident-opt.md), [gpu-resident-physcal.md](../design/gpu-resident-physcal.md)).
 - Requirements for a CUDA run: a CUDA driver (`libcuda`) and the CUDA libraries NVRTC, cuBLAS, cuSOLVER and cuRAND at run time (loaded with `dlopen`; no toolkit is needed to *build*). The standalone workspace sets `debug = 0` because linking tenferro can exhaust a hosted runner's disk.
 

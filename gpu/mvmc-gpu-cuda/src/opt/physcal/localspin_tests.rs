@@ -16,7 +16,7 @@ fn means(
                 measurement.operators.rows() * 8,
             )?;
         }
-        measurement.observe(exec, state)
+        measurement.observe(exec, state, 0)
     })
     .map_err(|e| e.to_string())?;
     let result = measurement.result(backend, state)?;
@@ -52,7 +52,7 @@ fn assert_physcal_flavor(name: &str, fixture_text: &str, exchange: f64) {
         // Julia PhysCal: immediate inverse updates (cuda_runners.jl:122).
         state.resident.delayed_updates = false;
         state.initialize(backend)?;
-        let measurement = Measurement::prepare(backend, operators, &state)?;
+        let measurement = Measurement::prepare(backend, operators, &state, false)?;
         let initial = state.resident.snapshot(backend)?;
         assert_eq!(initial.ele, integers(&fixture["initial_cfg"]));
         assert_local_spins(&state.model, &initial.ele);
@@ -175,7 +175,7 @@ fn resident_physcal_localspin_repeats_twenty_windows() {
             let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
             state.resident.delayed_updates = false;
             state.initialize(backend)?;
-            let mut measurement = Measurement::prepare(backend, operators, &state)?;
+            let mut measurement = Measurement::prepare(backend, operators, &state, false)?;
             let before = raw_exec_counters();
             let start = std::time::Instant::now();
             measurement.run(backend, &mut state)?;

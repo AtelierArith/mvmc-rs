@@ -122,7 +122,7 @@ pub(crate) fn assert_values(
     let rows = ops.rows();
     let before = complex(&download::<f64>(backend, &measurement.means, 2 * rows));
     with_raw_exec(backend, "complex.physcal.observe", |exec| {
-        measurement.observe(exec, state)
+        measurement.observe(exec, state, 0)
     })
     .map_err(|e| e.to_string())
     .unwrap();
@@ -205,7 +205,7 @@ fn assert_physcal(name: &str) {
         let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
         state.resident.delayed_updates = false;
         state.initialize(backend)?;
-        let measurement = Measurement::prepare(backend, operators, &state)?;
+        let measurement = Measurement::prepare(backend, operators, &state, false)?;
         let initial = state.resident.snapshot(backend)?.ele;
         assert_values(name, "initial", backend, &state, &measurement, &mut cpu);
         let tape = tape(walkers, steps);
@@ -310,7 +310,7 @@ fn resident_physcal_complex_repeats_twenty_windows() {
             let mut state = State::prepare_with_derivatives(backend, model, &sampling, false)?;
             state.resident.delayed_updates = false;
             state.initialize(backend)?;
-            let mut measurement = Measurement::prepare(backend, operators, &state)?;
+            let mut measurement = Measurement::prepare(backend, operators, &state, false)?;
             let before = raw_exec_counters();
             let start = std::time::Instant::now();
             measurement.run(backend, &mut state)?;
