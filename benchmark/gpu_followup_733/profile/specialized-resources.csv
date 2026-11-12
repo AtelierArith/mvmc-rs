@@ -1,0 +1,8 @@
+kernel,registers,local_bytes,static_shared_bytes,ptx_bytes
+pfinv_f64,128,8,432,4166860
+interval_resident_factor,128,0,432,4166860
+interval_paired_factor,96,0,32,4166860
+k_interval_hop,128,0,16,4166860
+interval_complex_factor,128,0,432,4166860
+interval_complex_hop,168,0,480,4166860
+interval_complex_hop_warp,168,0,480,4166860

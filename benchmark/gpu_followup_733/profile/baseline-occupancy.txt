@@ -1,0 +1,6 @@
+block=64 groups=1 dynamic=6944 static=480 active_blocks=6
+block=64 groups=2 dynamic=13088 static=480 active_blocks=6
+block=64 groups=4 dynamic=25376 static=480 active_blocks=3
+block=128 groups=1 dynamic=6944 static=480 active_blocks=3
+block=128 groups=2 dynamic=13088 static=480 active_blocks=3
+block=128 groups=4 dynamic=25376 static=480 active_blocks=3

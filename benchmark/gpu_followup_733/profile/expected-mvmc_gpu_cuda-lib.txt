@@ -1,0 +1,137 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+interval::resident::tests::accepted_hop_with_singular_candidate_plane_recovers_per_plane: test
+interval::resident::tests::complex_update_groups_fit_shared_memory_at_dispatch_boundaries: test
+interval::resident::tests::delayed_updates_flush_partial_queues_and_rebuild_boundaries: test
+interval::resident::tests::dense_refactor_matches_known_pfaffians_and_inverses: test
+interval::resident::tests::failed_rebuild_is_latched_and_cannot_publish_results: test
+interval::resident::tests::invalid_flag_full_pfaffian_path_matches_inverse_path: test
+interval::resident::tests::mixed_singular_rebuild_publishes_valid_planes: test
+interval::resident::tests::paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers: test
+interval::resident::tests::resident_geometry_fits_shared_memory_and_whole_warp_groups: test
+interval::resident::tests::status_codes_match_cuda_header: test
+interval::resident::tests::unfinished_schedule_latches_typed_status: test
+interval::tests::failed_rebuild_preserves_all_resident_tables: test
+opt::cg_tests::resident_cg_dh_rbm_match_cpu_c_order: test
+opt::cg_tests::resident_cg_diag_scale_l16_matches_cpu_c_order: test
+opt::cg_tests::resident_cg_failed_solve_aborts_by_default: test
+opt::cg_tests::resident_cg_fallback_reruns_the_other_variant: test
+opt::cg_tests::resident_cg_l128_matches_cpu_c_order: test
+opt::cg_tests::resident_cg_l16_matches_cpu_c_order: test
+opt::cg_tests::resident_cg_opt_repeats_twenty_steps: test
+opt::cg_tests::resident_cg_rescale_smat_follows_c_early_returns: test
+opt::cg_tests::resident_cg_rescale_smat_matches_cpu_c_order: test
+opt::complex_tests::resident_opt_complex_invalid_plane_fallbacks_match_cpu: test
+opt::complex_tests::resident_opt_complex_l128_matches_cpu_c_order: test
+opt::complex_tests::resident_opt_complex_l16_matches_cpu_c_order: test
+opt::complex_tests::resident_opt_complex_partial_warp_groups_match_cpu: test
+opt::complex_tests::resident_opt_complex_repeats_twenty_steps: test
+opt::dh_tests::resident_opt_dh2_production_matches_cpu_c_order: test
+opt::dh_tests::resident_opt_dh4_production_matches_cpu_c_order: test
+opt::dh_tests::resident_opt_dh_l128_matches_cpu_c_order: test
+opt::dh_tests::resident_opt_dh_l16_matches_cpu_c_order: test
+opt::dh_tests::resident_opt_dh_noncanonical_flags_match_cpu_c_order: test
+opt::dh_tests::resident_opt_dh_repeats_twenty_steps: test
+opt::fsz_complex_tests::resident_opt_fsz_complex_invalid_plane_fallbacks_match_cpu: test
+opt::fsz_complex_tests::resident_opt_fsz_complex_l128_matches_cpu_c_order: test
+opt::fsz_complex_tests::resident_opt_fsz_complex_l16_matches_cpu_c_order: test
+opt::fsz_complex_tests::resident_opt_fsz_complex_repeats_twenty_steps: test
+opt::fsz_tests::resident_opt_fsz_heisenberg_matches_cpu_c_order: test
+opt::fsz_tests::resident_opt_fsz_invalid_plane_fallbacks_match_cpu: test
+opt::fsz_tests::resident_opt_fsz_kondo_2sz2_matches_cpu_c_order: test
+opt::fsz_tests::resident_opt_fsz_kondo_kgc_l128_matches_cpu_c_order: test
+opt::fsz_tests::resident_opt_fsz_kondo_kgc_matches_cpu_c_order: test
+opt::fsz_tests::resident_opt_fsz_l128_matches_cpu_c_order: test
+opt::fsz_tests::resident_opt_fsz_l16_matches_cpu_c_order: test
+opt::fsz_tests::resident_opt_fsz_repeats_twenty_steps: test
+opt::localspin_tests::resident_opt_localspin_repeats_twenty_steps: test
+opt::localspin_tests::resident_opt_matches_julia_heisenberg_exchange: test
+opt::localspin_tests::resident_opt_matches_julia_kondo_mixed_moves: test
+opt::opttrans_tests::resident_opt_opttrans_l128_matches_cpu_c_order: test
+opt::opttrans_tests::resident_opt_opttrans_l16_matches_cpu_c_order: test
+opt::opttrans_tests::resident_opt_opttrans_repeats_twenty_steps: test
+opt::physcal::complex_tests::resident_physcal_complex_l128_matches_cpu_c_order: test
+opt::physcal::complex_tests::resident_physcal_complex_l16_matches_cpu_c_order: test
+opt::physcal::complex_tests::resident_physcal_complex_repeats_twenty_windows: test
+opt::physcal::dh_tests::resident_physcal_dh_l128_matches_cpu_c_order: test
+opt::physcal::dh_tests::resident_physcal_dh_l16_matches_cpu_c_order: test
+opt::physcal::dh_tests::resident_physcal_dh_repeats_twenty_windows: test
+opt::physcal::fsz_complex_tests::resident_physcal_fsz_complex_l128_matches_cpu_c_order: test
+opt::physcal::fsz_complex_tests::resident_physcal_fsz_complex_l16_matches_cpu_c_order: test
+opt::physcal::fsz_complex_tests::resident_physcal_fsz_complex_repeats_twenty_windows: test
+opt::physcal::fsz_tests::resident_physcal_fsz_heisenberg_matches_cpu_c_order: test
+opt::physcal::fsz_tests::resident_physcal_fsz_kondo_2sz2_matches_cpu_c_order: test
+opt::physcal::fsz_tests::resident_physcal_fsz_kondo_kgc_l128_matches_cpu_c_order: test
+opt::physcal::fsz_tests::resident_physcal_fsz_kondo_kgc_matches_cpu_c_order: test
+opt::physcal::fsz_tests::resident_physcal_fsz_l128_matches_cpu_c_order: test
+opt::physcal::fsz_tests::resident_physcal_fsz_l16_matches_cpu_c_order: test
+opt::physcal::fsz_tests::resident_physcal_fsz_repeats_twenty_windows: test
+opt::physcal::localspin_tests::resident_physcal_localspin_repeats_twenty_windows: test
+opt::physcal::localspin_tests::resident_physcal_matches_julia_heisenberg_exchange: test
+opt::physcal::localspin_tests::resident_physcal_matches_julia_kondo_mixed_moves: test
+opt::physcal::opttrans_tests::resident_physcal_opttrans_l128_matches_cpu_c_order: test
+opt::physcal::opttrans_tests::resident_physcal_opttrans_l16_matches_cpu_c_order: test
+opt::physcal::opttrans_tests::resident_physcal_opttrans_repeats_twenty_windows: test
+opt::physcal::rbm_tests::resident_physcal_rbm_l128_matches_cpu_c_order: test
+opt::physcal::rbm_tests::resident_physcal_rbm_l16_matches_cpu_c_order: test
+opt::physcal::rbm_tests::resident_physcal_rbm_repeats_twenty_windows: test
+opt::physcal::tests::physcal_explicit_input_parameters_override_fixed_parameters: test
+opt::physcal::tests::physcal_one_body_output_retains_c_indirect_reader_contract: test
+opt::physcal::tests::physcal_operator_validation_precedes_cuda_allocation: test
+opt::physcal::tests::resident_physcal_fallback_matches_inverse_path: test
+opt::physcal::tests::resident_physcal_matches_julia_observables_and_tape: test
+opt::physcal::tests::resident_physcal_repeats_and_keeps_sampling_resident: test
+opt::rbm_tests::resident_opt_rbm_l128_matches_cpu_c_order: test
+opt::rbm_tests::resident_opt_rbm_l16_matches_cpu_c_order: test
+opt::rbm_tests::resident_opt_rbm_repeats_twenty_steps: test
+opt::rbm_tests::resident_rbm_minimal_family_tables_run_on_cuda: test
+opt::scope_tests::resident_accepts_nsrcg_for_physcal_and_opt: test
+opt::scope_tests::resident_cg_iteration_bound_follows_c_max_iter: test
+opt::scope_tests::resident_cg_rescale_block_follows_c_layout: test
+opt::scope_tests::resident_complex_flags_follow_cpu_exact_one_semantics: test
+opt::scope_tests::resident_flags_follow_cpu_exact_one_semantics: test
+opt::scope_tests::resident_model_rejects_spin_changing_operators_before_cuda: test
+opt::scope_tests::resident_physcal_rejects_lanczos_before_cuda: test
+opt::scope_tests::resident_rbm_validator_separates_family_tags_from_coefficients: test
+opt::scope_tests::resident_scope_accepts_complex_fsz: test
+opt::scope_tests::resident_scope_accepts_complex_normal_orbitals: test
+opt::scope_tests::resident_scope_accepts_doublon_holon_factors: test
+opt::scope_tests::resident_scope_accepts_fsz_general_orbitals: test
+opt::scope_tests::resident_scope_accepts_local_spins_and_exchange: test
+opt::scope_tests::resident_scope_accepts_opttrans: test
+opt::scope_tests::resident_scope_accepts_rbm_factors: test
+opt::scope_tests::resident_scope_accepts_real_normal_baseline: test
+opt::scope_tests::resident_scope_rejects_complex_mode_families_before_cuda: test
+opt::scope_tests::resident_scope_rejects_complex_rbm_coefficients: test
+opt::scope_tests::resident_scope_rejects_fsz_families_before_cuda: test
+opt::scope_tests::resident_scope_rejects_infeasible_local_spin_filling: test
+opt::scope_tests::resident_scope_rejects_unsupported_families_before_cuda: test
+opt::tests::resident_opt_fallback_observables_match_inverse_path: test
+opt::tests::resident_opt_matches_julia_general_operators: test
+opt::tests::resident_opt_matches_julia_l128_stages: test
+opt::tests::resident_opt_nodal_derivatives_match_cpu_minors: test
+opt::tests::resident_opt_pipeline: test
+opt::tests::resident_opt_recovers_singular_sampling_plane: test
+opt::tests::resident_opt_rejects_failed_sr: test
+opt::tests::resident_opt_repeats_twenty_steps: test
+opt::tests::resident_opt_single_walker_has_zero_sr_update: test
+opt::tests::resident_opt_zero_overlap_publishes_nothing: test
+pfaffian::rebuild_tests::full_panel_rebuilds_match_cpu_and_inverse_residuals: test
+pfaffian::rebuild_tests::full_rebuild_geometry_keeps_panel_and_reference_within_shared_limit: test
+pfaffian::rebuild_tests::paired_inverse_overflow_restores_reference_input: test
+pfaffian::tests::panel_pfaffians_match_cpu_reference: test
+
+120 tests, 0 benchmarks

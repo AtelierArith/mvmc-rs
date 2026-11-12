@@ -1,0 +1,12 @@
+kernel=interval_complex_hop block=64 groups=1 dynamic=6944 static=480 active_blocks=6
+kernel=interval_complex_hop block=64 groups=2 dynamic=13088 static=480 active_blocks=6
+kernel=interval_complex_hop block=64 groups=4 dynamic=25376 static=480 active_blocks=3
+kernel=interval_complex_hop block=128 groups=1 dynamic=6944 static=480 active_blocks=3
+kernel=interval_complex_hop block=128 groups=2 dynamic=13088 static=480 active_blocks=3
+kernel=interval_complex_hop block=128 groups=4 dynamic=25376 static=480 active_blocks=3
+kernel=interval_complex_hop_warp block=64 groups=1 dynamic=6944 static=480 active_blocks=6
+kernel=interval_complex_hop_warp block=64 groups=2 dynamic=13088 static=480 active_blocks=6
+kernel=interval_complex_hop_warp block=64 groups=4 dynamic=25376 static=480 active_blocks=3
+kernel=interval_complex_hop_warp block=128 groups=1 dynamic=6944 static=480 active_blocks=3
+kernel=interval_complex_hop_warp block=128 groups=2 dynamic=13088 static=480 active_blocks=3
+kernel=interval_complex_hop_warp block=128 groups=4 dynamic=25376 static=480 active_blocks=3

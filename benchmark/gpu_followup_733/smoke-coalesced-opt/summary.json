@@ -1,0 +1,8 @@
+{
+  "median_seconds": {
+    "before": 12.647335148,
+    "after": 11.4247239655
+  },
+  "speedup": 1.107014505224984,
+  "cross_revision_numerics": "observed errors only; independent numerical/trajectory validation required"
+}
