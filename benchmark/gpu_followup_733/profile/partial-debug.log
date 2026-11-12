@@ -1,0 +1,26 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+
+running 1 test
+test opt::complex_tests::resident_opt_complex_partial_warp_groups_match_cpu ... L128 partial warp groups initial: max kappa_F=8.184e3; max |Im e|=1.103e1; max abs diff energy=1.621734994591719e-12; normalized by (aw+1) n eps kappa_F scale: overlap=0.000 energy=0.000 Slater derivative=0.001 (bound 16)
+L128 partial warp groups: 128 proposals x 8 walkers, accepted [52, 61, 68, 71, 71, 68, 69, 66], 168 decisions changed by Im QPFullWeight, smallest decision margin 2.1177206429868756e-3
+L128 partial warp groups final: max kappa_F=1.366e4; max |Im e|=1.024e1; max abs diff energy=1.5597353802803603e-11; normalized by (aw+1) n eps kappa_F scale: overlap=0.000 energy=0.000 Slater derivative=0.000 (bound 16)
+L128 partial warp groups: SR backward error=2.532623555690342e-16; gauge max abs diff=0e0
+L128 partial warp groups after SR: max kappa_F=1.302e4; max |Im e|=1.134e1; max abs diff energy=4.267926045751704e-13; normalized by (aw+1) n eps kappa_F scale: overlap=0.000 energy=0.000 Slater derivative=0.000 (bound 16)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 119 filtered out; finished in 212.47s
+

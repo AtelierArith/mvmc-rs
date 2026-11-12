@@ -1,0 +1,26 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+
+running 6 tests
+test device_rng_matches_julia_calls_reseed_and_independent_owners ... ok
+test julia_log_decision_handles_overflow_and_zero_uniform ... ok
+test nonfinite_proposal_overlap_preserves_walker_state ... ok
+test resident_intervals_complete_rebuild_boundaries_without_transfers ... ok
+test resident_l128_sampling_transfer_benchmark ... ok
+test resident_schedule_matches_host_control_for_mixed_walkers_and_full_filling ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 177.88s
+

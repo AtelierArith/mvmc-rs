@@ -1,0 +1,36 @@
+Time (%),Total Time (ns),Instances,Avg (ns),Med (ns),Min (ns),Max (ns),StdDev (ns),Name
+54.9,6906482752,8,863310344.0,867500287.0,6944,1788442950,891272614.5,interval_complex_hop
+34.7,4372171241,12,364347603.4,26065.0,19584,1026667571,486745949.3,interval_complex_factor
+7.5,939107786,3,313035928.7,314005123.0,308496680,316605983,4140616.1,opt_energy_terms_c
+2.6,321415482,3,107138494.0,107301120.0,106737713,107376649,349135.0,opt_derivatives_c
+0.2,27544945,11,2504085.9,1664.0,1280,8274405,3790274.8,interval_complex_commit
+0.1,8205470,1,8205470.0,8205470.0,8205470,8205470,0.0,opt_initial_commit_c
+0.0,4734586,3,1578195.3,1578196.0,1578035,1578355,160.0,void cutlass::Kernel2<cutlass_80_tensorop_d884gemm_64x32_16x4_nt_align1>(T1::Params)
+0.0,2104378,36,58454.9,44016.5,43649,82337,18029.0,"void potrf_alg2_upper_trsm<double, (int)5, (int)3>(int, int, T1 *, unsigned long, T1 *, unsigned long)"
+0.0,1320079,3,440026.3,439301.0,438469,442309,2020.1,opt_system
+0.0,1184751,3,394917.0,395109.0,393733,395909,1100.6,opt_energy_c
+0.0,1037617,39,26605.6,28577.0,2752,28641,6969.8,"void potrf_alg2_cta_upper<double, double, (int)32>(int, int, T1 *, unsigned long, int *)"
+0.0,822758,36,22854.4,19200.0,10080,45856,13496.7,"void potrf_alg2_syrk_kernel<double, (bool)1, (bool)0, (int)5, (int)5, (int)3, (int)4, (int)4>(int, int, int, const T1 *, unsigned long, T1 *, unsigned long, bool)"
+0.0,460165,4,115041.3,112209.0,107329,128418,9219.9,opt_counts
+0.0,347332,1,347332.0,347332.0,347332,347332,0.0,opt_initial
+0.0,318116,4,79529.0,78065.0,78017,83969,2960.1,opt_slater_c
+0.0,254883,3,84961.0,84961.0,84801,85121,160.0,"void trsv_lt_exec_up<double, (unsigned int)32, (unsigned int)32, (unsigned int)4, (bool)0, (bool)0>(int, const T1 *, long, T1 *, long, int *)"
+0.0,169794,1,169794.0,169794.0,169794,169794,0.0,"void generate_seed_pseudo<rng_config<curandStateXORWOW, (curandOrdering)101>>(unsigned long long, unsigned long long, unsigned long long, curandOrdering, curandStateXORWOW *, unsigned int *)"
+0.0,154880,3,51626.7,51616.0,51616,51648,18.5,opt_gauge_c
+0.0,153795,3,51265.0,51329.0,51041,51425,199.8,"void trsv_ln_exec_up<double, (unsigned int)32, (unsigned int)32, (unsigned int)4, (bool)0>(int, const T1 *, long, T1 *, long, int *)"
+0.0,137984,3,45994.7,41408.0,41344,55232,7999.8,opt_cofactors_c
+0.0,56768,3,18922.7,18912.0,18912,18944,18.5,opt_cutoff
+0.0,43520,3,14506.7,14400.0,14240,14880,333.1,opt_means
+0.0,31394,3,10464.7,10433.0,10337,10624,146.1,"std::enable_if<T7, void>::type internal::gemvx::kernel<int, int, double, double, double, double, (bool)1, (bool)1, (bool)0, (bool)0, (int)8, (bool)0, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<const double>, cublasGemvTensorStridedBatched<const double>, cublasGemvTensorStridedBatched<double>, double>>(T13)"
+0.0,27011,4,6752.8,6545.0,6433,7488,493.2,opt_overlaps_c
+0.0,20544,3,6848.0,6848.0,6752,6944,96.0,opt_energy_fallback_c
+0.0,18240,5,3648.0,3712.0,3104,3904,314.4,"void gen_sequenced<curandStateXORWOW, unsigned int, int, &curand_noargs<curandStateXORWOW>, rng_config<curandStateXORWOW, (curandOrdering)101>>(T1 *, T2 *, unsigned long, unsigned long, T3)"
+0.0,8864,3,2954.7,2912.0,2912,3040,73.9,opt_variance
+0.0,5504,4,1376.0,1376.0,1344,1408,26.1,opt_fill
+0.0,4960,3,1653.3,1664.0,1632,1664,18.5,opt_update
+0.0,4160,4,1040.0,1008.0,992,1152,76.2,interval_resident_complete
+0.0,3648,3,1216.0,1216.0,1216,1216,0.0,potrf_alg2_reset_info(int *)
+0.0,2784,3,928.0,928.0,928,928,0.0,"copy_info_kernel(int, int *)"
+0.0,2784,3,928.0,928.0,928,928,0.0,dtrsv_init(int *)
+0.0,2784,3,928.0,928.0,928,928,0.0,"dtrsv_init_up(int *, int)"
+0.0,2784,3,928.0,928.0,928,928,0.0,"potrf_alg2_set_info(int, int, int *)"

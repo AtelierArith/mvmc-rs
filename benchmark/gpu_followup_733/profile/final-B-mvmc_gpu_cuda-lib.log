@@ -1,0 +1,41 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+
+running 8 tests
+test opt::complex_tests::resident_opt_complex_invalid_plane_fallbacks_match_cpu ... ok
+test opt::complex_tests::resident_opt_complex_l128_matches_cpu_c_order ... ok
+test opt::complex_tests::resident_opt_complex_l16_matches_cpu_c_order ... ok
+test opt::complex_tests::resident_opt_complex_partial_warp_groups_match_cpu ... FAILED
+test opt::complex_tests::resident_opt_complex_repeats_twenty_steps ... ok
+test opt::physcal::complex_tests::resident_physcal_complex_l128_matches_cpu_c_order ... ok
+test opt::physcal::complex_tests::resident_physcal_complex_l16_matches_cpu_c_order ... ok
+test opt::physcal::complex_tests::resident_physcal_complex_repeats_twenty_windows ... ok
+
+failures:
+
+---- opt::complex_tests::resident_opt_complex_partial_warp_groups_match_cpu stdout ----
+
+thread 'opt::complex_tests::resident_opt_complex_partial_warp_groups_match_cpu' (39) panicked at src/opt/complex_tests.rs:668:31:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    opt::complex_tests::resident_opt_complex_partial_warp_groups_match_cpu
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 112 filtered out; finished in 790.18s
+
+exit status 101

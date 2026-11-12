@@ -1,5 +1,10 @@
 # Pfaffian backend measurements (#731)
 
+For the subsequent CUDA optimization relative to the merged #732 baseline,
+see [the #733 report](../gpu_followup_733/README.md). It adds about 1.095x
+complex Opt and 1.094x complex PhysCal throughput on the recorded RTX 3060
+workload, with unchanged explicit transfer counters.
+
 ## Selected CPU and GPU implementations (2026-11-12)
 
 CPU uses the shared Pfaffian/inverse API in the public tensor4all/faer fork

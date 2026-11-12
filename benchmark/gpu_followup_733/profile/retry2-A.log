@@ -1,0 +1,6 @@
+A: mvmc_gpu_cuda-lib
+A: resident_interval
+A: mvmc-cuda
+A: interval_gate
+A: interval_parity
+Shard A passed

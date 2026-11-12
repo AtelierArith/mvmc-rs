@@ -1,0 +1,62 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+
+running 112 tests
+test interval::resident::tests::accepted_hop_with_singular_candidate_plane_recovers_per_plane ... ok
+test interval::resident::tests::complex_update_groups_fit_shared_memory_at_dispatch_boundaries ... ok
+test interval::resident::tests::delayed_updates_flush_partial_queues_and_rebuild_boundaries ... ok
+test interval::resident::tests::dense_refactor_matches_known_pfaffians_and_inverses ... ok
+test interval::resident::tests::failed_rebuild_is_latched_and_cannot_publish_results ... ok
+test interval::resident::tests::invalid_flag_full_pfaffian_path_matches_inverse_path ... ok
+test interval::resident::tests::mixed_singular_rebuild_publishes_valid_planes ... ok
+test interval::resident::tests::paired_rebuild_matches_cpu_and_preserves_failed_or_masked_walkers ... ok
+test interval::resident::tests::resident_geometry_fits_shared_memory_and_whole_warp_groups ... ok
+test interval::resident::tests::status_codes_match_cuda_header ... ok
+test interval::resident::tests::unfinished_schedule_latches_typed_status ... ok
+test interval::tests::failed_rebuild_preserves_all_resident_tables ... ok
+test opt::cg_tests::resident_cg_dh_rbm_match_cpu_c_order ... FAILED
+test opt::cg_tests::resident_cg_diag_scale_l16_matches_cpu_c_order ... FAILED
+test opt::cg_tests::resident_cg_failed_solve_aborts_by_default ... FAILED
+test opt::cg_tests::resident_cg_fallback_reruns_the_other_variant ... FAILED
+test opt::cg_tests::resident_cg_l128_matches_cpu_c_order ... FAILED
+test opt::cg_tests::resident_cg_l16_matches_cpu_c_order ... FAILED
+test opt::cg_tests::resident_cg_opt_repeats_twenty_steps ... FAILED
+test opt::cg_tests::resident_cg_rescale_smat_follows_c_early_returns ... FAILED
+test opt::cg_tests::resident_cg_rescale_smat_matches_cpu_c_order ... FAILED
+test opt::dh_tests::resident_opt_dh2_production_matches_cpu_c_order ... ok
+test opt::dh_tests::resident_opt_dh4_production_matches_cpu_c_order ... ok
+test opt::dh_tests::resident_opt_dh_l128_matches_cpu_c_order ... ok
+test opt::dh_tests::resident_opt_dh_l16_matches_cpu_c_order ... ok
+test opt::dh_tests::resident_opt_dh_noncanonical_flags_match_cpu_c_order ... ok
+test opt::dh_tests::resident_opt_dh_repeats_twenty_steps ... ok
+test opt::fsz_complex_tests::resident_opt_fsz_complex_invalid_plane_fallbacks_match_cpu ... ok
+test opt::fsz_complex_tests::resident_opt_fsz_complex_l128_matches_cpu_c_order ... ok
+test opt::fsz_complex_tests::resident_opt_fsz_complex_l16_matches_cpu_c_order ... ok
+test opt::fsz_complex_tests::resident_opt_fsz_complex_repeats_twenty_steps ... ok
+test opt::fsz_tests::resident_opt_fsz_heisenberg_matches_cpu_c_order ... ok
+test opt::fsz_tests::resident_opt_fsz_invalid_plane_fallbacks_match_cpu ... ok
+test opt::fsz_tests::resident_opt_fsz_kondo_2sz2_matches_cpu_c_order ... ok
+test opt::fsz_tests::resident_opt_fsz_kondo_kgc_l128_matches_cpu_c_order ... ok
+test opt::fsz_tests::resident_opt_fsz_kondo_kgc_matches_cpu_c_order ... ok
+test opt::fsz_tests::resident_opt_fsz_l128_matches_cpu_c_order ... ok
+test opt::fsz_tests::resident_opt_fsz_l16_matches_cpu_c_order ... ok
+test opt::fsz_tests::resident_opt_fsz_repeats_twenty_steps ... ok
+test opt::localspin_tests::resident_opt_localspin_repeats_twenty_steps ... ok
+test opt::localspin_tests::resident_opt_matches_julia_heisenberg_exchange ... ok
+test opt::localspin_tests::resident_opt_matches_julia_kondo_mixed_moves ... ok
+test opt::opttrans_tests::resident_opt_opttrans_l128_matches_cpu_c_order ... ok
+test opt::opttrans_tests::resident_opt_opttrans_l16_matches_cpu_c_order ... ok
+test opt::opttrans_tests::resident_opt_opttr

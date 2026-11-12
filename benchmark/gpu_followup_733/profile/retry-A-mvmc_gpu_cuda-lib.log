@@ -1,0 +1,62 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+
+running 74 tests
+test opt::cg_tests::resident_cg_dh_rbm_match_cpu_c_order ... ok
+test opt::cg_tests::resident_cg_diag_scale_l16_matches_cpu_c_order ... ok
+test opt::cg_tests::resident_cg_failed_solve_aborts_by_default ... ok
+test opt::cg_tests::resident_cg_fallback_reruns_the_other_variant ... ok
+test opt::cg_tests::resident_cg_l128_matches_cpu_c_order ... ok
+test opt::cg_tests::resident_cg_l16_matches_cpu_c_order ... ok
+test opt::cg_tests::resident_cg_opt_repeats_twenty_steps ... ok
+test opt::cg_tests::resident_cg_rescale_smat_follows_c_early_returns ... ok
+test opt::cg_tests::resident_cg_rescale_smat_matches_cpu_c_order ... ok
+test opt::opttrans_tests::resident_opt_opttrans_repeats_twenty_steps ... ok
+test opt::physcal::dh_tests::resident_physcal_dh_l128_matches_cpu_c_order ... ok
+test opt::physcal::dh_tests::resident_physcal_dh_l16_matches_cpu_c_order ... ok
+test opt::physcal::dh_tests::resident_physcal_dh_repeats_twenty_windows ... ok
+test opt::physcal::fsz_tests::resident_physcal_fsz_heisenberg_matches_cpu_c_order ... ok
+test opt::physcal::fsz_tests::resident_physcal_fsz_kondo_2sz2_matches_cpu_c_order ... ok
+test opt::physcal::fsz_tests::resident_physcal_fsz_kondo_kgc_l128_matches_cpu_c_order ... ok
+test opt::physcal::fsz_tests::resident_physcal_fsz_kondo_kgc_matches_cpu_c_order ... ok
+test opt::physcal::fsz_tests::resident_physcal_fsz_l128_matches_cpu_c_order ... ok
+test opt::physcal::fsz_tests::resident_physcal_fsz_l16_matches_cpu_c_order ... ok
+test opt::physcal::fsz_tests::resident_physcal_fsz_repeats_twenty_windows ... ok
+test opt::physcal::localspin_tests::resident_physcal_localspin_repeats_twenty_windows ... ok
+test opt::physcal::localspin_tests::resident_physcal_matches_julia_heisenberg_exchange ... ok
+test opt::physcal::localspin_tests::resident_physcal_matches_julia_kondo_mixed_moves ... ok
+test opt::physcal::opttrans_tests::resident_physcal_opttrans_l128_matches_cpu_c_order ... ok
+test opt::physcal::opttrans_tests::resident_physcal_opttrans_l16_matches_cpu_c_order ... ok
+test opt::physcal::opttrans_tests::resident_physcal_opttrans_repeats_twenty_windows ... ok
+test opt::physcal::rbm_tests::resident_physcal_rbm_l128_matches_cpu_c_order ... ok
+test opt::physcal::rbm_tests::resident_physcal_rbm_l16_matches_cpu_c_order ... ok
+test opt::physcal::rbm_tests::resident_physcal_rbm_repeats_twenty_windows ... ok
+test opt::physcal::tests::physcal_explicit_input_parameters_override_fixed_parameters ... ok
+test opt::physcal::tests::physcal_one_body_output_retains_c_indirect_reader_contract ... ok
+test opt::physcal::tests::physcal_operator_validation_precedes_cuda_allocation ... ok
+test opt::physcal::tests::resident_physcal_fallback_matches_inverse_path ... ok
+test opt::physcal::tests::resident_physcal_matches_julia_observables_and_tape ... ok
+test opt::physcal::tests::resident_physcal_repeats_and_keeps_sampling_resident ... ok
+test opt::rbm_tests::resident_opt_rbm_l128_matches_cpu_c_order ... ok
+test opt::rbm_tests::resident_opt_rbm_l16_matches_cpu_c_order ... ok
+test opt::rbm_tests::resident_opt_rbm_repeats_twenty_steps ... ok
+test opt::rbm_tests::resident_rbm_minimal_family_tables_run_on_cuda ... FAILED
+test opt::scope_tests::resident_accepts_nsrcg_for_physcal_and_opt ... FAILED
+test opt::scope_tests::resident_cg_iteration_bound_follows_c_max_iter ... ok
+test opt::scope_tests::resident_cg_rescale_block_follows_c_layout ... ok
+test opt::scope_tests::resident_complex_flags_follow_cpu_exact_one_semantics ... ok
+test opt::scope_tests::resident_flags_follow_cpu_exact_one_semantics ... ok
+test opt::scope_test

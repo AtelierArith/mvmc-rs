@@ -1,0 +1,28 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+WARNING: Device-side CUDA Event completion trace is currently enabled.
+         This may increase runtime overhead and the likelihood of false
+         dependencies across CUDA Streams. If you wish to avoid this, please
+         disable the feature with --cuda-event-trace=false.
+versions Versions { driver_version: Some("580.178.04"), cuda_driver_api: Some("13.0"), nvrtc: Some("12.9"), cublas: Some("12.9.2"), cusolver: Some("11.7.5") }
+mode opt walkers 320 steps_or_windows 3 warmup 128 interval 128 seed 79
+rep,seconds,upload_calls,upload_bytes,download_calls,download_bytes,synchronizations,scopes
+0,127.058495018,28,63067392,4,3120,11,7
+Collecting data...
+Generating '/tmp/nsys-report-cc69.qdstrm'
+[1/1] [0%                          ] baseline-complex-opt.nsys-rep[1/1] [0%                          ] baseline-complex-opt.nsys-rep[1/1] [==================76%       ] baseline-complex-opt.nsys-rep[1/1] [==================77%       ] baseline-complex-opt.nsys-rep[1/1] [==================78%       ] baseline-complex-opt.nsys-rep[1/1] [===================79%      ] baseline-complex-opt.nsys-rep[1/1] [===================80%      ] baseline-complex-opt.nsys-rep[1/1] [===================81%      ] baseline-complex-opt.nsys-rep[1/1] [===================82%      ] baseline-complex-opt.nsys-rep[1/1] [====================83%     ] baseline-complex-opt.nsys-rep[1/1] [====================84%     ] baseline-complex-opt.nsys-rep[1/1] [====================85%     ] baseline-complex-opt.nsys-rep[1/1] [=====================86%    ] baseline-complex-opt.nsys-rep[1/1] [=====================87%    ] baseline-complex-opt.nsys-rep[1/1] [=====================88%    ] baseline-complex-opt.nsys-rep[1/1] [=====================89%    ] baseline-complex-opt.nsys-rep[1/1] [======================90%   ] baseline-complex-opt.nsys-rep[1/1] [======================91%   ] baseline-complex-opt.nsys-rep[1/1] [======================92%   ] baseline-complex-opt.nsys-rep[1/1] [========================100%] baseline-complex-opt.nsys-rep[1/1] [========================100%] baseline-complex-opt.nsys-rep
+Generated:
+	/results/baseline-complex-opt.nsys-rep

@@ -25,6 +25,39 @@ fn resident_geometry_fits_shared_memory_and_whole_warp_groups() {
 }
 
 #[test]
+fn complex_update_groups_fit_shared_memory_at_dispatch_boundaries() {
+    for (n, nqp) in [
+        (62, 16),
+        (64, 3),
+        (64, 4),
+        (128, 5),
+        (128, 16),
+        (130, 16),
+        (128, 500),
+        (128, 2600),
+    ] {
+        let g = IntervalGeometry {
+            walkers: 1,
+            n,
+            ne: n / 2,
+            nsite: n,
+            nqp,
+            ngutz: 0,
+            nproj: 0,
+        };
+        assert!(complex_shared_bytes(g) <= 48 * 1024, "n={n} nqp={nqp}");
+        // One vector triplet per active warp at L128; oversized QP metadata
+        // falls back to the original single triplet without rejecting input.
+        if n == 128 && nqp == 16 {
+            assert_eq!(complex_shared_bytes(g), 512 + (16 + 12 * 128) * 16 + 32);
+        }
+        if nqp == 500 {
+            assert_eq!(complex_shared_bytes(g), 512 + (500 + 3 * 128) * 16 + 32);
+        }
+    }
+}
+
+#[test]
 #[ignore = "requires CUDA; queued inverse updates against independently refactored matrices"]
 fn delayed_updates_flush_partial_queues_and_rebuild_boundaries() {
     use mvmc_gpu::{pfaffian_inverse_batched, testkit::random_planes, Backend};

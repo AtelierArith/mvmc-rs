@@ -1,0 +1,57 @@
+{
+  "targets": {
+    "interval_gate": {
+      "expected": 1,
+      "passed": 1,
+      "missing": [],
+      "unexpected": [],
+      "logs": [
+        "retry2-A-interval_gate.log"
+      ]
+    },
+    "interval_parity": {
+      "expected": 3,
+      "passed": 3,
+      "missing": [],
+      "unexpected": [],
+      "logs": [
+        "retry2-A-interval_parity.log"
+      ]
+    },
+    "mvmc-cuda": {
+      "expected": 3,
+      "passed": 3,
+      "missing": [],
+      "unexpected": [],
+      "logs": [
+        "retry2-A-mvmc-cuda.log"
+      ]
+    },
+    "mvmc_gpu_cuda-lib": {
+      "expected": 120,
+      "passed": 120,
+      "missing": [],
+      "unexpected": [],
+      "logs": [
+        "final-A-mvmc_gpu_cuda-lib.log",
+        "final-B-mvmc_gpu_cuda-lib.log",
+        "retry-A-mvmc_gpu_cuda-lib.log",
+        "retry-B-mvmc_gpu_cuda-lib.log",
+        "retry2-A-mvmc_gpu_cuda-lib.log",
+        "partial-debug.log"
+      ]
+    },
+    "resident_interval": {
+      "expected": 7,
+      "passed": 7,
+      "missing": [],
+      "unexpected": [],
+      "logs": [
+        "final-context-resident_interval.log",
+        "retry2-A-resident_interval.log"
+      ]
+    }
+  },
+  "total": 134,
+  "all_passed": true
+}
