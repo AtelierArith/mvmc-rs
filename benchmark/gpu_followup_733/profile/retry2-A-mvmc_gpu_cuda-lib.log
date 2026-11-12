@@ -1,0 +1,52 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.2
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+
+running 32 tests
+test opt::rbm_tests::resident_rbm_minimal_family_tables_run_on_cuda ... ok
+test opt::scope_tests::resident_accepts_nsrcg_for_physcal_and_opt ... ok
+test opt::scope_tests::resident_model_rejects_spin_changing_operators_before_cuda ... ok
+test opt::scope_tests::resident_physcal_rejects_lanczos_before_cuda ... ok
+test opt::scope_tests::resident_rbm_validator_separates_family_tags_from_coefficients ... ok
+test opt::scope_tests::resident_scope_accepts_complex_fsz ... ok
+test opt::scope_tests::resident_scope_accepts_complex_normal_orbitals ... ok
+test opt::scope_tests::resident_scope_accepts_doublon_holon_factors ... ok
+test opt::scope_tests::resident_scope_accepts_fsz_general_orbitals ... ok
+test opt::scope_tests::resident_scope_accepts_local_spins_and_exchange ... ok
+test opt::scope_tests::resident_scope_accepts_opttrans ... ok
+test opt::scope_tests::resident_scope_accepts_rbm_factors ... ok
+test opt::scope_tests::resident_scope_accepts_real_normal_baseline ... ok
+test opt::scope_tests::resident_scope_rejects_complex_mode_families_before_cuda ... ok
+test opt::scope_tests::resident_scope_rejects_complex_rbm_coefficients ... ok
+test opt::scope_tests::resident_scope_rejects_fsz_families_before_cuda ... ok
+test opt::scope_tests::resident_scope_rejects_infeasible_local_spin_filling ... ok
+test opt::scope_tests::resident_scope_rejects_unsupported_families_before_cuda ... ok
+test opt::tests::resident_opt_fallback_observables_match_inverse_path ... ok
+test opt::tests::resident_opt_matches_julia_general_operators ... ok
+test opt::tests::resident_opt_matches_julia_l128_stages ... ok
+test opt::tests::resident_opt_nodal_derivatives_match_cpu_minors ... ok
+test opt::tests::resident_opt_pipeline ... ok
+test opt::tests::resident_opt_recovers_singular_sampling_plane ... ok
+test opt::tests::resident_opt_rejects_failed_sr ... ok
+test opt::tests::resident_opt_repeats_twenty_steps ... ok
+test opt::tests::resident_opt_single_walker_has_zero_sr_update ... ok
+test opt::tests::resident_opt_zero_overlap_publishes_nothing ... ok
+test pfaffian::rebuild_tests::full_panel_rebuilds_match_cpu_and_inverse_residuals ... ok
+test pfaffian::rebuild_tests::full_rebuild_geometry_keeps_panel_and_reference_within_shared_limit ... ok
+test pfaffian::rebuild_tests::paired_inverse_overflow_restores_reference_input ... ok
+test pfaffian::tests::panel_pfaffians_match_cpu_reference ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 88 filtered out; finished in 18.44s
+

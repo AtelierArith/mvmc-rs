@@ -1,0 +1,174 @@
+kache: no daemon reachable at /tmp/mvmc-kache/daemon.sock; starting one inheriting this process's environment
+   Compiling mvmc733-cache-probe v0.0.0 (/home/vscode/.cache/mvmc/kache-verify733)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
+   Compiling mvmc733-cache-probe v0.0.0 (/home/vscode/.cache/mvmc/kache-verify733)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+    Checking rand_core v0.6.4
+    Checking sfmt19937 v0.0.0 (/work/crates/sfmt19937)
+    Finished `dev` profile [unoptimized] target(s) in 0.69s
+{
+  "schema_version": 1,
+  "command": "stats",
+  "disk": {
+    "store_bytes": 8706,
+    "store_limit_bytes": 49392123904,
+    "disk_private_bytes": 259,
+    "cloned_into_targets_bytes": 8447,
+    "snapshot_retained_bytes": 0,
+    "cloned_coverage": "partial"
+  },
+  "stores": [
+    {
+      "path": "/home/vscode/.cache/mvmc/kache",
+      "bytes": 8706,
+      "max_size": 49392123904,
+      "entries": 1,
+      "blob_stats": {
+        "total_blobs": 3,
+        "total_blob_size": 8706,
+        "total_logical_size": 8706,
+        "savings": 0
+      },
+      "error": null
+    }
+  ],
+  "index_bytes": 6226504,
+  "index_wal_bytes": 94792,
+  "index_rowid_high_water": {
+    "blobs": 3,
+    "cc_preprocess_memos": 0,
+    "entries": 1,
+    "entry_blobs": 3,
+    "eviction_tombstones": 0,
+    "input_predictions": 2710
+  },
+  "gc": {
+    "last_run": "2026-11-12T03:18:36.257285286+00:00",
+    "entries_evicted": 0,
+    "bytes_freed": 0,
+    "disk_bytes_reclaimed": 0,
+    "blobs_removed": 0,
+    "duration_ms": 72,
+    "source": "daemon",
+    "entries_pinned": 0,
+    "entries_unreclaimable": 0,
+    "bytes_held": 0,
+    "entries_failed": 0,
+    "entries_locked": 0,
+    "entries_busy_snapshot": 0,
+    "entries_recent_prefiltered": 0,
+    "entries_import_pinned": 0,
+    "evict_write_ms": 0,
+    "key_locks_removed": 1317,
+    "key_locks_remaining": 0,
+    "predictions_pruned": 0,
+    "file_hashes_pruned": 0
+  },
+  "entries": 1,
+  "hit_rate_pct": 0.0,
+  "local_hits": 0,
+  "prefetch_hits": 0,
+  "remote_hits": 0,
+  "dups": 0,
+  "misses": 1,
+  "daemon_connected": true,
+  "hours": 24,
+  "since_secs": 86400,
+  "since": "24h",
+  "next": [
+    {
+      "argv": [
+        "kache",
+        "clean",
+        "--tracked",
+        "--stale",
+        "14d",
+        "--dry-run"
+      ],
+      "why": "tracked build outputs still hold blocks; cleaning stale target directories is what frees disk"
+    }
+  ]
+}
+{
+  "schema_version": 1,
+  "command": "stats",
+  "disk": {
+    "store_bytes": 8706,
+    "store_limit_bytes": 49392123904,
+    "disk_private_bytes": 259,
+    "cloned_into_targets_bytes": 8447,
+    "snapshot_retained_bytes": 0,
+    "cloned_coverage": "partial"
+  },
+  "stores": [
+    {
+      "path": "/home/vscode/.cache/mvmc/kache",
+      "bytes": 8706,
+      "max_size": 49392123904,
+      "entries": 1,
+      "blob_stats": {
+        "total_blobs": 3,
+        "total_blob_size": 8706,
+        "total_logical_size": 8706,
+        "savings": 0
+      },
+      "error": null
+    }
+  ],
+  "index_bytes": 6238864,
+  "index_wal_bytes": 107152,
+  "index_rowid_high_water": {
+    "blobs": 3,
+    "cc_preprocess_memos": 0,
+    "entries": 1,
+    "entry_blobs": 3,
+    "eviction_tombstones": 0,
+    "input_predictions": 2710
+  },
+  "gc": {
+    "last_run": "2026-11-12T03:18:36.257285286+00:00",
+    "entries_evicted": 0,
+    "bytes_freed": 0,
+    "disk_bytes_reclaimed": 0,
+    "blobs_removed": 0,
+    "duration_ms": 72,
+    "source": "daemon",
+    "entries_pinned": 0,
+    "entries_unreclaimable": 0,
+    "bytes_held": 0,
+    "entries_failed": 0,
+    "entries_locked": 0,
+    "entries_busy_snapshot": 0,
+    "entries_recent_prefiltered": 0,
+    "entries_import_pinned": 0,
+    "evict_write_ms": 0,
+    "key_locks_removed": 1317,
+    "key_locks_remaining": 0,
+    "predictions_pruned": 0,
+    "file_hashes_pruned": 0
+  },
+  "entries": 1,
+  "hit_rate_pct": 50.0,
+  "local_hits": 1,
+  "prefetch_hits": 0,
+  "remote_hits": 0,
+  "dups": 0,
+  "misses": 1,
+  "daemon_connected": true,
+  "hours": 24,
+  "since_secs": 86400,
+  "since": "24h",
+  "next": [
+    {
+      "argv": [
+        "kache",
+        "clean",
+        "--tracked",
+        "--stale",
+        "14d",
+        "--dry-run"
+      ],
+      "why": "tracked build outputs still hold blocks; cleaning stale target directories is what frees disk"
+    }
+  ]
+}

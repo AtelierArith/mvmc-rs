@@ -1,0 +1,2 @@
+# Preserve verbatim tool logs, including their trailing blank lines.
+profile/*.log -whitespace

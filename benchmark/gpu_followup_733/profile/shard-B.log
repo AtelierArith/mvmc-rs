@@ -1,0 +1,9 @@
+B: mvmc_gpu_cuda-lib
+Traceback (most recent call last):
+  File "/home/terasaki/work/atelierarith/mvmc-rs/benchmark/gpu_followup_733/run_cuda_shard.py", line 58, in <module>
+    main()
+  File "/home/terasaki/work/atelierarith/mvmc-rs/benchmark/gpu_followup_733/run_cuda_shard.py", line 53, in main
+    subprocess.run(docker + flags, stdout=f, stderr=subprocess.STDOUT, check=True)
+  File "/home/terasaki/.local/share/uv/python/cpython-3.11.16-linux-x86_64-gnu/lib/python3.11/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'run', '--rm', '--user', '1000:1000', '--gpus', 'device=1', '-e', 'OPENBLAS_NUM_THREADS=1', '-e', 'OMP_NUM_THREADS=1', '-e', 'CUDA_CACHE_PATH=/driver-cache', '-v', 'mvmc-733-driver-cache:/driver-cache', '-v', 'mvmc-731-cuda-target:/cuda-target:ro', '-v', '/home/terasaki/work/atelierarith/mvmc-rs:/work:ro', '-w', '/work/gpu/mvmc-gpu-cuda', 'mvmc731-cuda-toolchain:local', 'taskset', '-c', '5-7,21-23', '/cuda-target/debug/deps/mvmc_gpu_cuda-0b087a264329a0e8', '--include-ignored', '--test-threads=1', 'opt::complex_tests::', 'opt::physcal::complex_tests::']' returned non-zero exit status 101.
