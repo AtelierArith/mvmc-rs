@@ -659,8 +659,8 @@ pub(crate) fn slater_elm_diff_fsz_with_scratch(
     for orb in 0..n_slater {
         let mut real = Complex64::new(0.0, 0.0);
         let mut imag = Complex64::new(0.0, 0.0);
-        for qp in 0..n_qp_full {
-            let tmp = weights.qp_full_weight[qp]
+        for (qp, &weight) in weights.qp_full_weight.iter().take(n_qp_full).enumerate() {
+            let tmp = weight
                 * scratch.qp_orbital.as_ref().unwrap().host_data().unwrap()[qp * n_slater + orb];
             real += tmp;
             imag += Complex64::new(-tmp.im, tmp.re);
