@@ -885,8 +885,8 @@ fn launch_geometry(g: IntervalGeometry) -> (u32, usize, u32) {
     let threads = g.block().min(128);
     let mut groups = g.qp_groups().min(threads as usize / 32);
     loop {
-        let scratch = (threads as usize / 32).min(g.nqp).max(3 * groups) * g.n;
-        let shared = ((g.n + 1) & !1) * 4 + (g.nqp + 1 + scratch) * 8 + 12 * 4;
+        let scratch = (threads as usize / 32).min(g.nqp).max(4 * groups) * g.n;
+        let shared = ((g.n + 1) & !1) * 4 + (g.nqp + 1 + scratch + groups) * 8 + 12 * 4;
         if shared <= 48 * 1024 || groups == 1 {
             return (threads, groups, shared as u32);
         }

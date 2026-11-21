@@ -259,8 +259,8 @@ pub fn cal_energy(def: &UhfDefinition, state: &mut HfState) {
     let g = |state: &HfState, a: usize, b: usize| state.at(a, b);
 
     let mut e_band = 0.0_f64;
-    for k in 0..def.nsize {
-        e_band += state.eigen_values[k];
+    for &value in state.eigen_values.iter().take(def.nsize) {
+        e_band += value;
     }
     // Intra U energy
     let mut e_coulomb_intra = 0.0_f64;

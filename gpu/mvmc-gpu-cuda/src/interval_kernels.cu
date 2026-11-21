@@ -34,8 +34,11 @@
 // Local spins and exchanges follow cuda_sampling_update.jl:215-341 and exist only on
 // the resident entry; the legacy entry is hopping-only without local spins. A hop
 // from a local-spin site is invalid. An exchange swaps an electron with an
-// opposite-spin partner when both sites are singly occupied. Its overlap is
-// recomputed from full Pfaffians and an accept refactors the walker, as Julia does.
+// opposite-spin partner when both sites are singly occupied. Without local spins its
+// ratio and inverse update use the stored inverse (C CalculateNewPfMTwo2_real /
+// UpdateMAllTwo_real, rank two per plane, #739); local-spin models keep the Julia
+// GPU full-Pfaffian/refactor path, which also handles a walker with an invalid plane
+// or a singular candidate plane.
 // The projection counts (doublons, charges) are unchanged by an exchange.
 //
 // FSZ walkers (general orbitals, #714) extend the contract. A slot stores its
@@ -105,6 +108,146 @@ __device__ inline void interval_hop_update(double* invq, const double* tab, int 
         invq[e] = x;
       }
     }
+  }
+  __syncthreads();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Two-electron (exchange) ratio for one QP plane from the stored inverse, C
+// `calculateNewPfMTwo_child_real`: vecA/vecB are the post-move Slater rows of
+// the two electrons, vecP = inv * vecA and vecQ = inv * vecB.
+// ---------------------------------------------------------------------------------------------
+__device__ inline void interval_exchange_ratio(
+    const double* invq, const double* tab, int qp, const int* rs,
+    int n, int n2, int msa, int msb, int rsa, int rsb,
+    double* vecA, double* vecB, double* vecP, double* vecQ,
+    int tid, int nt, bool active, double pf, double* candidate) {
+  if (active) {
+    for (int j = tid; j < n; j += nt) {
+      vecA[j] = SLT(tab, qp, rsa, rs[j], n2);
+      vecB[j] = SLT(tab, qp, rsb, rs[j], n2);
+    }
+  }
+  __syncthreads();
+  if (active) {
+    for (int i = tid; i < n; i += nt) {
+      const double* row = invq + (size_t)i * n;
+      double p = 0.0, q = 0.0;
+      for (int j = 0; j < n; ++j) {
+        p += row[j] * vecA[j];
+        q += row[j] * vecB[j];
+      }
+      vecP[i] = p;
+      vecQ[i] = q;
+    }
+  }
+  __syncthreads();
+  if (active && tid == 0) {
+    double bma = 0.0;
+    for (int i = 0; i < n; ++i) bma += vecB[i] * vecP[i];
+    const double inv_ab = invq[(size_t)msa * n + msb];
+    const double ratio = inv_ab * vecB[msa] + inv_ab * bma
+                       + vecP[msa] * vecQ[msb] - vecP[msb] * vecQ[msa];
+    *candidate = ratio * pf;
+  }
+  __syncthreads();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Two-electron (exchange) rank-two inverse update for one QP plane, C
+// `updateMAllTwo_child_real`. `rsa`/`rsb` are the post-move rows of the two
+// electrons; `rsaOld`/`rsbOld` give the old (a,b) element, which enters through
+// vecS[msb] exactly as in C. The caller's `shv` slot receives bMa.
+// ---------------------------------------------------------------------------------------------
+__device__ inline void interval_exchange_update(
+    double* invq, const double* tab, int qp, const int* rs,
+    int n, int n2, int msa, int msb, int rsa, int rsb, int rsa_old, int rsb_old,
+    double* vecA, double* vecB, double* vecP, double* vecQ,
+    double* shv, int tid, int nt, bool active) {
+  const double m_old_ab = SLT(tab, qp, rsa_old, rsb_old, n2);
+  if (active) {
+    for (int j = tid; j < n; j += nt) {
+      vecA[j] = SLT(tab, qp, rsa, rs[j], n2);
+      vecB[j] = SLT(tab, qp, rsb, rs[j], n2);
+    }
+  }
+  __syncthreads();
+  if (active && tid == 0) vecA[msb] = m_old_ab;
+  __syncthreads();
+  if (active) {
+    for (int i = tid; i < n; i += nt) {
+      const double* row = invq + (size_t)i * n;
+      double p = 0.0, q = 0.0;
+      for (int j = 0; j < n; ++j) {
+        p += row[j] * vecA[j];
+        q += row[j] * vecB[j];
+      }
+      vecP[i] = p;
+      vecQ[i] = q;
+    }
+  }
+  __syncthreads();
+  if (active && tid == 0) {
+    double bma = 0.0;
+    for (int i = 0; i < n; ++i) bma += vecB[i] * vecP[i];
+    *shv = bma;
+  }
+  __syncthreads();
+  double bma = 0.0, a = 0.0, b = 0.0, c = 0.0, d = 0.0, e = 0.0, f = 0.0;
+  double det = 0.0, inv_det = 0.0;
+  if (active) {
+    bma = *shv;
+    a = -vecP[msa];
+    b = vecP[msb];
+    c = vecQ[msa];
+    d = -vecQ[msb];
+    e = -bma - vecB[msa];
+    f = invq[(size_t)msa * n + msb];
+    det = a * d - b * c - e * f;
+    inv_det = 1.0 / det;
+  }
+  if (active) {
+    for (int i = tid; i < n; i += nt) {
+      // vecP/vecQ stay live; vecA/vecB become C's vecS/vecT.
+      const double s = inv_det * invq[(size_t)msa * n + i];
+      const double t = inv_det * invq[(size_t)msb * n + i];
+      vecA[i] = s;
+      vecB[i] = t;
+    }
+  }
+  __syncthreads();
+  if (active) {
+    for (int i = tid; i < n; i += nt) {
+      const double p_i = vecP[i], q_i = vecQ[i];
+      const double s_i = vecA[i], t_i = vecB[i];
+      double* row = invq + (size_t)i * n;
+      for (int j = 0; j < n; ++j) {
+        const double p_j = vecP[j], q_j = vecQ[j];
+        const double s_j = vecA[j], t_j = vecB[j];
+        row[j] += a * (q_i * t_j - q_j * t_i)
+                + b * (q_i * s_j - q_j * s_i)
+                + c * (p_i * t_j - p_j * t_i)
+                + d * (p_i * s_j - p_j * s_i)
+                + e * det * (s_i * t_j - s_j * t_i)
+                + f * inv_det * (p_i * q_j - q_i * p_j);
+      }
+      row[msa] += -c * t_i - d * s_i - f * inv_det * q_i;
+      row[msb] += -a * t_i - b * s_i + f * inv_det * p_i;
+    }
+  }
+  __syncthreads();
+  if (active) {
+    for (int j = tid; j < n; j += nt) {
+      const double p_j = vecP[j], q_j = vecQ[j];
+      const double s_j = vecA[j], t_j = vecB[j];
+      invq[(size_t)msa * n + j] += c * t_j + d * s_j + f * inv_det * q_j;
+      invq[(size_t)msb * n + j] += a * t_j + b * s_j - f * inv_det * p_j;
+    }
+  }
+  __syncthreads();
+  if (active && tid == 0) {
+    invq[(size_t)msa * n + msb] += f * inv_det;
+    invq[(size_t)msb * n + msa] -= f * inv_det;
   }
   __syncthreads();
 }
@@ -298,13 +441,15 @@ __device__ __forceinline__ void interval_hop_impl(
   const int tid = threadIdx.x, nt = blockDim.x;
   const int nwarp = nt >> 5;
   const int ratio_vectors = nwarp < nqp ? nwarp : nqp;
-  const int scratch_vectors = ratio_vectors > 3 * qp_groups ? ratio_vectors : 3 * qp_groups;
-  int* mvw = reinterpret_cast<int*>(scratch + (size_t)scratch_vectors * n);  // [8]
+  const int scratch_vectors = ratio_vectors > 4 * qp_groups ? ratio_vectors : 4 * qp_groups;
+  double* shv = scratch + (size_t)scratch_vectors * n;  // [qp_groups]
+  int* mvw = reinterpret_cast<int*>(shv + qp_groups);  // [8]
   const int group_threads = nt / qp_groups;
   const int group = tid / group_threads, group_tid = tid % group_threads;
-  double* v1 = scratch + (size_t)group * 3 * n;
+  double* v1 = scratch + (size_t)group * 4 * n;
   double* v2 = v1 + n;
   double* v3 = v2 + n;
+  double* v4 = v3 + n;
 
   const int n2 = 2 * nsite;
   const double* tab = slater;
@@ -330,7 +475,8 @@ __device__ __forceinline__ void interval_hop_impl(
   int* valid_w = recover ? valid + (size_t)w * nqp : nullptr;
   double* fac_w = recover ? fac + (size_t)w * nqp * n * n : nullptr;
   double* work_w = recover ? work + (size_t)w * nqp * n * n : nullptr;
-  // Exchanges and local spins need the resident full-Pfaffian/refactor path.
+  // Local-spin exchanges keep the resident full-Pfaffian/refactor path; an
+  // exchange without local spins takes the rank-two inverse path below (#739).
   const double exchange_p = recover ? exchange_fraction : 0.0;
   if (!recover) loc = nullptr;
   // FSZ walkers (#714) store each slot's rs = site + spin*nsite, so the
@@ -372,6 +518,10 @@ __device__ __forceinline__ void interval_hop_impl(
     const int msa = mvw[1];
     const int exchange = s_exchange, partner = s_partner;
     const int from = s_from, to = s_to, pfrom = s_pfrom, pto = s_pto;
+    // Local-spin models keep the Julia GPU exchange path (full Pfaffian and a
+    // refactor on accept) so their supplied-tape fixtures stay exact; the
+    // rank-two path below is the exchange-only/no-local-spin C contract (#739).
+    const bool fast_exchange = exchange && loc == nullptr;
     // Sites and spin of the moved electron (normal walkers: spin is fixed).
     const int ri = from % nsite, rj = to % nsite, spin = from / nsite;
     if (!mvw[0]) {
@@ -395,12 +545,32 @@ __device__ __forceinline__ void interval_hop_impl(
     for (int j = tid; j < n; j += nt) rs[j] = ele_w[j] + (j >= split ? nsite : 0);
     __syncthreads();
 
-    if (resident && (!s_rank || exchange)) {
-      // Julia cooperative_overlap!: every plane from the candidate sites.
+    // An accepted exchange updates the stored inverse with the two-electron
+    // rank-two formula (#739), so its ratio must start from that inverse. Hop
+    // updates may still be queued (Julia's delayed queue); fold them in first.
+    if (queue && fast_exchange && pending) {
+      interval_delayed_flush(inv_w, alternate, delay_w, sites, pending, n, nqp, tid, nt);
+      pending = 0;
+    }
+
+    if (resident && (!s_rank || (exchange && !fast_exchange))) {
+      // Julia cooperative_overlap! or a local-spin exchange: full Pfaffians.
       for (int q = 0; q < nqp; ++q) {
         resident_gather(fac_w, rs, n, -1, -1, tab, q, n2);
         const double p = resident_block_pfaffian(fac_w, n, scratch, scratch + n);
         if (tid == 0) pfnew[q] = p;
+      }
+      __syncthreads();
+    } else if (resident && fast_exchange) {
+      // C CalculateNewPfMTwo2_real: rank-two ratio from the stored inverse.
+      const int rsa = rs[msa], rsb = rs[partner];
+      for (int base = 0; base < nqp; base += qp_groups) {
+        const int q = base + group;
+        const bool active = q < nqp;
+        double* invq = active ? inv_w + (size_t)q * n * n : inv_w;
+        interval_exchange_ratio(invq, tab, q, rs, n, n2, msa, partner, rsa, rsb,
+                                v1, v2, v3, v4, group_tid, group_threads, active,
+                                active ? pf_w[q] : 0.0, pfnew + (active ? q : 0));
       }
       __syncthreads();
     } else {
@@ -487,11 +657,13 @@ __device__ __forceinline__ void interval_hop_impl(
       // The resident path refactors in this kernel; the legacy host-driven
       // path returns a rebuild request instead.
       int singular = 0;
-      if (accept && s_rank && !exchange) {
+      if (accept && s_rank) {
         for (int q = 0; q < nqp; ++q) singular |= !isfinite(pfnew[q]) || pfnew[q] == 0.0;
       }
-      // Julia refactors after every accepted exchange (cuda_sampling_update.jl:341).
-      mvw[7] = accept && (singular || !s_rank || exchange);
+      // A fast exchange updates the inverse in rank-two form; a local-spin
+      // exchange, an invalid walker or a singular candidate plane falls back to
+      // the refactor (Julia cuda_sampling_update.jl:341-371).
+      mvw[7] = accept && (singular || !s_rank || (exchange && !fast_exchange));
       if (accept) {
         out[0] = log_new;
       } else {
@@ -542,6 +714,24 @@ __device__ __forceinline__ void interval_hop_impl(
         ++accepted;
         ++window;
         mvw[6] = 1;
+      }
+      __syncthreads();
+    } else if (mvw[5] && fast_exchange) {
+      // C UpdateMAllTwo_real: rank-two inverse update per plane.
+      for (int base = 0; base < nqp; base += qp_groups) {
+        const int q = base + group;
+        const bool active = q < nqp;
+        double* invq = active ? inv_w + (size_t)q * n * n : inv_w;
+        interval_exchange_update(invq, tab, q, rs, n, n2, msa, partner, to, pto,
+                                 from, pfrom, v1, v2, v3, v4, shv + group,
+                                 group_tid, group_threads, active);
+        if (active && group_tid == 0) pf_w[q] = pfnew[q];
+      }
+      __syncthreads();
+      if (tid == 0) {
+        log_old = out[0];
+        ++accepted;
+        if (++window > nsite) mvw[6] = 1;
       }
       __syncthreads();
     } else if (mvw[5]) {

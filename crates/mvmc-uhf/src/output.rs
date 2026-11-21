@@ -71,8 +71,8 @@ pub fn output(
     println!("Energy and num are outputted to {head}_result.dat.");
 
     let mut text = String::new();
-    for i in 0..def.nsite * 2 {
-        let _ = writeln!(text, " {}  {} ", i + 1, c_fixed(state.eigen_values[i], 10));
+    for (i, &value) in state.eigen_values.iter().take(def.nsite * 2).enumerate() {
+        let _ = writeln!(text, " {}  {} ", i + 1, c_fixed(value, 10));
     }
     write_file(&data_path(base, head, "_eigen.dat"), &text)?;
     println!("Eigenvalues are outputted to {head}_eigen.dat.");

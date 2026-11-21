@@ -252,6 +252,22 @@ faster large-real path. The matched CPU/GPU results and unchanged RNG/transfer
 contracts are recorded in `benchmark/pfaffian_faer/README.md`. This downstream
 Git pin does not claim a registry release or adoption into tensor4all/faer main.
 
+## Resident GPU exchange updates (2026-11-21, #739)
+
+- Exchanges without local spins follow C's two-electron rank-two ratio and
+  inverse update (`CalculateNewPfMTwo2_real`, `UpdateMAllTwo_real`) from the
+  stored inverse. The full-Pfaffian proposal and refactor remain the recovery
+  path for an invalid or singular plane.
+- Local-spin models keep the Julia GPU contract (full-Pfaffian exchange
+  proposal and a refactor on accept) so the accepted Julia GPU supplied-tape
+  fixtures stay exact. The issue explicitly permits the from-scratch path for
+  local spins.
+- Pending delayed hop updates are flushed before an exchange ratio, so the
+  ratio starts from the stored inverse. Periodic refactors and per-plane
+  recovery are unchanged.
+- The matched RTX 3060 measurement is in `benchmark/gpu_issue739/report.md`:
+  the exchange sweep goes from 72x to 1.4x the hop sweep at `n = 256`.
+
 ## Development hosts
 
 - **Local GPU host:** 2x NVIDIA GeForce RTX 3060 (sm_86, 12 GB, FP64 about 1/64
