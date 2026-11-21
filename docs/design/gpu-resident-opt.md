@@ -186,8 +186,12 @@ Rust CPU C-order FSZ path. The physics is C's real FSZ path
     flips in place (`makeCandidate_LocalSpinFlip_conduction`).
   - Exchange: partner slot `w2 % 2Ne`, valid when it has the opposite spin
     and both sites are singly occupied (`makeCandidate_exchange_fsz`).
-    Overlaps come from full Pfaffians and an accept refactors in the kernel,
-    as for normal exchanges.
+    Local-spin models keep the Julia GPU full-Pfaffian proposal and an
+    in-kernel refactor on accept. Without local spins the ratio and an accepted
+    update use the stored inverse in C's two-electron rank-two form
+    (`CalculateNewPfMTwo2_real` / `UpdateMAllTwo_real`, #739); the
+    full-Pfaffian/refactor path remains for an invalid plane or a singular
+    candidate.
   - Local spin flip: the slot's spin turns in place, valid on a local-spin
     site (`makeCandidate_LocalSpinFlip_localspin`). It is a one-slot move,
     scored and updated as a hop (C `CalculateNewPfM2_fsz`,
@@ -615,6 +619,10 @@ recovery of the accepted Julia GPU reference (Julia-mVMC `7314015`):
     Gauss-Jordan inverse published as a mirrored skew pair. Queued delayed
     updates are discarded, not flushed. The accepted window restarts, so the
     host's bounded round schedule still holds; a completion check enforces it.
+  - An exchange without local spins uses C's two-electron rank-two ratio and
+    inverse update instead of a full Pfaffian and a refactor (#739). Pending
+    delayed hop updates are flushed first, so the ratio starts from the stored
+    inverse. Local-spin exchanges keep the Julia full-Pfaffian path.
 - **Energy/Green.** `opt_energy_fallback` evaluates every operator of such a
   walker with full Pfaffians of the moved configuration
   (`cuda_observables.jl:109-122,283-295`). Opt and PhysCal share it.

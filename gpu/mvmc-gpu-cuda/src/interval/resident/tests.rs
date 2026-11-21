@@ -841,6 +841,244 @@ fn invalid_flag_full_pfaffian_path_matches_inverse_path() {
     }
 }
 
+/// Issue #739: an exchange ratio and an accepted exchange update come from the
+/// stored inverse in rank-two form (C `CalculateNewPfMTwo2_real` /
+/// `UpdateMAllTwo_real`). On one supplied exchange tape the fast path must take
+/// the same moves as the full-Pfaffian recovery reference, and both must agree
+/// with an independent CPU factorization.
+#[test]
+#[ignore = "requires CUDA; exchange rank-two path against the full-Pfaffian path"]
+fn exchange_rank_two_path_matches_full_pfaffian_path() {
+    use mvmc_gpu::{pfaffian_inverse_batched, testkit::random_planes, Backend};
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    for n in [16usize, 128] {
+        // One electron per site (Ne = n/2 of each spin, Nsite = n): every
+        // opposite-spin pair is a valid exchange.
+        let ns = n;
+        let ne = n / 2;
+        let (w, nq) = (2usize, 2usize);
+        let hops = if n >= 128 { 20 } else { 2 * ns + 3 };
+        let g = IntervalGeometry {
+            walkers: w,
+            n,
+            ne,
+            nsite: ns,
+            nqp: nq,
+            ngutz: 0,
+            nproj: 0,
+        };
+        let slater = random_planes::<f64>(2 * ns, nq, 7391 + n as u64);
+        let ele: Vec<i32> = (0..w * n)
+            .map(|i| {
+                let slot = i % n;
+                let spin = slot / ne;
+                (2 * (slot % ne) + spin) as i32
+            })
+            .collect();
+        let cpu = pfaffian_inverse_batched(
+            &Backend::CpuPfapack,
+            &gather_planes(&ele, &slater, n, ns, nq),
+            n,
+            nq,
+            w,
+        )
+        .unwrap();
+        let inv: Vec<_> = cpu.inv.iter().map(|x| -x).collect();
+        let (gutz, jast) = (vec![-1; ns], vec![-1; ns * ns]);
+        let host = IntervalHost {
+            ele: &ele,
+            inv: &inv,
+            pf: &cpu.pf,
+            slater: &slater,
+            weights: &[1., 0.25],
+            gutz: &gutz,
+            jast: &jast,
+            params: &[],
+        };
+        // Word 3 stays below the exchange threshold and word 4 is zero, so every
+        // proposed exchange is valid and accepted.
+        let mut rng = sfmt19937::Sfmt19937Rng::new(7391 + n as u32);
+        let mut tape = vec![0u32; w * hops * 5];
+        for step in 0..hops {
+            for walker in 0..w {
+                let t = &mut tape[5 * (walker + w * step)..5 * (walker + w * step) + 5];
+                t[0] = rng.gen_rand32() % ne as u32;
+                t[1] = (rng.gen_rand32() & 1) << 31;
+                t[2] = rng.gen_rand32() % ne as u32;
+                t[3] = 0;
+                t[4] = 0;
+            }
+        }
+        let mut results = vec![];
+        for full_path in [false, true] {
+            let mut resident = {
+                let s: &mut CudaEngine = &mut backend;
+                ResidentInterval::prepare(s, g, &host, hops, 79)
+            }
+            .unwrap();
+            resident
+                .set_moves(&mut backend, &vec![0i32; ns], 1.0)
+                .unwrap();
+            if full_path {
+                let borrowed = &resident;
+                with_raw_exec(&mut backend, "exchange.full", |exec| {
+                    // SAFETY: the validity table has walkers*nqp words.
+                    unsafe { exec.upload(exec.ptr(&borrowed.valid)?, &vec![0i32; w * nq]) }
+                })
+                .unwrap();
+            }
+            resident.advance_with_tape(&mut backend, &tape).unwrap();
+            let result = resident.snapshot(&mut backend).unwrap();
+            let accepted = resident.accepted(&mut backend).unwrap();
+            let inv = {
+                let borrowed = &resident;
+                with_raw_exec(&mut backend, "exchange.inv", |exec| {
+                    let mut inv = vec![0f64; w * nq * n * n];
+                    // SAFETY: the inverse holds walkers*nqp*n*n doubles.
+                    unsafe { exec.download(&mut inv, exec.ptr(&borrowed.sampler.inv)?)? };
+                    Ok(inv)
+                })
+                .unwrap()
+            };
+            results.push((result, accepted, inv));
+        }
+        let label = format!("n={n}");
+        let (fast, fallback) = (&results[0], &results[1]);
+        assert_eq!(fast.0.ele, fallback.0.ele, "{label} configurations");
+        assert_eq!(fast.1, fallback.1, "{label} accepts");
+        assert_eq!(
+            fast.1,
+            vec![hops as i32; w],
+            "{label} every exchange accepts"
+        );
+        let planes = gather_planes(&fast.0.ele, &slater, n, ns, nq);
+        let exact = pfaffian_inverse_batched(&Backend::CpuPfapack, &planes, n, nq, w).unwrap();
+        for (name, run) in [("rank-two", fast), ("full", fallback)] {
+            for plane in 0..w * nq {
+                let span = plane * n * n..(plane + 1) * n * n;
+                let (residual, bound) = inverse_check(
+                    &planes[span.clone()],
+                    &run.2[span.clone()],
+                    &exact.inv[span],
+                    n,
+                    hops as f64,
+                );
+                let pf_error = ((run.0.pf[plane] - exact.pf[plane]) / exact.pf[plane]).abs();
+                assert!(
+                    residual <= bound && pf_error <= bound,
+                    "{label} {name} plane={plane} residual={residual:e} pf={pf_error:e} \
+                     bound={bound:e}"
+                );
+            }
+        }
+    }
+}
+
+/// Issue #739 throughput probe: one L=16 Hubbard sweep (`Nsite` proposals per
+/// walker) with and without exchanges on the resident kernel. Ignored because
+/// it reports timings; run with `--ignored --nocapture`.
+#[test]
+#[ignore = "requires CUDA; exchange sweep throughput probe"]
+fn exchange_sweep_throughput_l16() {
+    use mvmc_gpu::{pfaffian_inverse_batched, testkit::random_planes, Backend};
+    use std::time::Instant;
+    let mut backend = CudaEngine::open(cuda_devices().unwrap()[0].id()).unwrap();
+    let ns = 256usize;
+    let ne = 128usize;
+    let n = 2 * ne;
+    let nq = 1usize;
+    let hops = ns;
+    let slater = random_planes::<f64>(2 * ns, nq, 739);
+    let ele: Vec<i32> = (0..n)
+        .map(|i| {
+            let spin = i / ne;
+            (2 * (i % ne) + spin) as i32
+        })
+        .collect();
+    let cpu = pfaffian_inverse_batched(
+        &Backend::CpuPfapack,
+        &gather_planes(&ele, &slater, n, ns, nq),
+        n,
+        nq,
+        1,
+    )
+    .unwrap();
+    let inv_one: Vec<f64> = cpu.inv.iter().map(|x| -x).collect();
+    let (gutz, jast) = (vec![-1; ns], vec![-1; ns * ns]);
+    for (label, exchange) in [("hops", 0.0f64), ("exchange", 0.5)] {
+        for walkers in [64usize, 320, 1280] {
+            let g = IntervalGeometry {
+                walkers,
+                n,
+                ne,
+                nsite: ns,
+                nqp: nq,
+                ngutz: 0,
+                nproj: 0,
+            };
+            let ele_all: Vec<i32> = (0..walkers).flat_map(|_| ele.iter().copied()).collect();
+            let inv_all: Vec<f64> = (0..walkers).flat_map(|_| inv_one.iter().copied()).collect();
+            let pf_all: Vec<f64> = (0..walkers).flat_map(|_| cpu.pf.iter().copied()).collect();
+            let host = IntervalHost {
+                ele: &ele_all,
+                inv: &inv_all,
+                pf: &pf_all,
+                slater: &slater,
+                weights: &[1.0],
+                gutz: &gutz,
+                jast: &jast,
+                params: &[],
+            };
+            let mut rng = sfmt19937::Sfmt19937Rng::new(739);
+            let mut tape = vec![0u32; walkers * hops * 5];
+            for step in 0..hops {
+                for w in 0..walkers {
+                    let t = &mut tape[5 * (w + walkers * step)..5 * (w + walkers * step) + 5];
+                    let src = rng.gen_rand32();
+                    t[0] = src % ne as u32;
+                    t[1] = (src >> 31) << 31;
+                    t[2] = (src >> 8) % ne as u32;
+                    // Half the proposals are hops for the 0.5 run; word 3 is
+                    // ignored when exchange_fraction is zero.
+                    t[3] = if (src >> 16) & 1 == 0 { 0 } else { u32::MAX };
+                    t[4] = 0;
+                }
+            }
+            // Compile and time two fresh states; the first launch pays NVRTC.
+            let mut out = (0.0f64, 0i64);
+            for run in 0..2 {
+                let mut resident = {
+                    let s: &mut CudaEngine = &mut backend;
+                    ResidentInterval::prepare(s, g, &host, hops, 79)
+                }
+                .unwrap();
+                resident
+                    .set_moves(&mut backend, &vec![0i32; ns], exchange)
+                    .unwrap();
+                let t = Instant::now();
+                resident.advance_with_tape(&mut backend, &tape).unwrap();
+                let secs = t.elapsed().as_secs_f64();
+                if run == 1 {
+                    let accepted = {
+                        let s: &mut CudaEngine = &mut backend;
+                        resident.accepted(s)
+                    }
+                    .unwrap();
+                    out = (secs, accepted.iter().map(|&x| x as i64).sum());
+                }
+            }
+            let (secs, accepted) = out;
+            println!(
+                "mode={label:13} walkers={walkers:5} sweep={:.4} s  \
+                 walker-sweeps/s={:.1} accepted/walker={:.1}",
+                secs / walkers as f64,
+                walkers as f64 / secs,
+                accepted as f64 / walkers as f64
+            );
+        }
+    }
+}
+
 /// Test-only entry for the dense fallback helpers. One block refactors `count`
 /// skew matrices, given as the planes of a table with identity sites, with the
 /// same routine as an in-kernel walker rebuild. Kept out of the production

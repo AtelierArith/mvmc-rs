@@ -101,12 +101,13 @@ impl IntervalGeometry {
     pub fn shared_bytes(&self) -> u32 {
         let rs = ((self.n + 1) & !1) * 4;
         // Ratio scratch is reused by the update after the acceptance barrier.
+        // Exchanges use four vectors plus one scalar per QP group (#739).
         let scratch = (self.block() as usize / 32)
             .min(self.nqp)
-            .max(3 * self.qp_groups())
+            .max(4 * self.qp_groups())
             * self.n;
-        let doubles = (self.nqp + 1 + scratch) * 8;
-        (rs + doubles + 8 * 4) as u32
+        let doubles = (self.nqp + 1 + scratch + self.qp_groups()) * 8;
+        (rs + doubles + 12 * 4) as u32
     }
 
     /// Independent QP updates per block, each using a whole number of warps.
@@ -116,7 +117,7 @@ impl IntervalGeometry {
         let mut groups = 1;
         while groups * 2 <= self.nqp
             && groups * 2 <= self.block() as usize / 32
-            && fixed + 3 * groups * 2 * self.n * 8 <= 48 * 1024
+            && fixed + 4 * groups * 2 * self.n * 8 <= 48 * 1024
         {
             groups *= 2;
         }
@@ -234,7 +235,8 @@ impl IntervalSampler {
     /// Allocate the resident buffers and upload `host`. `total_hops` is the tape length in hops
     /// per walker (uploaded with [`Self::upload_tape`]); `exchange_fraction` is the Julia GPU
     /// exchange threshold (0 for the hopping-only `NExUpdatePath == 0` inputs; a nonzero value is
-    /// rejected by the caller until the exchange branch exists).
+    /// rejected here because this legacy host-driven entry does not drive the resident exchange
+    /// path).
     pub fn prepare<B: Engine + ?Sized>(
         backend: &mut B,
         geom: IntervalGeometry,
